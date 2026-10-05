@@ -1,0 +1,6 @@
+node_modules/
+.next/
+*.tsbuildinfo
+.env*
+!src/lib/
+!src/lib/**

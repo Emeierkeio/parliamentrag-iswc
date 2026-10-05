@@ -86,7 +86,7 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
   const dimensionality = data.meta.dimensionality ?? 2;
   const isStance = data.meta.axis_method === "stance";
   // Stance mode: the metric is coverage (share of interventions taking a
-  // position), NOT variance — the two axis ratios overlap, so use the total.
+  // position), not variance: the two axis ratios overlap, so use the total.
   const signalPct = isStance
       ? Math.round((data.meta.total_variance_explained || 0) * 100)
       : Math.round(((data.meta.explained_variance_ratio?.[0] || 0) + (dimensionality === 2 ? (data.meta.explained_variance_ratio?.[1] || 0) : 0)) * 100);
@@ -183,7 +183,7 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
   // Two clamped lines instead of a single truncated one: the pole names are
   // the only key to reading the chart, cutting them makes it useless
   const AxisLabel = ({ axis, side, className, ...props }: { axis: AxisDef, side: 'pos'|'neg', className?: string, style?: React.CSSProperties }) => (
-      <div className={cn("absolute max-w-[40%] text-center text-[9px] sm:text-[10px] uppercase tracking-[0.08em] leading-tight text-muted-foreground bg-slate-50/85 dark:bg-slate-900/85 px-1.5 py-0.5 z-10 line-clamp-2", className)} title={getAxisLabel(axis, side)} {...props}>
+      <div className={cn("absolute max-w-[40%] text-center font-mono text-[9px] sm:text-[10px] uppercase tracking-[var(--tracking-label)] leading-tight text-fg-muted bg-surface-muted/85 rounded-xs px-1.5 py-0.5 z-10 line-clamp-2", className)} title={getAxisLabel(axis, side)} {...props}>
            {getAxisLabel(axis, side)}
       </div>
   );
@@ -199,7 +199,7 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
              onPointerCancel={onPointerUp}
 
              className={cn(
-                 "relative w-full bg-slate-50 dark:bg-slate-900 border overflow-hidden mx-auto select-none touch-none",
+                 "relative w-full bg-surface-muted rounded-md overflow-hidden mx-auto select-none touch-none",
                  fill
                      ? "flex-1 min-h-[200px]"
                      : dimensionality === 1 ? "h-[200px]" : "h-[320px]",
@@ -210,10 +210,10 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
               {dimensionality === 2 ? (
                 <>
                   {/* 2D Grid Lines */}
-                  <div className="absolute top-1/2 left-0 w-full h-[1px] bg-slate-200 dark:bg-slate-700 pointer-events-none" />
-                  <div className="absolute top-0 left-1/2 w-[1px] h-full bg-slate-200 dark:bg-slate-700 pointer-events-none" />
+                  <div className="absolute top-1/2 left-0 w-full h-[1px] bg-line-strong pointer-events-none" />
+                  <div className="absolute top-0 left-1/2 w-[1px] h-full bg-line-strong pointer-events-none" />
                   
-                  {/* 2D Labels — the x poles hug the edges with a tight width
+                  {/* 2D Labels: the x poles hug the edges with a tight width
                       cap so they never march into the central cluster */}
                   <AxisLabel axis={data.axes.y} side="pos" className="top-2 left-1/2 -translate-x-1/2 max-w-[72%]" />
                   <AxisLabel axis={data.axes.y} side="neg" className="bottom-2 left-1/2 -translate-x-1/2 max-w-[72%]" />
@@ -223,7 +223,7 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
               ) : (
                 <>
                    {/* 1D Grid Line */}
-                   <div className="absolute top-1/2 left-0 w-full h-[1px] bg-slate-200 dark:bg-slate-700 pointer-events-none" />
+                   <div className="absolute top-1/2 left-0 w-full h-[1px] bg-line-strong pointer-events-none" />
                    
                    {/* 1D Labels */}
                    <AxisLabel axis={data.axes.x} side="pos" className="right-4 top-[10%]" />
@@ -231,14 +231,14 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
                 </>
               )}
 
-              {/* Scatter Points — light up with the hovered group's centroid */}
+              {/* Scatter Points light up with the hovered group's centroid */}
               {data.scatter_sample.map((pt, i) => {
                   const isHighlighted = hoveredGroup !== null && pt.group_id === hoveredGroup;
                   const isDimmed = hoveredGroup !== null && pt.group_id !== hoveredGroup;
                   return (
                   <div
                     key={i}
-                    className={`absolute rounded-full transition-all duration-150 ${
+                    className={`absolute rounded-full transition-opacity duration-150 ${
                         isHighlighted ? "w-2.5 h-2.5 opacity-90 z-10" : "w-1.5 h-1.5"
                     } ${isDimmed ? "opacity-[0.06]" : ""} ${hoveredGroup === null ? "opacity-20 hover:opacity-60" : ""}`}
                     style={{
@@ -251,7 +251,7 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
                   />
               )})}
 
-              {/* Group Centroids with Labels — dot area tracks fragment count */}
+              {/* Group Centroids with Labels: dot area tracks fragment count */}
                {data.groups.map((grp) => {
                    const cx = scale(grp.position_x, 'x');
                    const cy = dimensionality === 1 ? 50 : scale(-grp.position_y, 'y');
@@ -268,7 +268,7 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
                        <Tooltip>
                            <TooltipTrigger asChild>
                                 <div
-                                    className="absolute flex flex-col items-center cursor-pointer hover:scale-110 transition-transform z-20"
+                                    className="absolute flex flex-col items-center cursor-pointer motion-safe:hover:scale-110 transition-transform duration-[var(--duration-fast)] z-20"
                                     style={{
                                         left: `${cx}%`,
                                         top: `${cy}%`,
@@ -279,36 +279,36 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
                                 >
                                     {/* Dot */}
                                     <div
-                                        className="rounded-full border-2 border-white dark:border-slate-800 shadow-md"
+                                        className="rounded-full border-2 border-surface shadow-float"
                                         style={{ backgroundColor: color, width: dotPx, height: dotPx }}
                                     />
                                     {/* Label */}
                                     <span
-                                        className="text-[10px] font-bold mt-0.5 px-1 rounded bg-white/80 dark:bg-slate-900/80 shadow-sm whitespace-nowrap"
+                                        className="text-[10px] font-semibold mt-0.5 px-1 rounded-xs bg-surface/85 whitespace-nowrap"
                                         style={{ color: color }}
                                     >
                                         {abbrev}
                                     </span>
                                 </div>
                            </TooltipTrigger>
-                           <TooltipContent side="top" className="p-0 overflow-hidden border-0 shadow-lg">
+                           <TooltipContent side="top" className="p-0 overflow-hidden border-0 shadow-overlay">
                                <div className="px-3 py-2 flex items-center gap-2" style={{ backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)` }}>
                                    <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                                    <span className="font-semibold text-[13px] leading-tight">{grp.group_id}</span>
                                </div>
                                <div className="px-3 py-2 space-y-1">
                                    <div className="flex items-baseline justify-between gap-6 text-xs">
-                                       <span className="text-muted-foreground">{t("fragments")}</span>
-                                       <span className="font-medium tabular-nums">{grp.stats.n_fragments} <span className="text-muted-foreground font-normal">· {sharePct}%</span></span>
+                                       <span className="text-fg-muted">{t("fragments")}</span>
+                                       <span className="font-medium tabular">{grp.stats.n_fragments} <span className="text-fg-muted font-normal">· {sharePct}%</span></span>
                                    </div>
                                    <div className="flex items-baseline justify-between gap-6 text-xs">
-                                       <span className="text-muted-foreground">{t("position")}</span>
-                                       <span className="font-medium tabular-nums">{grp.position_x.toFixed(2)}, {dimensionality === 1 ? '—' : grp.position_y.toFixed(2)}</span>
+                                       <span className="text-fg-muted">{t("position")}</span>
+                                       <span className="font-medium tabular">{grp.position_x.toFixed(2)}, {dimensionality === 1 ? '—' : grp.position_y.toFixed(2)}</span>
                                    </div>
                                    {typeof grp.stats?.n_x === "number" && (
                                        <div className="flex items-baseline justify-between gap-6 text-xs">
-                                           <span className="text-muted-foreground">{t("positionBasis")}</span>
-                                           <span className="font-medium tabular-nums">x: {grp.stats.n_x} · y: {grp.stats.n_y}</span>
+                                           <span className="text-fg-muted">{t("positionBasis")}</span>
+                                           <span className="font-medium tabular">x: {grp.stats.n_x} · y: {grp.stats.n_y}</span>
                                        </div>
                                    )}
                                </div>
@@ -318,12 +318,12 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
                )})}
           </div>
           
-          {/* Legend — hovering an entry highlights that group's points too */}
+          {/* Legend: hovering an entry highlights that group's points too */}
           <div className="flex flex-wrap gap-2 mt-2 justify-center shrink-0">
               {data.groups.map((grp) => (
                   <div
                       key={grp.group_id}
-                      className={`flex items-center gap-1 text-xs cursor-default rounded px-1 transition-opacity ${
+                      className={`flex items-center gap-1 text-xs cursor-default rounded-xs px-1 transition-opacity ${
                           hoveredGroup !== null && hoveredGroup !== grp.group_id ? "opacity-40" : ""
                       }`}
                       onMouseEnter={() => setHoveredGroup(grp.group_id)}
@@ -333,14 +333,14 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
                           className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: getGroupColor(grp.group_id) }}
                       />
-                      <span className="text-muted-foreground">{getGroupAbbrev(grp.group_id)}</span>
+                      <span className="text-fg-muted">{getGroupAbbrev(grp.group_id)}</span>
                   </div>
               ))}
           </div>
 
           <div className="flex justify-between items-center mt-1.5 px-2 shrink-0">
              {/* Varianza spiegata / segnale lungo gli assi ancorati */}
-             <div className="flex items-center gap-1 text-xs text-muted-foreground">
+             <div className="flex items-center gap-1 text-xs text-fg-muted">
                  <span>{isStance ? t("stanceCoverage") : data.meta.axis_method === "semantic" ? t("signalCaptured") : t("explainedVariance")}: {signalPct}%</span>
                  <TooltipProvider>
                     <Tooltip>
@@ -362,7 +362,7 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
                  <Button variant="outline" size="icon" className="h-8 w-8 min-tap-none" onClick={() => setZoom(z => Math.max(0.2, z - 0.2))}>
                      <Minus className="h-3 w-3" />
                  </Button>
-                 <span className="text-[10px] text-muted-foreground w-8 text-center">{Math.round(zoom * 100)}%</span>
+                 <span className="text-[10px] text-fg-muted w-8 text-center">{Math.round(zoom * 100)}%</span>
                  <Button variant="outline" size="icon" className="h-8 w-8 min-tap-none" onClick={() => setZoom(z => Math.min(6, z + 0.2))}>
                      <Plus className="h-3 w-3" />
                  </Button>
@@ -372,21 +372,21 @@ export function CompassCard({ data, fill = false }: CompassCardProps) {
              </div>
           </div>
 
-          {/* Weak signal — few interventions actually take a stance on these axes */}
+          {/* Weak signal: few interventions actually take a stance on these axes */}
           {lowStance && (
-              <p className="mt-1.5 px-2 text-center text-[10px] leading-snug text-amber-600 dark:text-amber-500 shrink-0">
+              <p className="mt-1.5 px-2 text-center text-[11px] leading-snug text-notice-fg shrink-0">
                   {t("weakStanceWarning")}
               </p>
           )}
 
-          {/* Disclaimer — automated analysis, not a certified political placement */}
-          <p className="mt-1.5 px-2 text-center text-[10px] leading-snug text-muted-foreground/70 shrink-0">
+          {/* Disclaimer: automated analysis, not a certified political placement */}
+          <p className="mt-1.5 px-2 text-center text-[11px] leading-snug text-fg-muted shrink-0">
               {isStance ? t("stanceDisclaimer") : t("disclaimer")}{" "}
               <a
                 href="/method"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-primary transition-colors whitespace-nowrap"
+                className="underline underline-offset-2 decoration-fg-faint hover:text-brand-fg transition-colors whitespace-nowrap"
               >
                   {t("methodLink")}
               </a>

@@ -30,6 +30,7 @@ from ..models.timeline import (
     SpeakerSummaryResponse,
     SpeechText,
     TimelineResponse,
+    TopicVote,
     VoteActRef,
     VoteActTextResponse,
     VoteDetailResponse,
@@ -454,6 +455,204 @@ async def get_session_votes(
     ]
 
 
+_TOPIC_STOPWORDS = {
+    "della", "delle", "degli", "dello", "nella", "nelle", "negli", "sulla",
+    "sulle", "sugli", "dalla", "dalle", "dagli", "alla", "alle", "agli",
+    "riforma", "disciplina", "misure", "disposizioni", "legge", "politiche",
+}
+
+_TOPIC_VOTES_QUERY = """
+MATCH (s:Session)-[:HAS_VOTE]->(v:Vote)-[:ON_ACT]->(a:ParliamentaryAct)
+WHERE coalesce(s.legislature, 19) = $legislature
+  AND (($topic IS NOT NULL AND toLower(a.title) CONTAINS $topic)
+       OR any(n IN $acts WHERE a.title ENDS WITH '(' + n + ')'))
+WITH s, v, collect(a.title)[0] AS act_title
+RETURN v.id AS id, v.number AS number, v.subject AS subject,
+       v.description AS description, v.finalVote AS final_vote,
+       v.outcome AS outcome, v.inFavor AS in_favor,
+       v.against AS against, v.abstained AS abstained,
+       toString(s.date) AS date, s.number AS session_number, act_title
+ORDER BY date, number
+LIMIT $limit
+"""
+
+
+def _most_specific_word(neo4j: Neo4jClient, topic: str, legislature: int) -> str | None:
+    """The topic word that occurs in the fewest voted act titles, at least one.
+
+    Topic labels are phrased for people ("Conflitto in Ucraina") while act
+    titles are phrased for the law ("... in favore delle autorità governative
+    dell'Ucraina"); the rarest word is the one that names the subject.
+    """
+    words = [
+        w for w in re.findall(r"[a-zàèéìòù]+", topic)
+        if len(w) >= 4 and w not in _TOPIC_STOPWORDS
+    ]
+    if len(words) < 2:
+        return None
+    rows = neo4j.query(
+        """
+        UNWIND $words AS w
+        OPTIONAL MATCH (s:Session)-[:HAS_VOTE]->(:Vote)-[:ON_ACT]->(a:ParliamentaryAct)
+        WHERE coalesce(s.legislature, 19) = $legislature AND toLower(a.title) CONTAINS w
+        WITH w, count(DISTINCT a) AS acts
+        WHERE acts > 0
+        RETURN w ORDER BY acts ASC LIMIT 1
+        """,
+        {"words": words, "legislature": legislature},
+    )
+    return rows[0]["w"] if rows else None
+
+
+async def search_topic_votes(
+    neo4j: Neo4jClient,
+    topic: str | None,
+    act_numbers: list[str],
+    legislature: int = 19,
+    limit: int = 40,
+) -> list[TopicVote]:
+    """Roll calls on the acts a topic dossier is about.
+
+    An act matches when its title contains the topic phrase or ends with one
+    of the given numbers: Camera act titles carry the number as a trailing
+    "(1275)", and Vote.subject repeats it as "PDL n. 1275". When neither
+    matches, the topic's most specific word stands in for the phrase.
+    """
+    if not topic and not act_numbers:
+        return []
+    phrase = topic.strip().lower() if topic else None
+    params = {"topic": phrase, "acts": act_numbers, "legislature": legislature, "limit": limit}
+    rows = neo4j.query(_TOPIC_VOTES_QUERY, params)
+    if not rows and phrase:
+        word = _most_specific_word(neo4j, phrase, legislature)
+        if word:
+            rows = neo4j.query(_TOPIC_VOTES_QUERY, {**params, "topic": word})
+    return [
+        TopicVote(
+            id=r["id"],
+            number=r["number"] or 0,
+            subject=r["subject"],
+            description=r["description"],
+            final_vote=bool(r["final_vote"]),
+            outcome=r["outcome"],
+            in_favor=r["in_favor"],
+            against=r["against"],
+            abstained=r["abstained"],
+            date=r["date"],
+            session_number=r["session_number"],
+            act_title=r["act_title"],
+        )
+        for r in rows
+    ]
+
+
+_EVIDENCE_VOTES_QUERY = """
+UNWIND $speech_ids AS sid
+MATCH (sp:Speech {id: sid})<-[:CONTAINS_SPEECH]-(:Phase)<-[:HAS_PHASE]-(:Debate)-[:DISCUSSES]->(a:ParliamentaryAct)
+WITH a, count(DISTINCT sp) AS support
+ORDER BY support DESC
+LIMIT $max_acts
+MATCH (s:Session)-[:HAS_VOTE]->(v:Vote)-[:ON_ACT]->(a)
+WITH s, v, support, a.title AS act_title
+RETURN v.id AS id, v.number AS number, v.subject AS subject,
+       v.description AS description, v.finalVote AS final_vote,
+       v.outcome AS outcome, v.inFavor AS in_favor,
+       v.against AS against, v.abstained AS abstained,
+       toString(s.date) AS date, s.number AS session_number, act_title, support
+ORDER BY date, number
+LIMIT $limit
+"""
+
+
+async def search_evidence_votes(
+    neo4j: Neo4jClient,
+    speech_ids: list[str],
+    topic: str | None,
+    act_numbers: list[str],
+    legislature: int = 19,
+    limit: int = 100,
+) -> list[TopicVote]:
+    """Roll calls on the acts debated where the dossier's speeches were given.
+
+    The speeches behind a dossier sit in debates that DISCUSS acts (motions,
+    bills); the votes on those acts are what the groups voted on the topic.
+    Acts are ranked by how many of the dossier's speeches were given in their
+    debates, so a long omnibus sitting does not flood the list. Title matches
+    on the topic or act number are merged in.
+    """
+    rows = []
+    if speech_ids:
+        rows = neo4j.query(
+            _EVIDENCE_VOTES_QUERY,
+            {"speech_ids": speech_ids, "max_acts": 25, "limit": limit},
+        )
+    seen = {r["id"] for r in rows}
+    by_title = await search_topic_votes(neo4j, topic, act_numbers, legislature, limit)
+    votes = [
+        TopicVote(
+            id=r["id"],
+            number=r["number"] or 0,
+            subject=r["subject"],
+            description=r["description"],
+            final_vote=bool(r["final_vote"]),
+            outcome=r["outcome"],
+            in_favor=r["in_favor"],
+            against=r["against"],
+            abstained=r["abstained"],
+            date=r["date"],
+            session_number=r["session_number"],
+            act_title=r["act_title"],
+        )
+        for r in rows
+    ]
+    votes += [v.model_copy(update={"relation": "title"}) for v in by_title if v.id not in seen]
+    if not votes and speech_ids:
+        votes = _same_session_votes(neo4j, speech_ids, limit)
+    votes.sort(key=lambda v: (v.date or "", v.number))
+    return votes[:limit]
+
+
+def _same_session_votes(neo4j: Neo4jClient, speech_ids: list[str], limit: int) -> list[TopicVote]:
+    """Last resort: final votes and motions held in the sittings of the speeches.
+
+    They share the day, not necessarily the subject; the frontend says so.
+    """
+    rows = neo4j.query(
+        """
+        UNWIND $speech_ids AS sid
+        MATCH (s:Session)-[:HAS_DEBATE]->(:Debate)-[:HAS_PHASE]->(:Phase)-[:CONTAINS_SPEECH]->(:Speech {id: sid})
+        WITH DISTINCT s
+        MATCH (s)-[:HAS_VOTE]->(v:Vote)
+        WHERE v.finalVote OR toUpper(coalesce(v.subject, '') + ' ' + coalesce(v.description, '')) CONTAINS 'MOZIONE'
+        RETURN v.id AS id, v.number AS number, v.subject AS subject,
+               v.description AS description, v.finalVote AS final_vote,
+               v.outcome AS outcome, v.inFavor AS in_favor,
+               v.against AS against, v.abstained AS abstained,
+               toString(s.date) AS date, s.number AS session_number
+        ORDER BY date, number
+        LIMIT $limit
+        """,
+        {"speech_ids": speech_ids, "limit": limit},
+    )
+    return [
+        TopicVote(
+            id=r["id"],
+            number=r["number"] or 0,
+            subject=r["subject"],
+            description=r["description"],
+            final_vote=bool(r["final_vote"]),
+            outcome=r["outcome"],
+            in_favor=r["in_favor"],
+            against=r["against"],
+            abstained=r["abstained"],
+            date=r["date"],
+            session_number=r["session_number"],
+            relation="session",
+        )
+        for r in rows
+    ]
+
+
 async def get_vote_detail(
     neo4j: Neo4jClient,
     vote_id: str,
@@ -513,10 +712,13 @@ async def get_vote_detail(
         OPTIONAL MATCH (p)-[mc:MEMBER_OF_COMPONENT]->(c:MistoComponent)
           WHERE mc.start_date <= s.date
             AND (mc.end_date IS NULL OR mc.end_date >= s.date)
-        WITH p, iv,
+        WITH p, iv, s,
              head(collect(DISTINCT g.name)) AS groupName,
              head(collect(DISTINCT c.name)) AS componentName
         RETURN p.id AS id,
+               CASE WHEN p.camera_seat_legislature = s.legislature
+                         AND coalesce(s.chamber, 'camera') = 'camera'
+                    THEN p.camera_seat END AS seat,
                p.first_name AS first_name,
                p.last_name AS last_name,
                CASE
@@ -538,6 +740,7 @@ async def get_vote_detail(
             last_name=r["last_name"] or "",
             party=r["party"],
             outcome=r["outcome"] or "absent",
+            seat=r["seat"],
         )
         for r in participant_rows
     ]

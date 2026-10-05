@@ -51,15 +51,10 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
   const t = useTranslations("CitationCard");
 
   const isGoverno = citation.group?.toLowerCase() === "governo" || !!citation.institutional_role;
-  // "misto": il Gruppo Misto non è ascrivibile a uno schieramento — badge neutro
+  // "misto": il Gruppo Misto non è ascrivibile a uno schieramento, badge neutro
   const coalitionLabel = isGoverno
     ? t("governo")
     : citation.coalition === "misto" ? "Gruppo Misto" : citation.coalition;
-  const groupColor = isGoverno
-    ? "#4B0082"
-    : citation.coalition === "maggioranza" ? "#3B82F6"
-    : citation.coalition === "misto" ? "#6B7280"
-    : "#EF4444";
 
   const displayText = citation.translated_text ?? citation.text ?? citation.quote_text ?? "";
   const originalText = citation.is_translated ? (citation.text ?? citation.quote_text ?? "") : null;
@@ -76,9 +71,9 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
       <Card
         ref={cardRef}
         className={cn(
-          "cursor-pointer border-transparent bg-card shadow-sm transition-all duration-300 w-full max-w-full",
-          "hover:border-primary/30 hover:shadow-md",
-          isHighlighted && "border-yellow-400/50 bg-yellow-400/5 shadow-[0_0_15px_rgba(250,204,21,0.15)] ring-1 ring-yellow-400/30",
+          "group cursor-pointer gap-0 py-0 rounded-lg border-line bg-surface transition-colors duration-200 w-full max-w-full",
+          "hover:border-line-strong",
+          isHighlighted && "border-notice ring-1 ring-notice/40",
           className
         )}
         onClick={() => setIsModalOpen(true)}
@@ -87,8 +82,8 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
           <div className="flex items-start gap-4 max-w-full">
              {/* Icon instead of Index */}
             <div className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors",
-                isHighlighted && "bg-yellow-400/20 text-yellow-700"
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-sm transition-colors",
+                isHighlighted ? "bg-highlight text-notice-fg" : "bg-brand-soft text-brand-fg"
             )}>
               <Quote className="h-4 w-4" />
             </div>
@@ -102,31 +97,27 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
                           href={citation.camera_profile_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm font-semibold text-foreground truncate flex-1 min-w-0 hover:underline hover:text-primary transition-colors"
+                          className="text-sm font-semibold text-fg truncate flex-1 min-w-0 hover:underline hover:text-brand-fg transition-colors"
                           onClick={(e) => e.stopPropagation()} 
                       >
                           {toTitleCase(citation.deputy_first_name || "")} {toTitleCase(citation.deputy_last_name || "")}
                       </a>
                   ) : (
-                      <span className="text-sm font-semibold text-foreground break-words flex-1 min-w-0 hover:underline hover:text-primary transition-colors">
+                      <span className="text-sm font-semibold text-fg break-words flex-1 min-w-0">
                           {toTitleCase(citation.deputy_first_name || "")} {toTitleCase(citation.deputy_last_name || "")}
                       </span>
                   )}
                   <Badge
                     variant="outline"
-                    className="shrink-0 text-[10px] px-1.5 py-0 h-5"
-                    style={{
-                      borderColor: groupColor,
-                      color: groupColor,
-                    }}
+                    className="shrink-0 text-[10px] px-1.5 py-0 h-5 capitalize"
                   >
                     {coalitionLabel}
                   </Badge>
                 </div>
                 {!isGoverno && (
-                  <span className="text-[10px] text-muted-foreground block max-w-full break-words" title={citation.misto_component ? `${citation.group} – ${citation.misto_component}` : citation.group}>
+                  <span className="text-[11px] text-fg-muted block max-w-full break-words" title={citation.misto_component ? `${citation.group} · ${citation.misto_component}` : citation.group}>
                     {citation.misto_component
-                      ? `${citation.group} – ${citation.misto_component}`
+                      ? `${citation.group} · ${citation.misto_component}`
                       : citation.group}
                   </span>
                 )}
@@ -136,15 +127,15 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
               {originalText ? (
                 <Tooltip delayDuration={300}>
                   <TooltipTrigger asChild>
-                    <p className="[font-family:var(--font-display)] italic text-sm text-muted-foreground line-clamp-2 mb-3 leading-relaxed break-words cursor-help">
+                    <p className="serif-display italic text-[0.9375rem] text-fg-secondary line-clamp-2 mb-3 leading-relaxed break-words cursor-help">
                       &ldquo;{displayText}&rdquo;
-                      <Globe className="inline h-3 w-3 ml-1 text-muted-foreground/50" />
+                      <Globe className="inline h-3 w-3 ml-1 text-fg-faint" />
                       {getCameraUrl(citation.intervention_id || citation.intervention_id) && (
                            <a
                               href={getCameraUrl(citation.intervention_id || citation.intervention_id) || "#"}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex align-middle ml-1 text-primary/60 hover:text-primary transition-colors"
+                              className="inline-flex align-middle ml-1 text-fg-faint hover:text-brand-fg transition-colors"
                               onClick={(e) => e.stopPropagation()}
                               title={t("goToIntervention")}
                            >
@@ -154,19 +145,19 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
                     </p>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-[400px] p-3">
-                    <p className="text-[10px] font-semibold text-muted-foreground/70 mb-1 uppercase tracking-wider">{t("originalLabel")}</p>
-                    <p className="text-xs leading-relaxed italic">{originalText}</p>
+                    <p className="label-mono mb-1">{t("originalLabel")}</p>
+                    <p className="serif-display text-sm leading-relaxed italic">{originalText}</p>
                   </TooltipContent>
                 </Tooltip>
               ) : (
-                <p className="[font-family:var(--font-display)] italic text-sm text-muted-foreground line-clamp-2 mb-3 leading-relaxed break-words">
+                <p className="serif-display italic text-[0.9375rem] text-fg-secondary line-clamp-2 mb-3 leading-relaxed break-words">
                   &ldquo;{displayText}&rdquo;
                   {getCameraUrl(citation.intervention_id || citation.intervention_id) && (
                        <a
                           href={getCameraUrl(citation.intervention_id || citation.intervention_id) || "#"}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex align-middle ml-1 text-primary/60 hover:text-primary transition-colors"
+                          className="inline-flex align-middle ml-1 text-fg-faint hover:text-brand-fg transition-colors"
                           onClick={(e) => e.stopPropagation()}
                           title={t("goToIntervention")}
                        >
@@ -177,8 +168,8 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
               )}
 
               {/* Metadata */}
-              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-medium max-w-full">
-                <span className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted max-w-full">
+                <span className="flex items-center gap-1.5 shrink-0 tabular">
                   <Calendar className="h-3 w-3" />
                   {citation.date}
                 </span>
@@ -190,7 +181,7 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
                             href={getCameraUrl(citation.debate_id || citation.debate_id) || "#"}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hover:underline hover:text-foreground cursor-pointer transition-colors break-words"
+                            className="hover:underline hover:text-fg cursor-pointer transition-colors break-words"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {citation.debate}
@@ -204,7 +195,7 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
             </div>
 
             {/* Expand icon */}
-            <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+            <ExternalLink className="h-4 w-4 shrink-0 text-fg-faint group-hover:text-brand-fg transition-colors" />
           </div>
         </CardContent>
       </Card>
@@ -228,15 +219,10 @@ interface CitationModalProps {
 function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
   const t = useTranslations("CitationCard");
   const isGoverno = citation.group?.toLowerCase() === "governo" || !!citation.institutional_role;
-  // "misto": il Gruppo Misto non è ascrivibile a uno schieramento — badge neutro
+  // "misto": il Gruppo Misto non è ascrivibile a uno schieramento, badge neutro
   const coalitionLabel = isGoverno
     ? t("governo")
     : citation.coalition === "misto" ? "Gruppo Misto" : citation.coalition;
-  const groupColor = isGoverno
-    ? "#4B0082"
-    : citation.coalition === "maggioranza" ? "#3B82F6"
-    : citation.coalition === "misto" ? "#6B7280"
-    : "#EF4444";
   // On-demand translation state for the full speech text
   const [translatedFull, setTranslatedFull] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -273,7 +259,7 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
         setShowTranslated(true);
       }
     } catch {
-      // Silently fail — show original
+      // Silently fail, show original
     } finally {
       setIsTranslating(false);
     }
@@ -327,26 +313,25 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] sm:max-w-3xl bg-background border-none shadow-2xl p-0 overflow-hidden rounded-xl sm:rounded-2xl h-[90vh] sm:h-[85vh] flex flex-col">
+      <DialogContent className="max-w-[95vw] sm:max-w-3xl bg-surface border border-line shadow-overlay p-0 gap-0 overflow-hidden rounded-xl h-[90vh] sm:h-[85vh] flex flex-col">
         
         {/* Header: Title & Close */}
-        <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0 bg-card/50 backdrop-blur-sm">
-          <DialogTitle className="[font-family:var(--font-display)] flex items-center gap-2 text-lg font-semibold tracking-tight">
-             <Quote className="h-5 w-5 text-primary fill-primary/10" />
+        <DialogHeader className="px-6 py-4 border-b border-line shrink-0">
+          <DialogTitle className="label-mono flex items-center gap-2">
+             <Quote className="h-4 w-4 text-brand-fg" aria-hidden="true" />
              <span>{t("intervention")}</span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex flex-col relative">
              {/* Sticky Speaker Metadata Bar */}
-             <div className="bg-card z-10 px-6 py-4 flex items-center gap-4 border-b border-border/40 shrink-0 shadow-sm">
+             <div className="bg-surface z-10 px-6 py-4 flex items-center gap-4 border-b border-line shrink-0">
                  <div className="flex items-center gap-4 min-w-0 flex-1">
                     {citation.photo ? (
                         <img
                             src={citation.photo}
                             alt={`${toTitleCase(citation.deputy_first_name || "")} ${toTitleCase(citation.deputy_last_name || "")}`}
-                            className="h-12 w-12 shrink-0 rounded-full object-cover shadow-sm border border-border"
-                            style={{ borderColor: `${groupColor}30` }}
+                            className="h-12 w-12 shrink-0 rounded-full object-cover border border-line"
                             onError={(e) => {
                                 const target = e.currentTarget;
                                 target.style.display = "none";
@@ -356,8 +341,8 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                         />
                     ) : null}
                     <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-background shadow-sm border border-border text-lg font-bold text-muted-foreground/80"
-                        style={{ color: groupColor, borderColor: `${groupColor}30`, backgroundColor: `${groupColor}05`, display: citation.photo ? "none" : "flex" }}
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-surface-muted border border-line text-lg font-semibold text-fg-muted"
+                        style={{ display: citation.photo ? "none" : "flex" }}
                     >
                         {citation.deputy_first_name?.[0]}{citation.deputy_last_name?.[0]}
                     </div>
@@ -367,12 +352,12 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                                 href={citation.camera_profile_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="[font-family:var(--font-display)] font-semibold tracking-tight text-foreground text-lg leading-tight truncate hover:underline hover:text-primary transition-colors"
+                                className="serif-display text-fg text-xl leading-tight truncate hover:underline hover:text-brand-fg transition-colors"
                             >
                                 {toTitleCase(citation.deputy_first_name || "")} {toTitleCase(citation.deputy_last_name || "")}
                             </a>
                         ) : (
-                            <div className="[font-family:var(--font-display)] font-semibold tracking-tight text-foreground text-lg leading-tight truncate">
+                            <div className="serif-display text-fg text-xl leading-tight truncate">
                                 {toTitleCase(citation.deputy_first_name || "")} {toTitleCase(citation.deputy_last_name || "")}
                             </div>
                         )}
@@ -380,14 +365,13 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                              <Badge
                                 variant="outline"
                                 className="h-5 text-[10px] px-1.5 font-medium capitalize"
-                                style={{ borderColor: `${groupColor}40`, color: groupColor }}
                              >
                                 {coalitionLabel}
                              </Badge>
                              {!isGoverno && (
-                               <span className="text-xs text-muted-foreground truncate max-w-[300px]" title={citation.misto_component ? `${citation.group} – ${citation.misto_component}` : citation.group}>
+                               <span className="text-xs text-fg-muted truncate max-w-[300px]" title={citation.misto_component ? `${citation.group} · ${citation.misto_component}` : citation.group}>
                                   {citation.misto_component
-                                    ? `${citation.group} – ${citation.misto_component}`
+                                    ? `${citation.group} · ${citation.misto_component}`
                                     : citation.group}
                                </span>
                              )}
@@ -396,8 +380,8 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                 </div>
                 
                 {/* Date & Meta */}
-                <div className="flex flex-col items-end text-xs text-muted-foreground gap-1 shrink-0">
-                    <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md">
+                <div className="flex flex-col items-end text-xs text-fg-muted gap-1 shrink-0">
+                    <div className="flex items-center gap-1.5 bg-surface-muted px-2 py-1 rounded-sm tabular">
                         <Calendar className="w-3 h-3" /> 
                         <span className="font-medium">{citation.date}</span>
                     </div>
@@ -409,8 +393,8 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                 <div className="p-6 md:p-8 space-y-8">
                     {/* Context Box */}
                     {citation.debate && (
-                        <div className="bg-muted/30 rounded-xl p-4 border border-border/50 text-sm leading-relaxed text-muted-foreground">
-                            <div className="flex items-center gap-2 mb-2 text-primary font-medium text-xs uppercase tracking-wider">
+                        <div className="bg-surface-muted rounded-md p-4 text-sm leading-relaxed text-fg-secondary">
+                            <div className="label-mono flex items-center gap-2 mb-2">
                                 <MapPin className="w-3 h-3" />
                                 {t("parliamentaryContext")}
                             </div>
@@ -419,7 +403,7 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                                     href={contextUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="hover:text-primary hover:underline transition-colors flex items-center gap-1 group/link"
+                                    className="hover:text-brand-fg hover:underline transition-colors flex items-center gap-1 group/link"
                                 >
                                     {citation.debate}
                                     <ExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
@@ -432,7 +416,7 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
 
                     {/* Translation-in-progress banner */}
                     {isTranslating && (
-                        <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/15 px-3 py-2 text-xs font-medium text-primary">
+                        <div className="flex items-center gap-2 rounded-md bg-info-soft px-3 py-2 text-xs font-medium text-info-fg">
                             <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                             Translating to English…
                         </div>
@@ -440,7 +424,7 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
 
                     {/* Speech Text */}
                     <div className={cn(
-                        "prose prose-lg max-w-none dark:prose-invert [font-family:var(--font-display)] leading-loose text-foreground/90",
+                        "max-w-none serif-display text-lg leading-loose text-fg",
                         isTranslating && "opacity-50 transition-opacity"
                     )}>
                         {parts.length > 1 ? (
@@ -449,7 +433,7 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                                     <span key={i}>
                                         {part}
                                         {i < parts.length - 1 && (
-                                            <mark className="bg-yellow-200/50 text-foreground px-1 -mx-1 rounded border-b-2 border-yellow-400 dark:bg-yellow-500/20 dark:text-yellow-100 font-medium">
+                                            <mark className="bg-highlight text-fg px-1 -mx-1 rounded-xs border-b-2 border-notice italic [box-decoration-break:clone]">
                                                 {highlightText}
                                             </mark>
                                         )}
@@ -460,7 +444,7 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                             displayText
                         )}
                         {citation.is_translated && (
-                            <Globe className="inline h-4 w-4 ml-2 text-muted-foreground/40 align-middle" />
+                            <Globe className="inline h-4 w-4 ml-2 text-fg-faint align-middle" />
                         )}
 
                         {interventionUrl && (
@@ -468,7 +452,7 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                                 href={interventionUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center ml-2 text-primary/40 hover:text-primary transition-colors align-middle"
+                                className="inline-flex items-center justify-center ml-2 text-fg-faint hover:text-brand-fg transition-colors align-middle"
                                 title={t("goToCamera")}
                             >
                                 <LinkIcon className="w-4 h-4" />
@@ -478,7 +462,7 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
 
                     {/* Translate button + original text section */}
                     {citation.is_translated && !isTranslating && (
-                        <div className="mt-6 pt-6 border-t border-border/40">
+                        <div className="mt-6 pt-6 border-t border-line">
                             <div className="flex items-center gap-2 mb-3">
                                 <Button
                                     variant="outline"
@@ -504,11 +488,11 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
                             </div>
                             {originalFullText && (
                                 <>
-                                    <p className="text-[10px] font-semibold text-muted-foreground/70 mb-2 uppercase tracking-wider flex items-center gap-1.5">
+                                    <p className="label-mono mb-2 flex items-center gap-1.5">
                                         <Globe className="h-3 w-3" />
                                         {t("originalLabel")}
                                     </p>
-                                    <p className="[font-family:var(--font-display)] text-sm leading-relaxed italic text-muted-foreground/80">{originalFullText}</p>
+                                    <p className="serif-display text-sm leading-relaxed italic text-fg-secondary">{originalFullText}</p>
                                 </>
                             )}
                         </div>

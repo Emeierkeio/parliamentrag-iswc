@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
+import { CentroPage } from "@/components/centro/CentroPage";
+import { DocLayout } from "@/components/centro/DocLayout";
 
 // Mirror di backend/config/default.yaml → authority.weights.
 // Se i pesi cambiano lato backend vanno aggiornati anche qui.
@@ -25,164 +26,120 @@ const PAPER_LINKS = [
 export default function MethodPage() {
   const t = useTranslations("Method");
 
+  const sections = [
+    { id: "pipeline", title: t("pipelineTitle") },
+    { id: "autorevolezza", title: t("authorityTitle") },
+    { id: "citazioni", title: t("citationsTitle") },
+    { id: "limiti", title: t("limitsTitle") },
+    { id: "compasso", title: t("compassTitle") },
+    { id: "riferimenti", title: t("linksTitle") },
+  ];
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="px-6 py-5 border-b border-border">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image src="/logo-blue.svg" alt="" width={26} height={18} />
-            <span className="[font-family:var(--font-display)] text-sm font-medium text-foreground">
-              ParliamentRAG
-            </span>
-          </Link>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {t("backHome")}
-          </Link>
-        </div>
-      </header>
-
-      <main className="px-6 py-14">
-        <article className="max-w-3xl mx-auto">
-          <h1 className="[font-family:var(--font-display)] text-3xl sm:text-4xl font-medium tracking-tight">
-            {t("title")}
-          </h1>
-          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            {t("tagline")}
-          </p>
-
-          <div className="mt-8 border-l-2 border-primary/40 bg-primary/[0.04] px-5 py-4">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-1.5">
-              {t("introTitle")}
-            </p>
-            <p className="text-sm leading-relaxed text-foreground/85">{t("intro")}</p>
+    <CentroPage>
+      <DocLayout
+        sections={sections}
+        header={
+          <>
+            <h1 className="serif-display text-[clamp(2.25rem,8vw,3.5rem)] leading-[1.08] text-fg">{t("title")}</h1>
+            <p className="mt-4 text-lg text-fg-secondary">{t("tagline")}</p>
+          </>
+        }
+        rail={
+          <div className="rounded-lg bg-surface-muted p-5">
+            <p className="label-mono">{t("introTitle")}</p>
+            <p className="mt-2 text-[15px] leading-relaxed text-fg-secondary">{t("intro")}</p>
           </div>
+        }
+      >
+        <div className="space-y-12">
+          <Section id="pipeline" title={t("pipelineTitle")}>
+            <p>{t("pipelineP1")}</p>
+            <p>{t("pipelineP2")}</p>
+          </Section>
 
-          <div className="mt-10 space-y-10">
-            {/* 01 — Pipeline */}
-            <section>
-              <h2 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight flex items-baseline gap-3">
-                <span className="text-primary/40 text-sm tabular-nums">01</span>
-                {t("pipelineTitle")}
-              </h2>
-              <div className="mt-2 space-y-2 pl-8">
-                <p className="text-sm leading-relaxed text-muted-foreground">{t("pipelineP1")}</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">{t("pipelineP2")}</p>
-              </div>
-            </section>
+          <Section id="autorevolezza" title={t("authorityTitle")}>
+            <p>{t("authorityP1")}</p>
 
-            {/* 02 — Authority */}
-            <section>
-              <h2 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight flex items-baseline gap-3">
-                <span className="text-primary/40 text-sm tabular-nums">02</span>
-                {t("authorityTitle")}
-              </h2>
-              <div className="mt-2 space-y-4 pl-8">
-                <p className="text-sm leading-relaxed text-muted-foreground">{t("authorityP1")}</p>
-
-                <div className="rounded-lg border border-border/60 overflow-hidden">
-                  <div className="grid grid-cols-[1fr_auto] gap-4 px-4 py-2 bg-muted/40 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                    <span>{t("thComponent")}</span>
-                    <span className="text-right">{t("thWeight")}</span>
-                  </div>
-                  <div className="divide-y divide-border/50">
-                    {WEIGHTS.map((w) => (
-                      <div key={w.name} className="grid grid-cols-[1fr_auto] gap-4 items-center px-4 py-2.5">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground">{t(w.name)}</p>
-                          <p className="text-xs text-muted-foreground">{t(w.desc)}</p>
+            <table className="w-full border-t border-line text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th scope="col" className="py-2.5 font-medium text-fg-muted">{t("thComponent")}</th>
+                  <th scope="col" className="py-2.5 text-right font-medium text-fg-muted">{t("thWeight")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {WEIGHTS.map((w) => (
+                  <tr key={w.name} className="border-t border-line">
+                    <td className="py-3 pr-4">
+                      <p className="font-medium text-fg">{t(w.name)}</p>
+                      <p className="text-fg-muted">{t(w.desc)}</p>
+                    </td>
+                    <td className="py-3">
+                      <div className="flex items-center justify-end gap-3">
+                        <div className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-surface-sunken sm:block">
+                          <div className="h-full rounded-full bg-brand" style={{ width: `${w.weight * 100 * 2.5}%` }} />
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="hidden sm:block w-24 h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div
-                              className="h-full bg-primary/70 rounded-full"
-                              style={{ width: `${w.weight * 100 * 2.5}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-semibold tabular-nums text-foreground min-w-[2.6rem] text-right">
-                            {Math.round(w.weight * 100)}%
-                          </span>
-                        </div>
+                        <span className="tabular min-w-[2.6rem] text-right font-semibold text-fg">
+                          {Math.round(w.weight * 100)}%
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t.rich("authorityP2", {
-                    ranking: (chunks) => (
-                      <Link href="/ranking" className="text-primary underline underline-offset-2 hover:text-primary/80">
-                        {chunks}
-                      </Link>
-                    ),
-                  })}
-                </p>
-              </div>
-            </section>
+            <p>
+              {t.rich("authorityP2", {
+                ranking: (chunks) => <span>{chunks}</span>,
+              })}
+            </p>
+          </Section>
 
-            {/* 03 — Citations */}
-            <section>
-              <h2 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight flex items-baseline gap-3">
-                <span className="text-primary/40 text-sm tabular-nums">03</span>
-                {t("citationsTitle")}
-              </h2>
-              <div className="mt-2 space-y-2 pl-8">
-                <p className="text-sm leading-relaxed text-muted-foreground">{t("citationsP1")}</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">{t("citationsP2")}</p>
-              </div>
-            </section>
+          <Section id="citazioni" title={t("citationsTitle")}>
+            <p>{t("citationsP1")}</p>
+            <p>{t("citationsP2")}</p>
+          </Section>
 
-            {/* 04 — Limits */}
-            <section>
-              <h2 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight flex items-baseline gap-3">
-                <span className="text-primary/40 text-sm tabular-nums">04</span>
-                {t("limitsTitle")}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground pl-8">{t("limitsP1")}</p>
-            </section>
+          <Section id="limiti" title={t("limitsTitle")}>
+            <p>{t("limitsP1")}</p>
+          </Section>
 
-            {/* 05 — Compass */}
-            <section>
-              <h2 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight flex items-baseline gap-3">
-                <span className="text-primary/40 text-sm tabular-nums">05</span>
-                {t("compassTitle")}
-              </h2>
-              <div className="mt-2 space-y-2 pl-8">
-                <p className="text-sm leading-relaxed text-muted-foreground">{t("compassP1")}</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">{t("compassP2")}</p>
-              </div>
-            </section>
+          <Section id="compasso" title={t("compassTitle")}>
+            <p>{t("compassP1")}</p>
+            <p>{t("compassP2")}</p>
+          </Section>
 
-            {/* 06 — Paper */}
-            <section>
-              <h2 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight flex items-baseline gap-3">
-                <span className="text-primary/40 text-sm tabular-nums">06</span>
-                {t("linksTitle")}
-              </h2>
-              <div className="mt-2 pl-8">
-                <p className="text-sm leading-relaxed text-muted-foreground">{t("linksIntro")}</p>
-                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-                  {PAPER_LINKS.map((l) => (
-                    <a
-                      key={l.href}
-                      href={l.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-foreground/80 border-b border-border pb-0.5 hover:border-primary hover:text-primary transition-colors"
-                    >
-                      {t(l.label)}
-                      <ExternalLink className="h-3 w-3 text-muted-foreground/60" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </section>
-          </div>
-        </article>
-      </main>
-    </div>
+          <Section id="riferimenti" title={t("linksTitle")}>
+            <p>{t("linksIntro")}</p>
+            <ul className="flex flex-wrap gap-x-6 gap-y-2">
+              {PAPER_LINKS.map((l) => (
+                <li key={l.href}>
+                  <a
+                    href={l.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="link inline-flex min-h-11 items-center gap-1.5"
+                  >
+                    {t(l.label)}
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        </div>
+      </DocLayout>
+    </CentroPage>
+  );
+}
+
+function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-24">
+      <h2 className="text-xl font-semibold tracking-[var(--tracking-heading)] text-fg">{title}</h2>
+      <div className="mt-3 space-y-4 leading-relaxed text-fg-secondary">{children}</div>
+    </section>
   );
 }

@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { VoteParticipant, VotePartyBreakdown } from "@/types/timeline";
+import { OutcomeShape, SeatShape, toOutcome } from "./outcomes";
+import { SeatPlanHemicycle, useSeatPlan } from "./SeatPlanHemicycle";
 
 interface VoteHemicycleProps {
   participants: VoteParticipant[];
@@ -19,20 +21,13 @@ interface VoteHemicycleProps {
   className?: string;
 }
 
-const FILL: Record<string, string> = {
-  favor: "fill-emerald-600",
-  against: "fill-red-600",
-  abstain: "fill-amber-500",
-  absent: "fill-muted-foreground/25",
-};
-
 const OUTCOME_ORDER: Record<string, number> = { favor: 0, against: 1, abstain: 2, absent: 3 };
 
 /* Shorthand and hemicycle sector for XIX-legislature groups and Misto
    components. `rank` orders the wedges left→right following the sector
-   each group occupies in the Aula by political collocation (the exact
-   per-seat map is not published; sectors are assigned by tradition, left
-   of the President for the left, right for the right). Unmapped parties
+   each group occupies in the Aula by political collocation (sectors are
+   assigned by tradition, left of the President for the left, right for
+   the right). Unmapped parties
    fall back to the centre and to initials, so a new group never breaks. */
 const GROUPS: Array<{ re: RegExp; sigla: string; rank: number }> = [
   [/VERDI E SINISTRA/i, "AVS", 0],
@@ -93,8 +88,8 @@ interface Seat {
   row: number;
 }
 
-/* Seats are not the deputies' real benches — that mapping is not in the
-   open data — so the chamber is synthetic: concentric arcs filled left to
+/* Fallback when the real seating does not apply (Senate, past
+   legislatures): a synthetic chamber of concentric arcs filled left to
    right, which keeps each parliamentary group in a contiguous wedge. */
 function buildSeats(total: number): Seat[] {
   const rows = Math.max(4, Math.round(total / 50));
@@ -141,6 +136,7 @@ export function VoteHemicycle({
 }: VoteHemicycleProps) {
   const t = useTranslations("Timeline");
   const [hoveredParty, setHoveredParty] = useState<string | null>(null);
+  const plan = useSeatPlan();
 
   const { seats, ordered, dotRadius, labels } = useMemo(() => {
     // Wedges ordered by the group's real sector in the Aula (left→right).
@@ -210,7 +206,7 @@ export function VoteHemicycle({
         if (ring === 1 && x - halfW < lastEnd[1] + 2) {
           // Both rings taken (many small wedges near the apex): slide the
           // chip right past the previous one on the freer ring instead of
-          // stacking it on top — a small drift from the wedge midpoint
+          // stacking it on top: a small drift from the wedge midpoint
           // beats an unreadable overlap.
           ring = lastEnd[0] <= lastEnd[1] ? 0 : 1;
           x = Math.max(xAt(LABEL_R[ring]), lastEnd[ring] + 2 + halfW);
@@ -258,6 +254,55 @@ export function VoteHemicycle({
     top: `${((y - VB.y) / VB.h) * 100}%`,
   });
 
+  // Real seats when the floor plan is loaded and the seating covers the vote
+  // (Camera, current legislature); the synthetic arc otherwise.
+  const seated = ordered.filter((p) => p.seat != null).length;
+  if (plan && seated >= ordered.length * 0.8) {
+    return (
+      <div className={cn("mx-auto flex w-full max-w-2xl flex-col gap-3", className)}>
+        <div className="flex flex-wrap justify-center gap-1.5">
+          {[...labels]
+            .sort((a, b) => a.x - b.x)
+            .map((l) => {
+              const isSelected = selectedParty === l.party;
+              return (
+                <button
+                  key={l.party}
+                  type="button"
+                  aria-pressed={isSelected}
+                  title={l.party}
+                  onMouseEnter={() => setHoveredParty(l.party)}
+                  onMouseLeave={() => setHoveredParty(null)}
+                  onClick={() => onSelectParty?.(isSelected ? null : l.party)}
+                  className={cn(
+                    "appearance-none rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    isSelected
+                      ? "border-fg bg-fg text-bg"
+                      : activeParty === l.party
+                        ? "border-line-control bg-surface-muted text-fg"
+                        : "border-line-strong text-fg-muted hover:bg-surface-muted",
+                  )}
+                >
+                  {l.sigla}
+                </button>
+              );
+            })}
+        </div>
+        <SeatPlanHemicycle plan={plan} participants={ordered} activeKey={activeParty} keyOf={wedgeKey} />
+        <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-caption text-fg-secondary">
+          {(["favor", "against", "abstain", "absent"] as const)
+            .filter((o) => o !== "abstain" || tally.abstain > 0)
+            .map((o) => (
+              <li key={o} className="flex items-center gap-1.5">
+                <OutcomeShape outcome={o} size={9} />
+                {outcomeLabel(o)} <span className="tabular font-medium text-fg">{tally[o]}</span>
+              </li>
+            ))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     // Chip size uses container-query units so labels shrink with the arc
     // and the collision estimate in viewBox units stays valid at any width.
@@ -283,10 +328,10 @@ export function VoteHemicycle({
                   // chip layout entirely.
                   "absolute z-10 appearance-none -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border px-[1.1cqw] py-[0.25cqw] text-[2.2cqw] font-medium tracking-wide transition-colors",
                   isSelected
-                    ? "border-foreground bg-foreground text-background"
+                    ? "border-fg bg-fg text-bg"
                     : isActive
-                      ? "border-foreground/40 bg-muted text-foreground"
-                      : "border-border bg-background/80 text-muted-foreground hover:bg-muted",
+                      ? "border-line-control bg-surface-muted text-fg"
+                      : "border-line-strong bg-bg/80 text-fg-muted hover:bg-surface-muted",
                 )}
               >
                 {l.sigla}
@@ -295,7 +340,7 @@ export function VoteHemicycle({
             <TooltipContent side="top" className="text-xs">
               <p className="max-w-56 font-medium">{l.party}</p>
               {l.data && (
-                <p className="tabular-nums">
+                <p className="tabular">
                   {t("voteFavor")}: {l.data.favor} · {t("voteAgainst")}: {l.data.against}
                   {l.data.abstain > 0 && (
                     <> · {t("voteAbstained")}: {l.data.abstain}</>
@@ -316,45 +361,35 @@ export function VoteHemicycle({
           const seat = seats[i];
           const dimmed = activeParty !== null && wedgeKey(p.party) !== activeParty;
           return (
-            <circle
+            <SeatShape
               key={p.id + p.outcome}
+              outcome={toOutcome(p.outcome)}
               cx={seat.x}
               cy={seat.y}
               r={dotRadius}
               className={cn(
                 "hemicycle-dot transition-opacity duration-150",
-                FILL[p.outcome] ?? FILL.absent,
                 dimmed && "opacity-15",
               )}
               style={{ animationDelay: `${i * stagger}ms` }}
             >
               <title>
-                {`${p.first_name} ${p.last_name}${p.party ? ` — ${p.party}` : ""} — ${outcomeLabel(p.outcome)}`}
+                {`${p.first_name} ${p.last_name}${p.party ? ` (${p.party})` : ""}: ${outcomeLabel(p.outcome)}`}
               </title>
-            </circle>
+            </SeatShape>
           );
         })}
       </svg>
-      <div className="mt-1 flex justify-center gap-x-4 gap-y-1 flex-wrap text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-600" />
-          {t("voteFavor")} · {tally.favor}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-red-600" />
-          {t("voteAgainst")} · {tally.against}
-        </span>
-        {tally.abstain > 0 && (
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-amber-500" />
-            {t("voteAbstained")} · {tally.abstain}
-          </span>
-        )}
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-muted-foreground/25" />
-          {t("voteAbsent")} · {tally.absent}
-        </span>
-      </div>
+      <ul className="mt-1 flex flex-wrap justify-center gap-x-4 gap-y-1 text-caption text-fg-secondary">
+        {(["favor", "against", "abstain", "absent"] as const)
+          .filter((o) => o !== "abstain" || tally.abstain > 0)
+          .map((o) => (
+            <li key={o} className="flex items-center gap-1.5">
+              <OutcomeShape outcome={o} size={9} />
+              {outcomeLabel(o)} <span className="tabular font-medium text-fg">{tally[o]}</span>
+            </li>
+          ))}
+      </ul>
     </div>
   );
 }

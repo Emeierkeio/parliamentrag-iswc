@@ -31,21 +31,21 @@ interface ProgressIndicatorProps {
 
 /** Render rich step result details based on step type */
 function StepResultDetails({ step, result, details, tPi }: { step: number; result?: string; details?: Record<string, unknown>; tPi: ReturnType<typeof useTranslations> }) {
-  // Step 2: Commissioni — show commission name
+  // Step 2: Commissioni, show commission name
   if (step === 2) {
     const commList = Array.isArray(details?.commissioni) ? details.commissioni as Array<Record<string, unknown>> : [];
     const topComm = commList[0];
     const topCommName = topComm ? (typeof topComm.nome === "string" ? topComm.nome : typeof topComm.name === "string" ? topComm.name : undefined) : undefined;
     if (topCommName) {
       return (
-        <p className="text-[11px] text-primary font-medium mt-1">
+        <p className="text-[11px] text-brand-fg font-medium mt-1">
           {tPi('stepResultCommissione')}: {topCommName}
         </p>
       );
     }
     if (result) {
       return (
-        <p className="text-[11px] text-primary font-medium mt-1">
+        <p className="text-[11px] text-brand-fg font-medium mt-1">
           {result}
         </p>
       );
@@ -55,7 +55,7 @@ function StepResultDetails({ step, result, details, tPi }: { step: number; resul
   // Default: show result string; nothing to add when the step produced no result
   if (!result) return null;
   return (
-    <p className="text-[11px] text-primary font-medium mt-1">
+    <p className="text-[11px] text-brand-fg font-medium mt-1">
       {tPi('stepResultResult')}: {result}
     </p>
   );
@@ -78,7 +78,7 @@ export function ProgressBanner({ progress, className }: ProgressIndicatorProps) 
 
   return (
     <div className={cn(
-      "sticky top-0 z-20 w-full bg-background/95 backdrop-blur-md border-b border-primary/10",
+      "sticky top-0 z-20 w-full bg-surface/95 backdrop-blur-md border-b border-brand/10",
       "animate-in slide-in-from-top-2 duration-300",
       className
     )}></div>
@@ -120,23 +120,23 @@ export function ProgressIndicator({ progress, className }: ProgressIndicatorProp
                 <TooltipTrigger asChild>
                   <div
                     className={cn(
-                      "h-1.5 rounded-full transition-all duration-300 flex-1 cursor-pointer",
-                      isComplete && "bg-primary",
-                      isActive && "bg-primary/50",
-                      !isComplete && !isActive && "bg-muted"
+                      "h-1.5 rounded-full transition-[background-color,color,opacity] duration-300 flex-1 cursor-pointer",
+                      isComplete && "bg-brand",
+                      isActive && "bg-brand/50",
+                      !isComplete && !isActive && "bg-surface-muted"
                     )}
                   />
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-[250px]">
                   <p className="font-semibold text-xs">{getStepLabel(step.id)}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <p className="text-[11px] text-fg-muted mt-0.5">
                     {getStepDescription(step.id)}
                   </p>
                   {isComplete && (
                     <StepResultDetails step={stepNumber} result={getStepResult(stepNumber)?.result} details={getStepResult(stepNumber)?.details} tPi={tPi} />
                   )}
                   {isActive && (
-                    <p className="text-[11px] text-primary/70 font-medium mt-1 italic">{tPi('inProgress')}</p>
+                    <p className="text-[11px] text-brand-fg font-medium mt-1 italic">{tPi('inProgress')}</p>
                   )}
                 </TooltipContent>
               </Tooltip>
@@ -149,10 +149,10 @@ export function ProgressIndicator({ progress, className }: ProgressIndicatorProp
       <div className="hidden sm:block">
         {/* Progress bar */}
         <div className="relative mb-4">
-          <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+          <div className="h-1 w-full rounded-full bg-surface-muted overflow-hidden">
             <div
-              className="h-full bg-primary transition-all duration-500 ease-out rounded-full"
-              style={{ width: `${progressPercent}%` }}
+              className="h-full w-full origin-left bg-brand rounded-full transition-transform duration-[var(--duration-slow)] ease-out motion-reduce:transition-none"
+              style={{ transform: `scaleX(${progressPercent / 100})` }}
             />
           </div>
         </div>
@@ -172,10 +172,10 @@ export function ProgressIndicator({ progress, className }: ProgressIndicatorProp
                   <div className="flex flex-col items-center gap-1.5 cursor-pointer min-w-0 flex-1">
                     <div
                       className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all duration-300",
-                        isComplete && "bg-primary text-primary-foreground",
-                        isActive && "bg-primary/20 text-primary ring-2 ring-primary/50",
-                        isPending && "bg-muted text-muted-foreground opacity-40"
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-[background-color,color,opacity] duration-300",
+                        isComplete && "bg-brand text-on-brand",
+                        isActive && "bg-brand/20 text-brand-fg ring-2 ring-brand/50",
+                        isPending && "bg-surface-muted text-fg-muted opacity-40"
                       )}
                     >
                       {isComplete ? (
@@ -188,10 +188,10 @@ export function ProgressIndicator({ progress, className }: ProgressIndicatorProp
                     </div>
                     <span
                       className={cn(
-                        "text-[10px] leading-tight text-center truncate w-full px-0.5 transition-all duration-300",
-                        isComplete && "text-primary font-medium",
-                        isActive && "text-primary font-semibold",
-                        isPending && "text-muted-foreground opacity-40"
+                        "text-[10px] leading-tight text-center truncate w-full px-0.5 transition-[background-color,color,opacity] duration-300",
+                        isComplete && "text-brand-fg font-medium",
+                        isActive && "text-brand-fg font-semibold",
+                        isPending && "text-fg-muted opacity-40"
                       )}
                     >
                       <span className="lg:hidden">{getStepShortLabel(step.id)}</span>
@@ -201,14 +201,14 @@ export function ProgressIndicator({ progress, className }: ProgressIndicatorProp
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-[280px]">
                   <p className="font-semibold text-xs">{getStepLabel(step.id)}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <p className="text-[11px] text-fg-muted mt-0.5">
                     {getStepDescription(step.id)}
                   </p>
                   {isComplete && (
                     <StepResultDetails step={stepNumber} result={stepResult?.result} details={stepResult?.details} tPi={tPi} />
                   )}
                   {isActive && (
-                    <p className="text-[11px] text-primary/70 font-medium mt-1 italic">
+                    <p className="text-[11px] text-brand-fg font-medium mt-1 italic">
                       {tPi('inProgress')}
                     </p>
                   )}
@@ -269,11 +269,11 @@ export function CompletedProgressStepper({ progress, className }: ProgressIndica
             return (
               <Tooltip key={step.id} delayDuration={0}>
                 <TooltipTrigger asChild>
-                  <div className="h-1.5 rounded-full bg-primary flex-1 min-w-0 cursor-pointer" />
+                  <div className="h-1.5 rounded-full bg-brand flex-1 min-w-0 cursor-pointer" />
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-[250px]">
                   <p className="font-semibold text-xs">{getStepLabel(step.id)}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <p className="text-[11px] text-fg-muted mt-0.5">
                     {getStepDescription(step.id)}
                   </p>
                   <StepResultDetails step={stepNumber} result={stepResult?.result} details={stepResult?.details} tPi={tPi} />
@@ -286,7 +286,7 @@ export function CompletedProgressStepper({ progress, className }: ProgressIndica
           {steps.map((step) => (
             <span
               key={step.id}
-              className="text-[8px] leading-tight text-center text-primary/70 font-medium truncate flex-1 min-w-0 px-px"
+              className="text-[8px] leading-tight text-center text-brand-fg font-medium truncate flex-1 min-w-0 px-px"
             >
               {getStepShortLabel(step.id)}
             </span>
@@ -294,7 +294,7 @@ export function CompletedProgressStepper({ progress, className }: ProgressIndica
         </div>
       </div>
 
-      {/* Desktop: receipt grid — the process is over, so each phase reports
+      {/* Desktop: receipt grid: the process is over, so each phase reports
           its outcome inline instead of freezing the live-progress stepper */}
       <div className="hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-2.5">
         {steps.map((step, index) => {
@@ -306,13 +306,13 @@ export function CompletedProgressStepper({ progress, className }: ProgressIndica
             <Tooltip key={step.id} delayDuration={0}>
               <TooltipTrigger asChild>
                 <div className="group flex items-start gap-2 cursor-pointer min-w-0">
-                  <Check className="mt-[3px] h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                  <Check className="mt-[3px] h-3.5 w-3.5 shrink-0 text-brand-fg" aria-hidden="true" />
                   <div className="min-w-0">
-                    <p className="text-xs font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
+                    <p className="text-xs font-medium leading-snug text-fg transition-colors group-hover:text-brand-fg">
                       {getStepLabel(step.id)}
                     </p>
                     {resultLine && (
-                      <p className="truncate text-[11px] text-muted-foreground">
+                      <p className="truncate text-[11px] text-fg-muted">
                         {resultLine}
                       </p>
                     )}
@@ -321,7 +321,7 @@ export function CompletedProgressStepper({ progress, className }: ProgressIndica
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-[280px]">
                 <p className="font-semibold text-xs">{getStepLabel(step.id)}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
+                <p className="text-[11px] text-fg-muted mt-0.5">
                   {getStepDescription(step.id)}
                 </p>
                 <StepResultDetails step={stepNumber} result={stepResult?.result} details={stepResult?.details} tPi={tPi} />
@@ -386,14 +386,14 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
     return () => clearInterval(interval);
   }, [progress.isWaiting, progress.elapsedSeconds]);
 
-  // currentStep: 0 = connecting — first SSE event not yet received
+  // currentStep: 0 = connecting, first SSE event not yet received
   if (!progress.isWaiting && progress.currentStep === 0) {
     return (
       <div className={cn(
         "flex items-center justify-center w-full min-h-[50vh] md:min-h-[60vh]",
         className
       )}>
-        <Loader2 className="h-6 w-6 animate-spin text-primary/30" />
+        <Loader2 className="h-6 w-6 animate-spin text-brand-fg" />
       </div>
     );
   }
@@ -422,10 +422,10 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
           {/* The query is the context of the wait: it leads the screen */}
           {query && (
             <div className="text-center mb-7">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60 mb-2">
+              <p className="label-mono mb-2">
                 {tPi('yourRequest')}
               </p>
-              <p className="[font-family:var(--font-display)] text-xl sm:text-2xl font-medium tracking-tight leading-snug text-foreground line-clamp-2 [text-wrap:balance]">
+              <p className="serif-display text-xl sm:text-2xl leading-snug text-fg line-clamp-2 [text-wrap:balance]">
                 {query}
               </p>
             </div>
@@ -435,36 +435,36 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
               they change on the waiting → next transition, while the facts
               row below ticks every second and must stay out of it, or the
               screen reader would announce the timer continuously. */}
-          <div className="rounded-xl border border-border/60 bg-card px-5 py-4">
+          <div className="rounded-lg border border-line bg-surface px-5 py-4">
             <div role="status" aria-live="polite">
               <div className="flex items-center gap-2.5">
                 <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
                   <span
                     className={cn(
                       "absolute inline-flex h-full w-full rounded-full opacity-50 motion-safe:animate-ping",
-                      isNext ? "bg-primary" : "bg-muted-foreground/50"
+                      isNext ? "bg-brand" : "bg-fg-faint/50"
                     )}
                     style={{ animationDuration: "2s" }}
                   />
                   <span className={cn(
                     "relative inline-flex h-2 w-2 rounded-full",
-                    isNext ? "bg-primary" : "bg-muted-foreground/70"
+                    isNext ? "bg-brand" : "bg-fg-faint/70"
                   )} />
                 </span>
-                <p className="text-sm font-semibold text-foreground">
+                <p className="text-sm font-semibold text-fg">
                   {isNext ? tPi('youreNext') : tPi('systemFull')}
                 </p>
               </div>
-              <p className="text-[13px] text-muted-foreground leading-relaxed mt-1.5">
+              <p className="text-[13px] text-fg-muted leading-relaxed mt-1.5">
                 {isNext ? tPi('youreNextDesc') : tPi('systemFullQueued')}
               </p>
             </div>
 
             {/* Facts: only values the backend really sent */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 pt-3 border-t border-border/40 text-xs text-muted-foreground tabular-nums">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 pt-3 border-t border-line text-xs text-fg-muted tabular">
               {pos !== undefined && !isNext && (
                 <span>
-                  <span className="font-semibold text-foreground">#{pos}</span>{" "}
+                  <span className="font-semibold text-fg">#{pos}</span>{" "}
                   {tPi('queuePositionLabel')}
                 </span>
               )}
@@ -489,18 +489,18 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
             </div>
 
             {/* Indeterminate activity line: the system is alive, no fake progress */}
-            <div className="mt-3.5 h-[3px] w-full rounded-full bg-muted overflow-hidden" aria-hidden="true">
-              <div className="h-full w-1/3 rounded-full bg-primary/50 motion-safe:animate-[queue-slide_2.2s_ease-in-out_infinite] motion-reduce:w-full motion-reduce:bg-primary/20" />
+            <div className="mt-3.5 h-[3px] w-full rounded-full bg-surface-muted overflow-hidden" aria-hidden="true">
+              <div className="h-full w-1/3 rounded-full bg-brand/50 motion-safe:animate-[queue-slide_2.2s_ease-in-out_infinite] motion-reduce:w-full motion-reduce:bg-brand/20" />
             </div>
           </div>
 
-          <p className="text-[11px] text-muted-foreground/60 text-center mt-3 leading-relaxed">
+          <p className="text-[11px] text-fg-muted text-center mt-3 leading-relaxed">
             {tPi('dontClose')}
           </p>
 
           {/* Capabilities: secondary section, subordinate to the status above */}
-          <div className="mt-10 pt-6 border-t border-border/40">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/50 mb-4">
+          <div className="mt-10 pt-6 border-t border-line">
+            <p className="label-mono mb-4">
               {tPi('discoverWhileWaiting')}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 text-left">
@@ -508,12 +508,12 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
                 const Icon = feat.icon;
                 return (
                   <div key={feat.titleKey} className="flex items-start gap-2.5">
-                    <Icon className="h-3.5 w-3.5 text-primary/70 mt-0.5 shrink-0" aria-hidden="true" />
+                    <Icon className="h-3.5 w-3.5 text-brand-fg mt-0.5 shrink-0" aria-hidden="true" />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-foreground leading-tight">
+                      <p className="text-xs font-semibold text-fg leading-tight">
                         {tPi(feat.titleKey as Parameters<typeof tPi>[0])}
                       </p>
-                      <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                      <p className="text-[11px] text-fg-muted leading-snug mt-0.5">
                         {tPi(feat.descKey as Parameters<typeof tPi>[0])}
                       </p>
                     </div>
@@ -546,8 +546,8 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
         {/* Mobile progress dots */}
         <div className="w-full mb-5">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] text-muted-foreground">{tPi('analysisInProgress')}</span>
-            <span className="text-[11px] font-medium text-primary">
+            <span className="text-[11px] text-fg-muted">{tPi('analysisInProgress')}</span>
+            <span className="text-[11px] font-medium text-brand-fg">
               {progress.currentStep} / {steps.length}
             </span>
           </div>
@@ -560,10 +560,10 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
                 <div
                   key={step.id}
                   className={cn(
-                    "h-1 rounded-full transition-all duration-300 flex-1",
-                    isComplete && "bg-primary",
-                    isActive && "bg-primary/50",
-                    !isComplete && !isActive && "bg-muted"
+                    "h-1 rounded-full transition-[background-color,color,opacity] duration-300 flex-1",
+                    isComplete && "bg-brand",
+                    isActive && "bg-brand/50",
+                    !isComplete && !isActive && "bg-surface-muted"
                   )}
                 />
               );
@@ -576,7 +576,7 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
           <div className="w-full text-center space-y-4">
             {/* Icon */}
             <div className="flex justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary ring-3 ring-primary/5">
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-brand-soft text-brand-fg">
                 {ActiveIcon ? (
                   <ActiveIcon className="h-7 w-7" />
                 ) : (
@@ -587,26 +587,26 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
 
             {/* Title */}
             <div>
-              <p className="text-[11px] font-medium text-primary/60 uppercase tracking-wider mb-0.5">
+              <p className="label-mono text-brand-fg mb-0.5">
                 Step {progress.currentStep}
               </p>
-              <h2 className="[font-family:var(--font-display)] text-xl font-semibold tracking-tight text-foreground">
+              <h2 className="serif-display text-xl text-fg">
                 {getStepLabel(currentStepConfig.id)}
               </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-fg-muted mt-0.5">
                 {getStepDescription(currentStepConfig.id)}
               </p>
             </div>
 
             {/* Why */}
-            <div className="bg-muted/40 rounded-xl px-4 py-3 text-left">
-              <p className="text-[13px] text-muted-foreground leading-relaxed">
+            <div className="bg-surface-muted rounded-md px-4 py-3 text-left">
+              <p className="text-[13px] text-fg-muted leading-relaxed">
                 {getStepWhyDescription(currentStepConfig.id)}
               </p>
             </div>
 
             {/* Loading */}
-            <div className="flex items-center justify-center gap-2 text-sm text-primary/70">
+            <div className="flex items-center justify-center gap-2 text-sm text-brand-fg">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{tPi('inProgress')}</span>
             </div>
@@ -615,18 +615,18 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
 
         {/* Mobile completed results */}
         {progress.stepResults && progress.stepResults.length > 0 && (
-          <div className="w-full mt-5 pt-4 border-t border-border/30">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60 mb-2">
+          <div className="w-full mt-5 pt-4 border-t border-line">
+            <p className="label-mono mb-2">
               {tPi('resultsObtained')}
             </p>
             <div className="space-y-1.5">
               {[...progress.stepResults].sort((a, b) => a.step - b.step).map((sr) => (
                 <div key={sr.step} className="flex items-start gap-2">
-                  <Check className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  <Check className="h-3.5 w-3.5 text-brand-fg mt-0.5 shrink-0" />
                   <div className="min-w-0">
-                    <span className="text-[13px] font-medium text-foreground">{sr.label}</span>
+                    <span className="text-[13px] font-medium text-fg">{sr.label}</span>
                     {sr.result && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{sr.result}</p>
+                      <p className="text-[11px] text-fg-muted mt-0.5 leading-snug">{sr.result}</p>
                     )}
                   </div>
                 </div>
@@ -636,14 +636,14 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
         )}
 
         {/* Mobile objective */}
-        <div className="w-full mt-5 pt-4 border-t border-border/30">
+        <div className="w-full mt-5 pt-4 border-t border-line">
           <div className="flex items-center gap-1.5 mb-1.5">
-            <Target className="h-3 w-3 text-primary/60" />
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+            <Target className="h-3 w-3 text-brand-fg" />
+            <p className="label-mono">
               {tPi('finalObjective')}
             </p>
           </div>
-          <p className="text-[13px] text-muted-foreground leading-relaxed">
+          <p className="text-[13px] text-fg-muted leading-relaxed">
             {tPi('objectiveText')}
           </p>
         </div>
@@ -652,7 +652,7 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
       {/* ===== DESKTOP LAYOUT ===== */}
       {/* LEFT SIDEBAR: Step list + Objective */}
       <div className="hidden md:block w-64 lg:w-72 shrink-0">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60 mb-4">
+        <p className="label-mono mb-4">
           {tPi('analysisPipeline')}
         </p>
 
@@ -668,8 +668,8 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
               <div
                 key={step.id}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-300",
-                  isActive && "bg-primary/10",
+                  "flex items-center gap-3 px-3 py-2 rounded-md transition-[background-color,color,opacity] duration-300",
+                  isActive && "bg-brand-soft",
                   isComplete && "opacity-80",
                   isPending && "opacity-30"
                 )}
@@ -677,10 +677,10 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
                 {/* Step indicator */}
                 <div
                   className={cn(
-                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all duration-300",
-                    isComplete && "bg-primary text-primary-foreground",
-                    isActive && "bg-primary/20 text-primary ring-2 ring-primary/40",
-                    isPending && "bg-muted text-muted-foreground"
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-[background-color,color,opacity] duration-300",
+                    isComplete && "bg-brand text-on-brand",
+                    isActive && "bg-brand/20 text-brand-fg ring-2 ring-brand/40",
+                    isPending && "bg-surface-muted text-fg-muted"
                   )}
                 >
                   {isComplete ? (
@@ -696,16 +696,16 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
                 <div className="min-w-0 flex-1">
                   <p
                     className={cn(
-                      "text-sm leading-tight truncate transition-all duration-300",
-                      isComplete && "text-primary font-medium",
-                      isActive && "text-primary font-semibold",
-                      isPending && "text-muted-foreground"
+                      "text-sm leading-tight truncate transition-[background-color,color,opacity] duration-300",
+                      isComplete && "text-brand-fg font-medium",
+                      isActive && "text-brand-fg font-semibold",
+                      isPending && "text-fg-muted"
                     )}
                   >
                     {getStepLabel(step.id)}
                   </p>
                   {isComplete && getStepResult(stepNumber)?.result && (
-                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                    <p className="text-[11px] text-fg-muted truncate mt-0.5">
                       {getStepResult(stepNumber)!.result}
                     </p>
                   )}
@@ -716,14 +716,14 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
         </div>
 
         {/* Objective */}
-        <div className="mt-6 pt-5 border-t border-border/40">
+        <div className="mt-6 pt-5 border-t border-line">
           <div className="flex items-center gap-2 mb-2">
-            <Target className="h-3.5 w-3.5 text-primary/60" />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">
+            <Target className="h-3.5 w-3.5 text-brand-fg" />
+            <p className="label-mono">
               {tPi('objective')}
             </p>
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed">
+          <p className="text-sm text-fg-muted leading-relaxed">
             {tPi('objectiveText')}
           </p>
         </div>
@@ -734,15 +734,15 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
         {/* Progress bar */}
         <div className="w-full max-w-lg mb-8">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-muted-foreground">{tPi('progress')}</span>
-            <span className="text-xs font-medium text-primary">
+            <span className="text-xs text-fg-muted">{tPi('progress')}</span>
+            <span className="text-xs font-medium text-brand-fg">
               {progress.currentStep} / {steps.length}
             </span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+          <div className="h-1.5 w-full rounded-full bg-surface-muted overflow-hidden">
             <div
-              className="h-full bg-primary transition-all duration-500 ease-out rounded-full"
-              style={{ width: `${progressPercent}%` }}
+              className="h-full w-full origin-left bg-brand rounded-full transition-transform duration-[var(--duration-slow)] ease-out motion-reduce:transition-none"
+              style={{ transform: `scaleX(${progressPercent / 100})` }}
             />
           </div>
         </div>
@@ -752,7 +752,7 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
           <div className="w-full max-w-lg text-center space-y-5">
             {/* Icon */}
             <div className="flex justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-4 ring-primary/5">
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-brand-soft text-brand-fg">
                 {ActiveIcon ? (
                   <ActiveIcon className="h-8 w-8" />
                 ) : (
@@ -763,26 +763,26 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
 
             {/* Step title */}
             <div>
-              <p className="text-xs font-medium text-primary/60 uppercase tracking-wider mb-1">
+              <p className="label-mono text-brand-fg mb-1">
                 Step {progress.currentStep}
               </p>
-              <h2 className="[font-family:var(--font-display)] text-2xl lg:text-[1.75rem] font-semibold tracking-tight text-foreground">
+              <h2 className="serif-display text-2xl lg:text-[1.875rem] text-fg">
                 {getStepLabel(currentStepConfig.id)}
               </h2>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-fg-muted mt-1">
                 {getStepDescription(currentStepConfig.id)}
               </p>
             </div>
 
             {/* Why description */}
-            <div className="bg-muted/40 rounded-xl px-6 py-4 text-left">
-              <p className="text-sm text-muted-foreground leading-relaxed">
+            <div className="bg-surface-muted rounded-md px-6 py-4 text-left">
+              <p className="text-sm text-fg-muted leading-relaxed">
                 {getStepWhyDescription(currentStepConfig.id)}
               </p>
             </div>
 
             {/* Loading indicator */}
-            <div className="flex items-center justify-center gap-2 text-sm text-primary/70">
+            <div className="flex items-center justify-center gap-2 text-sm text-brand-fg">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{tPi('inProgress')}</span>
             </div>
@@ -791,18 +791,18 @@ export function ProgressFullPage({ progress, query, className }: ProgressFullPag
 
         {/* Completed results summary */}
         {progress.stepResults && progress.stepResults.length > 0 && (
-          <div className="w-full max-w-lg mt-8 pt-6 border-t border-border/30">
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground/60 mb-3">
+          <div className="w-full max-w-lg mt-8 pt-6 border-t border-line">
+            <p className="label-mono mb-3">
               {tPi('resultsObtained')}
             </p>
             <div className="space-y-2">
               {[...progress.stepResults].sort((a, b) => a.step - b.step).map((sr) => (
                 <div key={sr.step} className="flex items-start gap-2.5">
-                  <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <Check className="h-4 w-4 text-brand-fg mt-0.5 shrink-0" />
                   <div className="min-w-0">
-                    <span className="text-sm font-medium text-foreground">{sr.label}</span>
+                    <span className="text-sm font-medium text-fg">{sr.label}</span>
                     {sr.result && (
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{sr.result}</p>
+                      <p className="text-xs text-fg-muted mt-0.5 leading-relaxed">{sr.result}</p>
                     )}
                   </div>
                 </div>
@@ -820,8 +820,8 @@ export function ProgressIndicatorCompact({ progress }: ProgressIndicatorProps) {
   if (!progress) return null;
 
   return (
-    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+    <div className="flex items-center gap-3 text-sm text-fg-muted">
+      <Loader2 className="h-4 w-4 animate-spin text-brand-fg" />
       <span>
         {progress.stepLabel} ({progress.currentStep}/{progress.totalSteps})
       </span>

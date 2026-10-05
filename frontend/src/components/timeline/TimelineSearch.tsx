@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { Search, X, Calendar } from "lucide-react";
+import { ArrowRight, Search, X, Calendar } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -79,20 +79,20 @@ export function TimelineSearch({
     <div className="space-y-2.5" role="search" aria-label={t("pageTitle")}>
       {/* Search input */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted pointer-events-none" />
         <Input
           type="text"
           placeholder={t("searchPlaceholder")}
           value={filters.search}
           onChange={(e) => onFiltersChange({ search: e.target.value })}
-          className="pl-9 pr-9 h-10"
+          className="pl-9 pr-9 h-11"
           aria-label={t("searchPlaceholder")}
         />
         {filters.search && (
           <button
             type="button"
             onClick={() => onFiltersChange({ search: "" })}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-fg-muted hover:bg-surface-muted hover:text-fg transition-colors"
             aria-label="Clear search"
           >
             <X className="h-4 w-4" />
@@ -102,18 +102,18 @@ export function TimelineSearch({
 
       {/* Presets + date range in a single row */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Preset segmented control — fills the row on phones, inline on larger screens */}
-        <div className="flex flex-1 sm:flex-none sm:inline-flex rounded-lg border p-0.5 bg-card shadow-sm">
+        {/* Preset segmented control: fills the row on phones, inline on larger screens */}
+        <div className="flex flex-1 sm:flex-none sm:inline-flex rounded-full border border-line-strong p-0.5 bg-surface">
           {presets.map(({ key, days, label }) => (
             <button
               key={key}
               onClick={() => applyPreset(key, days)}
               aria-pressed={activePreset === key}
               className={cn(
-                "flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                "flex-1 sm:flex-none min-h-8 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                 activePreset === key
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-brand text-on-brand"
+                  : "text-fg-secondary hover:text-fg"
               )}
             >
               {label}
@@ -128,44 +128,44 @@ export function TimelineSearch({
           aria-expanded={showDates}
           aria-label={t("dateFrom")}
           className={cn(
-            "sm:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
+            "sm:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors",
             showDates
-              ? "border-primary/40 bg-primary/5 text-primary"
-              : "border-border bg-card text-muted-foreground"
+              ? "border-brand/40 bg-brand-soft text-brand-fg"
+              : "border-line-strong bg-surface text-fg-muted"
           )}
         >
           <Calendar className="h-4 w-4" />
         </button>
 
         {/* Separator */}
-        <div className="w-px h-5 bg-border mx-1 hidden sm:block" />
+        <div className="w-px h-5 bg-line mx-1 hidden sm:block" />
 
-        {/* Compact date range — hidden on phones until the toggle opens it */}
+        {/* Compact date range, hidden on phones until the toggle opens it */}
         <div className={cn("items-center gap-1.5 w-full sm:w-auto", showDates ? "flex" : "hidden sm:flex")}>
-          <Calendar className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0 hidden sm:block" />
+          <Calendar className="h-3.5 w-3.5 text-fg-muted shrink-0 hidden sm:block" />
           <input
             type="date"
             value={filters.fromDate}
             onChange={(e) => handleFromDate(e.target.value)}
-            className="flex-1 sm:flex-none h-8 rounded-md border border-border bg-background px-2.5 text-xs text-foreground focus:ring-1 focus:ring-ring/50 transition-colors outline-none"
+            className="flex-1 sm:flex-none h-8 rounded-md border border-line-control bg-surface px-2.5 text-xs text-fg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
             aria-label={t("dateFrom")}
           />
-          <span className="text-[10px] text-muted-foreground/50">—</span>
+          <ArrowRight className="h-3 w-3 shrink-0 text-fg-faint" aria-hidden />
           <input
             type="date"
             value={filters.toDate}
             onChange={(e) => handleToDate(e.target.value)}
-            className="flex-1 sm:flex-none h-8 rounded-md border border-border bg-background px-2.5 text-xs text-foreground focus:ring-1 focus:ring-ring/50 transition-colors outline-none"
+            className="flex-1 sm:flex-none h-8 rounded-md border border-line-control bg-surface px-2.5 text-xs text-fg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
             aria-label={t("dateTo")}
           />
         </div>
 
-        {/* Clear all — outside the dates row so it stays reachable on phones
+        {/* Clear all: outside the dates row so it stays reachable on phones
             while the dates are collapsed */}
         {hasActiveFilters && (
           <button
             onClick={handleClear}
-            className="h-8 px-2.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors ml-auto shrink-0"
+            className="h-8 px-3 rounded-full text-xs font-medium text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors ml-auto shrink-0"
           >
             {t("clearFilters")}
           </button>

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * TraceCard — "dietro le quinte" della pipeline, in stile trace explorer.
+ * TraceCard: "dietro le quinte" della pipeline, in stile trace explorer.
  *
  * Tre viste sugli stessi dati registrati dal backend:
  * - Pipeline: waterfall temporale con barre agli offset reali; le fasi con
@@ -9,7 +9,7 @@
  *   finestra
  * - Chiamate LLM: elenco cronologico completo, ogni chiamata si apre su
  *   prompt (per ruolo), risposta, token e temperatura
- * - Citazioni: il registro del CitationRegistry — stato di ogni citazione,
+ * - Citazioni: il registro del CitationRegistry: stato di ogni citazione,
  *   coerenza semantica, motivi di scarto, affermazioni senza fonte
  *
  * Solo durate, contatori e anteprime troncate: il testo integrale delle
@@ -147,26 +147,26 @@ function LlmCallRow({ call, index }: { call: LlmCall; index: number }) {
   const Icon = isEmb ? Braces : Cpu;
 
   return (
-    <div className={cn("rounded-md border border-border/50", open && "bg-muted/20")}>
+    <div className={cn("rounded-md border border-line", open && "bg-surface-muted")}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-muted/40 rounded-md transition-colors"
+        className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-surface-muted rounded-md transition-colors"
       >
-        <ChevronRight className={cn("h-3 w-3 shrink-0 text-muted-foreground/60 transition-transform", open && "rotate-90")} />
-        <Icon className="h-3 w-3 shrink-0 text-primary/60" />
-        <span className="text-[10px] font-mono text-foreground/80 bg-muted/70 rounded px-1 py-px shrink-0">
+        <ChevronRight className={cn("h-3 w-3 shrink-0 text-fg-muted transition-transform", open && "rotate-90")} />
+        <Icon className="h-3 w-3 shrink-0 text-brand-fg" />
+        <span className="text-[10px] font-mono text-fg-secondary bg-surface-muted rounded px-1 py-px shrink-0">
           {call.model ?? call.endpoint}
         </span>
         {call.error ? (
-          <span className="text-[10px] text-destructive truncate">{t("callError")}</span>
+          <span className="text-[10px] text-danger-fg truncate">{t("callError")}</span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/70 truncate min-w-0">
+          <span className="text-[10px] text-fg-muted truncate min-w-0">
             {isEmb
               ? `${call.inputs ?? 0} ${t("inputLabel")}`
               : `${call.messages?.length ?? 0} msg`}
           </span>
         )}
-        <span className="ml-auto shrink-0 text-[10px] font-mono tabular-nums text-muted-foreground/80">
+        <span className="ml-auto shrink-0 text-[10px] font-mono tabular text-fg-muted">
           {call.tokens?.total != null && (
             <span className="mr-2">{formatTokens(call.tokens.total)} tok</span>
           )}
@@ -176,7 +176,7 @@ function LlmCallRow({ call, index }: { call: LlmCall; index: number }) {
 
       {open && (
         <div className="px-2 pb-2 space-y-1.5">
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-1 text-[9.5px] font-mono text-muted-foreground/70">
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-1 text-[9.5px] font-mono text-fg-muted">
             <span>t+{formatMs(call.t_offset_ms)}</span>
             {call.temperature != null && <span>temp {call.temperature}</span>}
             {call.tokens?.prompt != null && (
@@ -187,43 +187,43 @@ function LlmCallRow({ call, index }: { call: LlmCall; index: number }) {
           </div>
 
           {call.error && (
-            <div className="rounded bg-destructive/10 border border-destructive/20 p-2 text-[10px] font-mono text-destructive whitespace-pre-wrap">
+            <div className="rounded-sm bg-danger-soft border border-danger/20 p-2 text-[10px] font-mono text-danger-fg whitespace-pre-wrap">
               {call.error}
             </div>
           )}
 
           {(call.messages ?? []).map((m, i) => (
-            <div key={i} className="rounded bg-muted/50 p-2">
+            <div key={i} className="rounded-sm bg-surface-muted p-2">
               <div className="flex items-baseline justify-between mb-1">
-                <span className="text-[9px] uppercase tracking-widest font-semibold text-muted-foreground/70">{m.role}</span>
-                <span className="text-[9px] font-mono text-muted-foreground/50">{m.chars.toLocaleString("it-IT")} char</span>
+                <span className="label-mono text-[10px]">{m.role}</span>
+                <span className="text-[9px] font-mono text-fg-faint">{m.chars.toLocaleString("it-IT")} char</span>
               </div>
-              <div className="text-[10px] font-mono text-foreground/70 whitespace-pre-wrap max-h-36 overflow-y-auto leading-relaxed">
+              <div className="text-[10px] font-mono text-fg-secondary whitespace-pre-wrap max-h-36 overflow-y-auto leading-relaxed">
                 {m.preview}
               </div>
             </div>
           ))}
 
           {call.input_preview && (
-            <div className="rounded bg-muted/50 p-2">
-              <div className="text-[9px] uppercase tracking-widest font-semibold text-muted-foreground/70 mb-1">
+            <div className="rounded-sm bg-surface-muted p-2">
+              <div className="label-mono text-[10px] mb-1">
                 {t("inputLabel")} ({call.inputs})
               </div>
-              <div className="text-[10px] font-mono text-foreground/70 whitespace-pre-wrap max-h-20 overflow-y-auto leading-relaxed">
+              <div className="text-[10px] font-mono text-fg-secondary whitespace-pre-wrap max-h-20 overflow-y-auto leading-relaxed">
                 {call.input_preview}
               </div>
             </div>
           )}
 
           {call.response_preview != null && (
-            <div className="rounded border border-primary/20 bg-primary/5 p-2">
+            <div className="rounded-sm border border-brand/20 bg-surface-brand p-2">
               <div className="flex items-baseline justify-between mb-1">
-                <span className="text-[9px] uppercase tracking-widest font-semibold text-primary/70">{t("responseLabel")}</span>
+                <span className="label-mono text-[10px] text-brand-fg">{t("responseLabel")}</span>
                 {call.response_chars != null && (
-                  <span className="text-[9px] font-mono text-muted-foreground/50">{call.response_chars.toLocaleString("it-IT")} char</span>
+                  <span className="text-[9px] font-mono text-fg-faint">{call.response_chars.toLocaleString("it-IT")} char</span>
                 )}
               </div>
-              <div className="text-[10px] font-mono text-foreground/70 whitespace-pre-wrap max-h-36 overflow-y-auto leading-relaxed">
+              <div className="text-[10px] font-mono text-fg-secondary whitespace-pre-wrap max-h-36 overflow-y-auto leading-relaxed">
                 {call.response_preview}
               </div>
             </div>
@@ -239,12 +239,12 @@ function LlmCallRow({ call, index }: { call: LlmCall; index: number }) {
 /* ------------------------------------------------------------------ */
 
 const STATUS_STYLE: Record<string, string> = {
-  resolved: "bg-green-600",
-  in_text: "bg-primary/70",
-  bound: "bg-primary/40",
-  registered: "bg-muted-foreground/30",
-  orphaned: "bg-amber-500",
-  failed: "bg-destructive",
+  resolved: "bg-brand",
+  in_text: "bg-brand/70",
+  bound: "bg-brand/40",
+  registered: "bg-fg-faint/50",
+  orphaned: "bg-notice",
+  failed: "bg-danger",
 };
 
 function LedgerRow({ entry }: { entry: CitationLedgerEntry }) {
@@ -256,26 +256,26 @@ function LedgerRow({ entry }: { entry: CitationLedgerEntry }) {
     statusLabel = entry.status;
   }
   return (
-    <div className="flex items-start gap-2 py-1.5 border-b border-border/40 last:border-0">
-      <span className={cn("mt-1 h-2 w-2 rounded-full shrink-0", STATUS_STYLE[entry.status] ?? "bg-muted-foreground/40")} />
+    <div className="flex items-start gap-2 py-1.5 border-b border-line last:border-0">
+      <span className={cn("mt-1 h-2 w-2 rounded-full shrink-0", STATUS_STYLE[entry.status] ?? "bg-fg-faint/40")} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-[11px] text-foreground/85 truncate">{entry.speaker ?? "—"}</span>
+          <span className="text-[11px] text-fg-secondary truncate">{entry.speaker ?? "—"}</span>
           {entry.party && (
-            <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 truncate">{entry.party}</span>
+            <span className="text-[9px] uppercase tracking-wider text-fg-muted truncate">{entry.party}</span>
           )}
         </div>
-        <div className="text-[9px] font-mono text-muted-foreground/50 truncate" title={entry.evidence_id}>
+        <div className="text-[9px] font-mono text-fg-faint truncate" title={entry.evidence_id}>
           {entry.evidence_id}
         </div>
         {entry.error && (
-          <div className="text-[10px] text-destructive/80 mt-0.5">{entry.error}</div>
+          <div className="text-[10px] text-danger-fg mt-0.5">{entry.error}</div>
         )}
       </div>
       <div className="text-right shrink-0">
-        <div className="text-[10px] font-medium text-foreground/70">{statusLabel}</div>
+        <div className="text-[10px] font-medium text-fg-secondary">{statusLabel}</div>
         {entry.coherence_score != null && (
-          <div className="text-[9px] font-mono text-muted-foreground/60">
+          <div className="text-[9px] font-mono text-fg-muted">
             {t("coherenceShort")} {entry.coherence_score.toFixed(2).replace(".", ",")}
           </div>
         )}
@@ -362,13 +362,13 @@ export function TraceCard({ trace }: TraceCardProps) {
   const renderBar = (stage: TraceStage, start: number, variant: "stage" | "hero" | "child") => {
     const delay = `${Math.min(barIndex++ * 60, 900)}ms`;
     return (
-      <div className="relative h-[18px] flex-1 overflow-hidden rounded-[3px] bg-muted/50">
+      <div className="relative h-[18px] flex-1 overflow-hidden rounded-xs bg-surface-muted">
         <div
           className={cn(
-            "absolute top-[3px] bottom-[3px] rounded-[2px] origin-left animate-trace-grow",
-            variant === "hero" && "bg-primary",
-            variant === "stage" && "bg-primary/30",
-            variant === "child" && "bg-primary/55",
+            "absolute top-[3px] bottom-[3px] rounded-xs origin-left animate-trace-grow",
+            variant === "hero" && "bg-brand",
+            variant === "stage" && "bg-brand/30",
+            variant === "child" && "bg-brand/55",
           )}
           style={{
             left: `${pct(start)}%`,
@@ -386,7 +386,7 @@ export function TraceCard({ trace }: TraceCardProps) {
     return (
       <div className="ml-6 mr-2 my-1 space-y-1">
         {stageCalls.length === 0 ? (
-          <div className="text-[10px] text-muted-foreground/50 px-2 py-1">{t("noCalls")}</div>
+          <div className="text-[10px] text-fg-faint px-2 py-1">{t("noCalls")}</div>
         ) : (
           stageCalls.map((c, i) => <LlmCallRow key={`${key}_${i}`} call={c} index={i} />)
         )}
@@ -402,20 +402,20 @@ export function TraceCard({ trace }: TraceCardProps) {
   const header = (
     <div className="flex items-end justify-between gap-4 mb-1 px-1">
       <div>
-        <div className="text-3xl leading-none text-primary [font-family:var(--font-display)]">
+        <div className="text-3xl leading-none text-brand-fg serif-display">
           {formatMs(trace.total_ms)}
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/70 mt-1.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-fg-muted mt-1.5">
           <span>{t("subtitle")}</span>
           {trace.llm && (
             <>
-              <span className="text-muted-foreground/30">·</span>
+              <span className="text-fg-faint">·</span>
               <span className="font-mono">{trace.llm.chat_calls} LLM + {trace.llm.embedding_calls} emb</span>
-              <span className="text-muted-foreground/30">·</span>
+              <span className="text-fg-faint">·</span>
               <span className="font-mono">{formatTokens(trace.llm.total_tokens)} token</span>
               {trace.llm.cost_usd != null && trace.llm.cost_usd > 0 && (
                 <>
-                  <span className="text-muted-foreground/30">·</span>
+                  <span className="text-fg-faint">·</span>
                   <span className="font-mono">≈{formatCost(trace.llm.cost_usd)}</span>
                 </>
               )}
@@ -425,10 +425,10 @@ export function TraceCard({ trace }: TraceCardProps) {
       </div>
       {trace.rewritten_query && (
         <div className="text-right min-w-0 max-w-[40%]">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground/50 mb-0.5">
+          <div className="label-mono text-[10px] mb-0.5">
             {t("rewrittenLabel")}
           </div>
-          <div className="text-[11px] font-mono text-muted-foreground truncate" title={trace.rewritten_query}>
+          <div className="text-[11px] font-mono text-fg-muted truncate" title={trace.rewritten_query}>
             «{trace.rewritten_query}»
           </div>
         </div>
@@ -441,11 +441,11 @@ export function TraceCard({ trace }: TraceCardProps) {
       {/* Asse dei tempi con tacche ai quarti */}
       <div className="flex items-center ml-[10.5rem] mr-[3.75rem] mb-1 mt-3">
         {[0, 1, 2, 3].map((q) => (
-          <div key={q} className="flex-1 border-l border-border/60 pl-1 text-[9px] font-mono text-muted-foreground/50 leading-none">
+          <div key={q} className="flex-1 border-l border-line pl-1 text-[9px] font-mono text-fg-faint leading-none">
             {q === 0 ? "0" : formatMs((axisTotal * q) / 4)}
           </div>
         ))}
-        <div className="border-l border-border/60 pl-1 text-[9px] font-mono text-muted-foreground/50 leading-none">
+        <div className="border-l border-line pl-1 text-[9px] font-mono text-fg-faint leading-none">
           {formatMs(axisTotal)}
         </div>
       </div>
@@ -463,35 +463,35 @@ export function TraceCard({ trace }: TraceCardProps) {
                 onClick={clickable ? () => toggleStage(stage.key) : undefined}
                 className={cn(
                   "group flex items-center gap-3 py-[3px] rounded-md transition-colors",
-                  clickable ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30",
+                  clickable ? "cursor-pointer hover:bg-surface-muted" : "hover:bg-surface-muted",
                 )}
               >
                 <div className="w-[9.75rem] shrink-0 pl-1 min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
                     {clickable && (
-                      <ChevronRight className={cn("h-3 w-3 shrink-0 text-muted-foreground/50 transition-transform", openStages.has(stage.key) && "rotate-90")} />
+                      <ChevronRight className={cn("h-3 w-3 shrink-0 text-fg-faint transition-transform", openStages.has(stage.key) && "rotate-90")} />
                     )}
                     <span className={cn(
                       "text-[11px] leading-tight truncate",
-                      isHero ? "font-semibold text-foreground" : "text-foreground/80",
+                      isHero ? "font-semibold text-fg" : "text-fg-secondary",
                     )}>
                       {stageLabel(stage.key)}
                     </span>
                     {ownCalls > 0 && (
-                      <span className="text-[8.5px] font-mono text-primary/60 bg-primary/10 rounded-full px-1.5 shrink-0">{ownCalls}</span>
+                      <span className="text-[8.5px] font-mono text-brand-fg bg-brand-soft rounded-full px-1.5 shrink-0">{ownCalls}</span>
                     )}
                   </div>
                   {detail && (
-                    <div className={cn("text-[10px] text-muted-foreground/60 leading-tight truncate", clickable && "pl-4")} title={detail}>
+                    <div className={cn("text-[10px] text-fg-muted leading-tight truncate", clickable && "pl-4")} title={detail}>
                       {detail}
                     </div>
                   )}
                 </div>
                 {renderBar(stage, start, isHero ? "hero" : "stage")}
-                <div className="w-[3rem] shrink-0 text-right text-[10px] font-mono tabular-nums text-muted-foreground">
+                <div className="w-[3rem] shrink-0 text-right text-[10px] font-mono tabular text-fg-muted">
                   {formatMs(stage.ms)}
                   {tokensForRow({ stage, start, children }) > 0 && (
-                    <div className="text-[8.5px] text-muted-foreground/50 leading-tight">
+                    <div className="text-[8.5px] text-fg-faint leading-tight">
                       {formatTokens(tokensForRow({ stage, start, children }))} tok
                     </div>
                   )}
@@ -500,7 +500,7 @@ export function TraceCard({ trace }: TraceCardProps) {
               {renderStageCalls(stage.key)}
 
               {children.length > 0 && (
-                <div className="ml-2 border-l border-border/50">
+                <div className="ml-2 border-l border-line">
                   {children.map(({ stage: child, start: childStart }) => {
                     const childDetail = stageDetail(child);
                     const childCalls = (callsByStage.get(child.key) ?? []).length;
@@ -512,37 +512,37 @@ export function TraceCard({ trace }: TraceCardProps) {
                           onClick={childClickable ? () => toggleStage(child.key) : undefined}
                           className={cn(
                             "group flex items-center gap-3 py-[2px] pl-2 rounded-md transition-colors",
-                            childClickable ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30",
+                            childClickable ? "cursor-pointer hover:bg-surface-muted" : "hover:bg-surface-muted",
                           )}
                         >
                           <div className="w-[9.1rem] shrink-0 min-w-0">
                             <div className="flex items-baseline gap-1.5 min-w-0">
                               {childClickable && (
-                                <ChevronRight className={cn("h-2.5 w-2.5 shrink-0 self-center text-muted-foreground/50 transition-transform", openStages.has(child.key) && "rotate-90")} />
+                                <ChevronRight className={cn("h-2.5 w-2.5 shrink-0 self-center text-fg-faint transition-transform", openStages.has(child.key) && "rotate-90")} />
                               )}
-                              <span className="text-[10.5px] text-foreground/70 leading-tight truncate">
+                              <span className="text-[10.5px] text-fg-secondary leading-tight truncate">
                                 {stageLabel(child.key)}
                               </span>
                               {child.model && (
-                                <span className="text-[8.5px] font-mono text-muted-foreground/50 bg-muted/70 rounded px-1 py-px shrink-0">
+                                <span className="text-[8.5px] font-mono text-fg-faint bg-surface-muted rounded px-1 py-px shrink-0">
                                   {child.model}
                                 </span>
                               )}
                               {childCalls > 0 && (
-                                <span className="text-[8.5px] font-mono text-primary/60 bg-primary/10 rounded-full px-1.5 shrink-0">{childCalls}</span>
+                                <span className="text-[8.5px] font-mono text-brand-fg bg-brand-soft rounded-full px-1.5 shrink-0">{childCalls}</span>
                               )}
                             </div>
                             {childDetail && (
-                              <div className="text-[10px] text-muted-foreground/60 leading-tight truncate" title={childDetail}>
+                              <div className="text-[10px] text-fg-muted leading-tight truncate" title={childDetail}>
                                 {childDetail}
                               </div>
                             )}
                           </div>
                           {renderBar(child, childStart, "child")}
-                          <div className="w-[3rem] shrink-0 text-right text-[10px] font-mono tabular-nums text-muted-foreground/80">
+                          <div className="w-[3rem] shrink-0 text-right text-[10px] font-mono tabular text-fg-muted">
                             {formatMs(child.ms)}
                             {(stageTokens.get(child.key) ?? 0) > 0 && (
-                              <div className="text-[8.5px] text-muted-foreground/50 leading-tight">
+                              <div className="text-[8.5px] text-fg-faint leading-tight">
                                 {formatTokens(stageTokens.get(child.key))} tok
                               </div>
                             )}
@@ -563,11 +563,11 @@ export function TraceCard({ trace }: TraceCardProps) {
             <div
               role="button"
               onClick={() => toggleStage("other")}
-              className="group flex items-center gap-1 py-[3px] pl-1 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+              className="group flex items-center gap-1 py-[3px] pl-1 rounded-md cursor-pointer hover:bg-surface-muted transition-colors"
             >
-              <ChevronRight className={cn("h-3 w-3 shrink-0 text-muted-foreground/50 transition-transform", openStages.has("other") && "rotate-90")} />
-              <span className="text-[11px] text-foreground/60">{t("stages.other")}</span>
-              <span className="text-[8.5px] font-mono text-primary/60 bg-primary/10 rounded-full px-1.5">{(callsByStage.get("other") ?? []).length}</span>
+              <ChevronRight className={cn("h-3 w-3 shrink-0 text-fg-faint transition-transform", openStages.has("other") && "rotate-90")} />
+              <span className="text-[11px] text-fg-secondary">{t("stages.other")}</span>
+              <span className="text-[8.5px] font-mono text-brand-fg bg-brand-soft rounded-full px-1.5">{(callsByStage.get("other") ?? []).length}</span>
             </div>
             {renderStageCalls("other")}
           </div>
@@ -580,14 +580,14 @@ export function TraceCard({ trace }: TraceCardProps) {
             <span className={cn(
               "text-[9px] font-mono rounded-full px-2 py-0.5 border",
               trace.domain.in_domain !== false
-                ? "border-green-600/20 bg-green-600/5 text-green-700"
-                : "border-amber-500/30 bg-amber-500/10 text-amber-700",
+                ? "border-transparent bg-brand-soft text-brand-fg"
+                : "border-transparent bg-notice-soft text-notice-fg",
             )}>
               {trace.domain.in_domain !== false ? t("domainOk") : t("domainOut")}
             </span>
           )}
           {trace.compass_meta?.method && (
-            <span className="text-[9px] font-mono rounded-full px-2 py-0.5 border border-border/60 bg-muted/40 text-muted-foreground">
+            <span className="text-[9px] font-mono rounded-full px-2 py-0.5 border border-line bg-surface-muted text-fg-muted">
               {t("stages.compass")}: {trace.compass_meta.method}
               {trace.compass_meta.variance != null && ` · ${t("varianceShort")} ${Math.round(trace.compass_meta.variance * 100)}%`}
               {trace.compass_meta.stable != null && ` · ${trace.compass_meta.stable ? t("compassStable") : t("compassUnstable")}`}
@@ -596,7 +596,7 @@ export function TraceCard({ trace }: TraceCardProps) {
         </div>
       )}
 
-      <p className="text-[10px] text-muted-foreground/50 leading-relaxed mt-3 px-1">
+      <p className="text-[10px] text-fg-faint leading-relaxed mt-3 px-1">
         {t("footnote")}
       </p>
     </div>
@@ -621,21 +621,21 @@ export function TraceCard({ trace }: TraceCardProps) {
             <TabsTrigger value="retrieval" className="text-xs">
               {t("tabs.retrieval")}
               {retrievalSample.length > 0 && (
-                <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/60">{retrievalSample.length}</span>
+                <span className="ml-1.5 text-[9px] font-mono text-fg-muted">{retrievalSample.length}</span>
               )}
             </TabsTrigger>
           )}
           {calls.length > 0 && (
             <TabsTrigger value="calls" className="text-xs">
               {t("tabs.calls")}
-              <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/60">{calls.length}</span>
+              <span className="ml-1.5 text-[9px] font-mono text-fg-muted">{calls.length}</span>
             </TabsTrigger>
           )}
           {report && (
             <TabsTrigger value="citations" className="text-xs">
               {t("tabs.citations")}
               {report.ledger && (
-                <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/60">{report.ledger.length}</span>
+                <span className="ml-1.5 text-[9px] font-mono text-fg-muted">{report.ledger.length}</span>
               )}
             </TabsTrigger>
           )}
@@ -648,7 +648,7 @@ export function TraceCard({ trace }: TraceCardProps) {
             <div className="mt-2">
               {Object.keys(partyCoverage).length > 0 && (
                 <div className="mb-4">
-                  <div className="text-[9px] uppercase tracking-widest text-muted-foreground/60 mb-1.5 px-1">
+                  <div className="label-mono text-[10px] mb-1.5 px-1">
                     {t("coverageTitle")}
                   </div>
                   <div className="space-y-1">
@@ -657,14 +657,14 @@ export function TraceCard({ trace }: TraceCardProps) {
                       const max = Math.max(...entries.map(([, n]) => n), 1);
                       return entries.map(([party, n]) => (
                         <div key={party} className="flex items-center gap-2">
-                          <span className="w-[11rem] shrink-0 text-[10px] text-foreground/75 truncate" title={party}>{party}</span>
-                          <div className="relative flex-1 h-[12px] rounded-[2px] bg-muted/50 overflow-hidden">
+                          <span className="w-[11rem] shrink-0 text-[10px] text-fg-secondary truncate" title={party}>{party}</span>
+                          <div className="relative flex-1 h-[12px] rounded-xs bg-surface-muted overflow-hidden">
                             <div
-                              className="absolute inset-y-[2px] left-0 rounded-[1px] bg-primary/45 origin-left animate-trace-grow"
+                              className="absolute inset-y-[2px] left-0 rounded-[1px] bg-brand/45 origin-left animate-trace-grow"
                               style={{ width: `${(n / max) * 100}%` }}
                             />
                           </div>
-                          <span className="w-7 shrink-0 text-right text-[10px] font-mono tabular-nums text-muted-foreground">{n}</span>
+                          <span className="w-7 shrink-0 text-right text-[10px] font-mono tabular text-fg-muted">{n}</span>
                         </div>
                       ));
                     })()}
@@ -674,11 +674,11 @@ export function TraceCard({ trace }: TraceCardProps) {
 
               {retrievalSample.length > 0 && (
                 <div>
-                  <div className="text-[9px] uppercase tracking-widest text-muted-foreground/60 mb-1 px-1">
+                  <div className="label-mono text-[10px] mb-1 px-1">
                     {t("evidenceTitle")}
                   </div>
-                  <div className="rounded-md border border-border/50 overflow-hidden">
-                    <div className="flex items-center gap-2 px-2 py-1 bg-muted/40 text-[9px] uppercase tracking-wider text-muted-foreground/60">
+                  <div className="rounded-md border border-line overflow-hidden">
+                    <div className="flex items-center gap-2 px-2 py-1 bg-surface-muted text-[9px] uppercase tracking-wider text-fg-muted">
                       <span className="flex-1 min-w-0">{t("evidenceSpeaker")}</span>
                       <span className="w-10 text-right font-mono">sim</span>
                       <span className="w-10 text-right font-mono">auth</span>
@@ -686,28 +686,28 @@ export function TraceCard({ trace }: TraceCardProps) {
                       <span className="w-[4.5rem] text-right hidden sm:block">{t("evidenceDate")}</span>
                     </div>
                     {retrievalSample.map((ev, i) => (
-                      <div key={ev.id ?? i} className="flex items-center gap-2 px-2 py-1 border-t border-border/30 hover:bg-muted/30 transition-colors">
+                      <div key={ev.id ?? i} className="flex items-center gap-2 px-2 py-1 border-t border-line hover:bg-surface-muted transition-colors">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-1.5 min-w-0">
-                            <span className="text-[10.5px] text-foreground/85 truncate">{ev.speaker ?? "—"}</span>
-                            <span className="text-[8.5px] uppercase tracking-wider text-muted-foreground/55 truncate">{ev.party}</span>
+                            <span className="text-[10.5px] text-fg-secondary truncate">{ev.speaker ?? "—"}</span>
+                            <span className="text-[8.5px] uppercase tracking-wider text-fg-muted truncate">{ev.party}</span>
                           </div>
-                          <div className="text-[8.5px] font-mono text-muted-foreground/40 truncate" title={ev.id}>{ev.id}</div>
+                          <div className="text-[8.5px] font-mono text-fg-faint truncate" title={ev.id}>{ev.id}</div>
                         </div>
-                        <span className="w-10 text-right text-[10px] font-mono tabular-nums text-muted-foreground">
+                        <span className="w-10 text-right text-[10px] font-mono tabular text-fg-muted">
                           {ev.similarity != null ? ev.similarity.toFixed(2).replace(".", ",") : "—"}
                         </span>
-                        <span className="w-10 text-right text-[10px] font-mono tabular-nums text-muted-foreground">
+                        <span className="w-10 text-right text-[10px] font-mono tabular text-fg-muted">
                           {ev.authority != null ? ev.authority.toFixed(2).replace(".", ",") : "—"}
                         </span>
-                        <span className="w-10 text-right text-[10px] font-mono tabular-nums text-muted-foreground">
+                        <span className="w-10 text-right text-[10px] font-mono tabular text-fg-muted">
                           {ev.citability != null ? ev.citability.toFixed(2).replace(".", ",") : "—"}
                         </span>
-                        <span className="w-[4.5rem] text-right text-[9px] font-mono text-muted-foreground/60 hidden sm:block">{ev.date}</span>
+                        <span className="w-[4.5rem] text-right text-[9px] font-mono text-fg-muted hidden sm:block">{ev.date}</span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-[9px] text-muted-foreground/50 mt-1.5 px-1">{t("evidenceNote")}</p>
+                  <p className="text-[9px] text-fg-faint mt-1.5 px-1">{t("evidenceNote")}</p>
                 </div>
               )}
             </div>
@@ -738,29 +738,29 @@ export function TraceCard({ trace }: TraceCardProps) {
                       : null,
                   },
                 ].map(({ label, value }) => (
-                  <div key={label} className="rounded-md bg-muted/40 px-2 py-1.5 text-center">
-                    <div className="text-lg leading-none text-primary [font-family:var(--font-display)]">
+                  <div key={label} className="rounded-md bg-surface-muted px-2 py-1.5 text-center">
+                    <div className="text-lg leading-none text-brand-fg serif-display">
                       {value ?? "—"}
                     </div>
-                    <div className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mt-1">{label}</div>
+                    <div className="label-mono text-[10px] mt-1">{label}</div>
                   </div>
                 ))}
               </div>
 
               {report.ledger && report.ledger.length > 0 && (
-                <div className="rounded-md border border-border/50 px-2">
+                <div className="rounded-md border border-line px-2">
                   {report.ledger.map((entry, i) => <LedgerRow key={i} entry={entry} />)}
                 </div>
               )}
 
               {(report.unsupported_claims ?? []).length > 0 && (
                 <div className="mt-3">
-                  <div className="text-[9px] uppercase tracking-widest text-muted-foreground/60 mb-1 px-1">
+                  <div className="label-mono text-[10px] mb-1 px-1">
                     {t("unsupportedTitle")}
                   </div>
                   <div className="space-y-1">
                     {report.unsupported_claims!.map((claim, i) => (
-                      <div key={i} className="rounded bg-amber-500/10 border border-amber-500/20 px-2 py-1 text-[10px] text-foreground/70">
+                      <div key={i} className="rounded-sm bg-notice-soft px-2 py-1 text-[10px] text-fg-secondary">
                         {claim}
                       </div>
                     ))}
@@ -801,7 +801,7 @@ export function TraceButton({ trace }: { trace?: TraceData }) {
         <button
           aria-label={t("traceTitle")}
           title={t("traceTitle")}
-          className="group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all shrink-0 text-muted-foreground hover:text-primary hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group inline-flex min-h-9 items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-medium transition-[background-color,color,transform] duration-[var(--duration-fast)] active:scale-[0.98] shrink-0 text-fg-muted hover:text-fg hover:bg-surface-muted"
         >
           <LangChainGlyph className="h-4 w-4" />
           <span className="hidden sm:inline">{t("traceTitle")}</span>
@@ -809,7 +809,7 @@ export function TraceButton({ trace }: { trace?: TraceData }) {
       </DialogTrigger>
       <DialogContent className="w-[min(96vw,64rem)] sm:max-w-5xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="[font-family:var(--font-display)] text-xl">
+          <DialogTitle className="serif-display text-xl">
             {t("traceTitle")}
           </DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">

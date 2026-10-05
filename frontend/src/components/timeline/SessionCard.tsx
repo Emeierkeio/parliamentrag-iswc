@@ -2,7 +2,7 @@
 
 import { useState, useId } from "react";
 import React from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { ChevronRight, Vote } from "lucide-react";
 
 import {
@@ -26,7 +26,7 @@ function highlightText(text: string, term: string): React.ReactNode {
   const parts = text.split(new RegExp(`(${escaped})`, "gi"));
   return parts.map((part, i) =>
     part.toLowerCase() === term.toLowerCase() ? (
-      <mark key={i} className="bg-primary/10 text-primary rounded-sm px-0.5">
+      <mark key={i} className="rounded-xs bg-highlight px-0.5 text-fg">
         {part}
       </mark>
     ) : (
@@ -35,8 +35,31 @@ function highlightText(text: string, term: string): React.ReactNode {
   );
 }
 
+/* Recaps open with a fixed formula ("Nella sessione parlamentare del ...
+   sono stati trattati i seguenti argomenti: a; b; c. Rest."): the topics
+   become a list and whatever follows the list stays as prose. */
+const RECAP_LEAD = /^.*?(?:seguenti argomenti|following (?:topics|items))\s*:\s*/i;
+
+function parseRecap(recap: string): { topics: string[]; rest: string } {
+  const lead = recap.match(RECAP_LEAD);
+  if (!lead) return { topics: [], rest: recap };
+  const body = recap.slice(lead[0].length);
+  const stop = body.search(/\.\s+(?=[A-ZÀ-Ý])/);
+  const list = stop === -1 ? body.replace(/\.$/, "") : body.slice(0, stop);
+  const rest = stop === -1 ? "" : body.slice(stop + 1).trim();
+  const topics = list
+    .split(/;\s*/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => x.charAt(0).toUpperCase() + x.slice(1));
+  return { topics, rest };
+}
+
+const TOPICS_SHOWN = 4;
+
 export function SessionCard({ session, searchTerm }: SessionCardProps) {
   const t = useTranslations("Timeline");
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [proceduralOpen, setProceduralOpen] = useState(false);
   const [votesSheetOpen, setVotesSheetOpen] = useState(false);
@@ -47,7 +70,11 @@ export function SessionCard({ session, searchTerm }: SessionCardProps) {
   const contentId = useId();
   const proceduralId = useId();
 
-  const formattedDate = new Date(session.date).toLocaleDateString(undefined, {
+  const when = new Date(session.date);
+  const day = when.getDate();
+  const monthYear = when.toLocaleDateString(locale, { month: "short", year: "numeric" });
+  const recap = parseRecap(session.recap ?? "");
+  const formattedDate = when.toLocaleDateString(locale, {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -69,87 +96,102 @@ export function SessionCard({ session, searchTerm }: SessionCardProps) {
   ].filter((s) => s.count > 0);
 
   return (
-    <div className="border-b border-border">
+    <div>
       <Collapsible open={open} onOpenChange={setOpen}>
-        {/* Header */}
-        <CollapsibleTrigger
-          className="w-full text-left group"
-          aria-expanded={open}
-          aria-controls={contentId}
-        >
-          <div className="py-4">
-            <div className="flex items-baseline gap-2.5">
-              <span className="[font-family:var(--font-display)] text-lg text-primary/40 tabular-nums leading-none">
-                {session.number}
-              </span>
-              <h3 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight text-foreground leading-none">
+        <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-4 py-5 sm:grid-cols-[4rem_minmax(0,1fr)] sm:gap-x-6">
+          <div className="flex flex-col items-start pt-0.5" aria-hidden>
+            <span className="font-mono text-2xl font-medium leading-none tabular-nums text-fg sm:text-[1.75rem]">{day}</span>
+            <span className="mt-1 label-mono text-[10px] text-fg-muted">{monthYear}</span>
+          </div>
+
+          <div className="min-w-0">
+            <CollapsibleTrigger
+              className="group flex w-full items-baseline gap-3 text-left"
+              aria-expanded={open}
+              aria-controls={contentId}
+            >
+              <h3 className="text-base font-semibold leading-snug tracking-[var(--tracking-heading)] text-fg first-letter:uppercase group-hover:text-brand-fg">
                 {formattedDate}
               </h3>
-              <span
-                className={cn(
-                  "text-[10px] uppercase tracking-[0.2em] font-medium",
-                  session.chamber === "senato" ? "text-chart-5" : "text-primary"
-                )}
-              >
-                {session.chamber}
-              </span>
+              <span className="font-mono text-xs text-fg-muted">{t("sessionNumber", { n: session.number })}</span>
+              {session.chamber === "senato" && (
+                <span className="label-mono text-[10px] text-fg-muted">{session.chamber}</span>
+              )}
               <ChevronRight
                 className={cn(
-                  "ml-auto h-4 w-4 shrink-0 self-center text-muted-foreground/40 transition-transform duration-200",
-                  open && "rotate-90"
+                  "ml-auto h-4 w-4 shrink-0 self-center text-fg-faint transition-transform duration-200",
+                  open && "rotate-90",
                 )}
+                aria-hidden
               />
-            </div>
+            </CollapsibleTrigger>
+
+            {session.recap ? (
+              recap.topics.length > 0 ? (
+                <div className="mt-3">
+                  <ul className="flex flex-col gap-1.5 text-sm leading-snug text-fg-secondary">
+                    {(open ? recap.topics : recap.topics.slice(0, TOPICS_SHOWN)).map((topic, i) => (
+                      <li key={i} className="flex gap-2.5">
+                        <span className="mt-[0.55em] h-1 w-1 shrink-0 rounded-full bg-fg-faint" aria-hidden />
+                        <span>{searchTerm ? highlightText(topic, searchTerm) : topic}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {!open && recap.topics.length > TOPICS_SHOWN && (
+                    <button
+                      type="button"
+                      onClick={() => setOpen(true)}
+                      className="mt-1.5 pl-3.5 text-xs text-brand-fg hover:underline"
+                    >
+                      {t("moreTopics", { count: recap.topics.length - TOPICS_SHOWN })}
+                    </button>
+                  )}
+                  {recap.rest && (
+                    <p className={cn("mt-2.5 text-sm leading-relaxed text-fg-muted", !open && "line-clamp-2")}>
+                      {searchTerm ? highlightText(recap.rest, searchTerm) : recap.rest}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className={cn("mt-3 text-sm leading-relaxed text-fg-secondary", !open && "line-clamp-3")}>
+                  {searchTerm ? highlightText(session.recap, searchTerm) : session.recap}
+                </p>
+              )
+            ) : (
+              <p className="mt-3 text-xs italic text-fg-muted">{t("summaryNotYetGenerated")}</p>
+            )}
+
+            {stats.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {stats.map((s, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center rounded-full bg-surface-muted px-2.5 py-1 text-xs tabular-nums text-fg-secondary"
+                  >
+                    {s.label}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-        </CollapsibleTrigger>
-
-        {/* Body — always visible */}
-        <div className="pb-4">
-          {/* AI recap */}
-          {session.recap ? (
-            // Clamped while collapsed: the card is a preview, the full recap
-            // belongs to the expanded state (tap anywhere on the header)
-            <p className={cn("text-sm text-foreground/80 leading-relaxed", !open && "line-clamp-3")}>
-              {searchTerm ? highlightText(session.recap, searchTerm) : session.recap}
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground/60 italic">
-              {t("summaryNotYetGenerated")}
-            </p>
-          )}
-
-          {/* Stats row — labelled, zeros hidden */}
-          {stats.length > 0 && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3">
-              {stats.map((s, i) => (
-                <span
-                  key={i}
-                  className="text-[11px] text-muted-foreground tabular-nums"
-                >
-                  {s.label}
-                </span>
-              ))}
-            </div>
-          )}
-
         </div>
 
         {/* Expanded debate list */}
         <CollapsibleContent id={contentId} role="region" aria-label={`${formattedDate} debates`}>
-          <div className="pb-4 pt-1 border-t border-border/40">
+          <div className="mb-5 ml-[4.25rem] border-t border-line pt-1 sm:ml-[5.5rem]">
             {/* Votes are recorded per sitting, so their entry point lives
                 here rather than repeated inside every debate panel. */}
             {session.vote_count > 0 && (
               <button
                 type="button"
                 onClick={() => setVotesSheetOpen(true)}
-                className="group flex w-full items-center gap-2.5 py-2.5 px-3 -mx-3 rounded-lg text-left hover:bg-muted/50 transition-colors"
+                className="group flex w-full items-center gap-2.5 py-2.5 px-3 -mx-3 rounded-md text-left hover:bg-surface-muted transition-colors"
               >
-                <Vote className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                <span className="text-sm flex-1 leading-snug font-medium">
+                <Vote className="h-3.5 w-3.5 shrink-0 text-fg-muted" aria-hidden />
+                <span className="text-sm flex-1 leading-snug font-medium text-fg">
                   {t("votesLabel", { count: session.vote_count })}
                 </span>
-                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-fg-faint transition-transform group-hover:translate-x-0.5" />
               </button>
             )}
 
@@ -161,15 +203,15 @@ export function SessionCard({ session, searchTerm }: SessionCardProps) {
                     key={debate.id}
                     type="button"
                     onClick={() => setSelectedDebate({ id: debate.id, title })}
-                    className="group flex w-full items-center gap-2.5 py-2.5 px-3 -mx-3 rounded-lg text-left hover:bg-muted/50 transition-colors"
+                    className="group flex w-full items-center gap-2.5 py-2.5 px-3 -mx-3 rounded-md text-left hover:bg-surface-muted transition-colors"
                   >
-                    <span className="text-sm flex-1 leading-snug">
+                    <span className="text-sm flex-1 leading-snug text-fg">
                       {searchTerm ? highlightText(title, searchTerm) : title}
                     </span>
-                    <span className="text-[11px] text-muted-foreground/50 tabular-nums shrink-0">
+                    <span className="tabular text-xs text-fg-muted shrink-0">
                       {t("speechCount", { count: debate.speech_count })}
                     </span>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-fg-faint transition-transform group-hover:translate-x-0.5" />
                   </button>
                 );
               })}
@@ -178,7 +220,7 @@ export function SessionCard({ session, searchTerm }: SessionCardProps) {
             {procedural.length > 0 && (
               <Collapsible open={proceduralOpen} onOpenChange={setProceduralOpen}>
                 <CollapsibleTrigger
-                  className="mt-1 py-1.5 px-3 -mx-3 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+                  className="mt-1 py-1.5 px-3 -mx-3 text-xs text-fg-muted hover:text-fg transition-colors"
                   aria-expanded={proceduralOpen}
                   aria-controls={proceduralId}
                 >
@@ -191,7 +233,7 @@ export function SessionCard({ session, searchTerm }: SessionCardProps) {
                     {procedural.map((d) => (
                       <p
                         key={d.id}
-                        className="text-xs leading-snug text-muted-foreground/60"
+                        className="text-xs leading-snug text-fg-muted"
                       >
                         {searchTerm
                           ? highlightText(cleanDebateTitle(d.title), searchTerm)

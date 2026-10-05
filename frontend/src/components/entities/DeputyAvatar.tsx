@@ -1,38 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { getGroupColor } from "@/config";
 
 interface DeputyAvatarProps {
   photo: string | null;
   firstName: string;
   lastName: string;
-  group: string | null;
   /** Diameter in px */
   size: number;
 }
 
-/**
- * Foto tonda del deputato con fallback a iniziali tinte del colore
- * del gruppo (le foto camera.it a volte mancano o rispondono 404).
- */
-export function DeputyAvatar({ photo, firstName, lastName, group, size }: DeputyAvatarProps) {
+/** Round deputy photo; camera.it photos are sometimes missing or 404, so the
+    fallback is the initials on a neutral disc. */
+export function DeputyAvatar({ photo, firstName, lastName, size }: DeputyAvatarProps) {
   const [failed, setFailed] = useState(false);
-  const color = getGroupColor(group ?? "");
-  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  const initials = `${firstName.trim().charAt(0)}${lastName.trim().charAt(0)}`.toUpperCase();
 
   if (!photo || failed) {
     return (
       <span
         aria-hidden="true"
-        className="inline-flex shrink-0 select-none items-center justify-center rounded-full font-medium"
-        style={{
-          width: size,
-          height: size,
-          backgroundColor: `${color}1f`,
-          color,
-          fontSize: Math.round(size * 0.34),
-        }}
+        className="inline-flex shrink-0 select-none items-center justify-center rounded-full bg-surface-sunken font-mono font-medium text-fg-muted"
+        style={{ width: size, height: size, fontSize: Math.round(size * 0.32) }}
       >
         {initials}
       </span>
@@ -40,14 +29,14 @@ export function DeputyAvatar({ photo, firstName, lastName, group, size }: Deputy
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- foto esterne camera.it, serve onError
+    // eslint-disable-next-line @next/next/no-img-element -- external camera.it photos, onError needed
     <img
       src={photo}
       alt=""
       width={size}
       height={size}
       loading="lazy"
-      className="shrink-0 rounded-full bg-muted object-cover"
+      className="shrink-0 rounded-full bg-surface-muted object-cover"
       style={{ width: size, height: size }}
       onError={() => setFailed(true)}
     />

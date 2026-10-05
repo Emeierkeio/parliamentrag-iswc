@@ -1,140 +1,210 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "../tokens/ecosystem.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * shadcn/ui variables, bound to the ecosystem roles in tokens/ecosystem.css.
+ * The ui/ primitives and older screens read these names; new code uses the
+ * semantic utilities (bg-surface, text-fg-muted, border-line, text-brand-fg).
+ */
+:root,
+[data-theme="dark"] {
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --card: var(--surface);
+  --card-foreground: var(--fg);
+  --popover: var(--surface);
+  --popover-foreground: var(--fg);
+  --primary: var(--brand);
+  --primary-foreground: var(--on-brand);
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--fg);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--fg-muted);
+  --accent: var(--brand-soft);
+  --accent-foreground: var(--brand-fg);
+  --destructive: var(--danger-fg);
+  --destructive-foreground: var(--white);
+  --border: var(--line);
+  --input: var(--line-control);
+  --ring: var(--focus);
+
+  --chart-1: var(--brand);
+  --chart-2: var(--accent-violet);
+  --chart-3: var(--notice);
+  --chart-4: var(--vote-favor);
+  --chart-5: var(--fg-faint);
+
+  --sidebar: var(--surface-muted);
+  --sidebar-foreground: var(--fg-secondary);
+  --sidebar-primary: var(--fg);
+  --sidebar-primary-foreground: var(--bg);
+  --sidebar-accent: var(--surface);
+  --sidebar-accent-foreground: var(--fg);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--focus);
+}
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
-}
-
-/* Institutional Italian Parliament Theme */
-:root {
-  --radius: 0.75rem;
-
-  /* Background: Warm off-white with subtle warmth */
-  --background: oklch(0.985 0.003 80);
-  --foreground: oklch(0.18 0.03 250);
-
-  /* Surface: Clean white cards */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.03 250);
-
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.03 250);
-
-  /* Primary: Blu Istituzionale Italiano */
-  --primary: oklch(0.32 0.08 250); /* #1B3A5C */
-  --primary-foreground: oklch(0.95 0.01 80);
-
-  /* Secondary: Warm sand tone */
-  --secondary: oklch(0.95 0.01 80);
-  --secondary-foreground: oklch(0.32 0.08 250);
-
-  /* Muted: Warm light gray */
-  --muted: oklch(0.96 0.005 80);
-  --muted-foreground: oklch(0.5 0.01 250);
-
-  /* Accent: Light blue institutional tint */
-  --accent: oklch(0.94 0.015 250);
-  --accent-foreground: oklch(0.25 0.06 250);
-
-  /* Destructive: Bordeaux parlamentare */
-  --destructive: oklch(0.48 0.18 15);
-  --destructive-foreground: oklch(1 0 0);
-
-  /* Borders: Warm subtle borders */
-  --border: oklch(0.91 0.005 80);
-  --input: oklch(0.91 0.005 80);
-  --ring: oklch(0.55 0.1 250);
-
-  /* Charts - Institutional Palette */
-  --chart-1: oklch(0.32 0.08 250); /* Blu Istituzionale */
-  --chart-2: oklch(0.48 0.18 15);  /* Bordeaux */
-  --chart-3: oklch(0.62 0.06 80);  /* Oro scuro */
-  --chart-4: oklch(0.55 0.12 145); /* Verde */
-  --chart-5: oklch(0.5 0.15 300);  /* Viola */
-
-  /* Sidebar: Blu scuro istituzionale */
-  --sidebar: oklch(0.22 0.05 250);
-  --sidebar-foreground: oklch(0.85 0.01 80);
-  --sidebar-primary: oklch(0.95 0.01 80);
-  --sidebar-primary-foreground: oklch(0.22 0.05 250);
-  --sidebar-accent: oklch(0.28 0.06 250);
-  --sidebar-accent-foreground: oklch(0.92 0.005 80);
-  --sidebar-border: oklch(0.30 0.04 250);
-  --sidebar-ring: oklch(0.55 0.1 250);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   html {
     overflow-x: hidden;
     /* The iOS safe areas (status bar, home indicator) show the html
-       background: without this they flash white against the cream pages */
-    background-color: var(--background);
-    /* App pages scroll inside their own containers — without this, hitting
+       background: without this they flash white against the pages */
+    background-color: var(--bg);
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    scroll-padding-top: calc(var(--header-h) + 1.5rem);
+    /* App pages scroll inside their own containers: without this, hitting
        the edge of an inner scroller chains to the viewport and rubber-bands
        the whole page (sidebar included) on macOS. Must live on html, NOT on
        body: Chromium traps viewport wheel scrolling when set on body. */
     overscroll-behavior-y: none;
   }
   body {
-    @apply bg-background text-foreground antialiased font-sans;
-    overflow-x: hidden;
+    @apply antialiased font-sans;
+    background: var(--bg);
+    color: var(--fg);
+    /* No overflow-x here: with html already non-visible, any value other than
+       visible makes body a scroll container and the sticky header scrolls
+       away (and the build lowers clip to hidden). html clips instead. */
     width: 100%;
     max-width: 100%;
   }
+  ::selection {
+    background: var(--brand-soft-strong);
+    color: var(--fg);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
 }
 
-/* iOS Safari overflow containment — Safari ignores overflow-x:hidden on html/body */
+/* iOS Safari overflow containment: Safari ignores overflow-x:hidden on html/body */
 @supports (-webkit-touch-callout: none) {
   html, body {
     -webkit-overflow-scrolling: touch;
   }
   body > div {
-    overflow-x: hidden;
     max-width: 100%;
+  }
+}
+
+@utility container-page {
+  width: 100%;
+  max-width: calc(var(--container-page) + 3rem);
+  margin-inline: auto;
+  padding-inline: 1rem;
+  @media (width >= 48rem) {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* Functional label (DOMANDA, FONTI, PER GRUPPO): mono, small, tracked. */
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility link {
+  color: var(--brand-fg);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+  transition: text-decoration-color var(--duration-fast) var(--ease-standard);
+  &:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+/* Display serif at its text optical size: sturdier strokes at headline sizes.
+   Headlines, the footer index and verbatim quotes only, never UI. */
+@utility serif-display {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-optical-sizing: none;
+  font-variation-settings: "opsz" 20;
+  letter-spacing: var(--tracking-serif);
+}
+@utility serif-display-strong {
+  font-weight: 600;
+}
+
+.rise {
+  animation: var(--animate-rise);
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+@utility z-raised { z-index: var(--z-raised); }
+@utility z-dock { z-index: var(--z-dock); }
+@utility z-header { z-index: var(--z-header); }
+@utility z-overlay { z-index: var(--z-overlay); }
+@utility z-dialog { z-index: var(--z-dialog); }
+@utility z-skip { z-index: var(--z-skip); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -226,7 +296,7 @@
   }
 
   .scrollbar-thin:hover {
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: var(--line-strong) transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
@@ -245,11 +315,11 @@
   }
 
   .scrollbar-thin:hover::-webkit-scrollbar-thumb {
-    background: #e5e5e5;
+    background: var(--line-strong);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: #d4d4d4;
+    background: var(--line-control);
   }
 
   /* Word wrapping utilities for preventing overflow */
@@ -320,7 +390,7 @@ input[type="range"].weight-slider::-webkit-slider-thumb {
   background: var(--primary);
   cursor: pointer;
   margin-top: -4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-float);
 }
 
 input[type="range"].weight-slider::-moz-range-track {
@@ -342,7 +412,7 @@ input[type="range"].weight-slider::-moz-range-thumb {
   background: var(--primary);
   border: none;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-float);
 }
 
 /* Mobile touch optimizations */
@@ -364,5 +434,119 @@ input[type="range"].weight-slider::-moz-range-thumb {
 @supports (-webkit-touch-callout: none) {
   input, textarea, select {
     font-size: 16px !important;
+  }
+}
+
+@keyframes shell-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+/* Paged scrolling on phones (home and /sistemi): each .snap-screen fills the
+   viewport under the sticky header and the root scroller snaps to it. The
+   footer snaps by its end so it stays reachable after the last screen. */
+@media (width < 48rem) {
+  html:has(.snap-screen) {
+    scroll-snap-type: y mandatory;
+    scroll-padding-top: calc(var(--header-h) + env(safe-area-inset-top));
+  }
+  .snap-screen {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(100dvh - var(--header-h) - env(safe-area-inset-top));
+    padding-block: 1rem;
+    /* The wider right gutter clears the page indicator on the right edge;
+       a .snap-screen is its own container, never nested in container-page. */
+    padding-inline: 1rem 3rem;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  html:has(.snap-screen) body footer {
+    scroll-snap-align: end;
+  }
+}
+
+/*
+ * Launch screen of the installed app (components/brand/LaunchScreen.tsx).
+ * Hidden everywhere except standalone mode (display-mode, or
+ * navigator.standalone on iOS via data-standalone) on a session's first load;
+ * ?launch=1 forces it, ?launch=still freezes its first frame. Family timing,
+ * the same in Stenografo, Fascicoli and Scranno: the pen draws for 850 ms from
+ * 120 ms, the dot hops from the arc's right foot onto the seat (600 ms from
+ * 970 ms; offsets in mark units, as in drawLogo), the layer fades at 1.55 s.
+ * Reduced motion: the static mark, gone at 400 ms.
+ */
+.launch {
+  display: none;
+}
+@media (display-mode: standalone) {
+  html:not([data-launched]) .launch {
+    display: flex;
+  }
+}
+html[data-standalone]:not([data-launched]) .launch,
+html[data-launch] .launch {
+  display: flex;
+}
+.launch {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--fg);
+  pointer-events: none;
+  animation: launch-out 280ms ease-out 1.55s both;
+}
+.launch-mark {
+  overflow: visible;
+  translate: 0 calc(-1 * var(--launch-dy, 0px));
+}
+.launch-ghost {
+  stroke: currentColor;
+  fill: currentColor;
+  opacity: 0.12;
+}
+.launch-stroke {
+  stroke: currentColor;
+  stroke-dasharray: 1;
+  animation: launch-draw 850ms cubic-bezier(0.55, 0, 0.25, 1) 120ms both;
+}
+.launch-dot {
+  fill: var(--brand);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: launch-dot 600ms 970ms both;
+}
+html[data-launch="still"] .launch,
+html[data-launch="still"] .launch * {
+  animation-play-state: paused;
+}
+@keyframes launch-draw {
+  /* A zero-length dash with round caps still paints a dot: hidden outright at the start. */
+  0% { stroke-dashoffset: 1; stroke-opacity: 0; }
+  2% { stroke-dashoffset: 0.98; stroke-opacity: 1; }
+  100% { stroke-dashoffset: 0; stroke-opacity: 1; }
+}
+@keyframes launch-dot {
+  0% { opacity: 0; transform: translate(76px, -6px) scale(0.4); }
+  1% { opacity: 0.7; transform: translate(76px, -6px) scale(0.4); animation-timing-function: cubic-bezier(0.3, 0, 0.4, 1); }
+  45% { opacity: 0.55; transform: translate(36px, -44px) scale(0.4); animation-timing-function: cubic-bezier(0.55, 0, 0.8, 0.45); }
+  68% { opacity: 1; transform: translate(0, 0) scale(0.45); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  84% { opacity: 1; transform: translate(0, 0) scale(1.22, 1.1); animation-timing-function: ease-in-out; }
+  100% { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+@keyframes launch-out {
+  to { opacity: 0; visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .launch-stroke,
+  .launch-dot {
+    animation: none;
+  }
+  .launch {
+    animation-delay: 400ms;
   }
 }

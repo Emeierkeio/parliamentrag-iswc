@@ -44,8 +44,8 @@ export function DebateSheet({
       >
         {debate && (
           <>
-            <SheetHeader className="border-b px-6 py-4">
-              <SheetDescription className="text-[11px] uppercase tracking-[0.2em]">
+            <SheetHeader className="border-b border-line px-6 py-4">
+              <SheetDescription className="label-mono">
                 {sessionNumber !== null
                   ? t("sessionRef", { number: sessionNumber, date: formattedDate })
                   : formattedDate}

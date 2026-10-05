@@ -46,12 +46,20 @@ export interface VoteInfo {
   abstained: number | null;
 }
 
+export interface TopicVote extends VoteInfo {
+  date: string | null;
+  session_number: number | null;
+  act_title: string | null;
+  relation?: "act" | "title" | "session";
+}
+
 export interface VoteParticipant {
   id: string;
   first_name: string;
   last_name: string;
   party: string | null;
   outcome: string; // "favor" | "against" | "abstain" | "absent"
+  seat?: number | null;
 }
 
 export interface VotePartyBreakdown {

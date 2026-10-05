@@ -58,6 +58,7 @@ import {
   getEvaluatedChatIds,
 } from "@/lib/survey-api";
 import { useLastUpdate, formatLastUpdateShort } from "@/hooks/use-last-update";
+import { NewsletterSignup } from "@/components/feedback/NewsletterSignup";
 
 interface SurveyModalProps {
   isOpen: boolean;
@@ -210,9 +211,9 @@ function AuthorityGroupComparisonPanel({
 
   if (isLoadingA || isLoadingB) {
     return (
-      <div className="flex flex-1 w-full flex-col items-center justify-center text-gray-400 gap-3 min-h-0">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
-        <p className="text-xs text-gray-500">Ricerca deputati nel testo...</p>
+      <div className="flex flex-1 w-full flex-col items-center justify-center text-fg-muted gap-3 min-h-0">
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
+        <p className="text-xs text-fg-muted">Ricerca deputati nel testo...</p>
       </div>
     );
   }
@@ -237,22 +238,22 @@ function AuthorityGroupComparisonPanel({
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* ── Instruction header (fixed, non-scrollable) ── */}
-      <div className="px-3 py-2.5 bg-gray-50 dark:bg-gray-900/50 border-b shrink-0">
+      <div className="px-3 py-2.5 bg-surface-muted border-b shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 leading-tight mb-0.5">
+            <p className="text-xs font-semibold text-fg leading-tight mb-0.5">
               Confronta gli esperti per gruppo politico
             </p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+            <p className="text-[11px] text-fg-muted leading-snug">
               Leggi i deputati citati in A e B, poi indica quale risposta ha scelto l'esperto più autorevole.
             </p>
           </div>
           {/* Progress badge */}
           <div className={cn(
-            "shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold whitespace-nowrap",
+            "shrink-0 flex items-center gap-1 px-2 py-1 rounded-sm text-[11px] font-semibold whitespace-nowrap",
             allRated
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+              ? "bg-brand-soft-strong text-brand-fg"
+              : "bg-surface-muted text-fg-secondary"
           )}>
             {allRated
               ? <><Check className="w-3 h-3" /> Completo</>
@@ -263,14 +264,14 @@ function AuthorityGroupComparisonPanel({
       </div>
 
       {/* ── Column labels ── */}
-      <div className="grid grid-cols-2 gap-1 px-3 pt-2 pb-1 shrink-0 border-b bg-white dark:bg-gray-950">
+      <div className="grid grid-cols-2 gap-1 px-3 pt-2 pb-1 shrink-0 border-b bg-surface">
         <div className="text-center">
-          <span className="text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 px-3 py-0.5 rounded-full border border-blue-200 dark:border-blue-800/50">
+          <span className="text-xs font-semibold text-brand-fg bg-brand-soft px-3 py-0.5 rounded-sm border border-brand/25">
             Risposta A
           </span>
         </div>
         <div className="text-center">
-          <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 px-3 py-0.5 rounded-full border border-gray-200 dark:border-gray-700">
+          <span className="text-xs font-semibold text-notice-fg bg-notice-soft px-3 py-0.5 rounded-sm border border-notice/25">
             Risposta B
           </span>
         </div>
@@ -292,9 +293,9 @@ function AuthorityGroupComparisonPanel({
           const expertA = byGroupA[key] ?? null;
           const expertB = byGroupB[key] ?? null;
           return (
-            <div key={key} className="rounded-xl mb-2 bg-white dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800/40">
+            <div key={key} className="rounded-lg mb-2 bg-surface border border-line">
               <div className="flex justify-center pt-2 pb-0.5">
-                <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800">
+                <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-sm text-fg-secondary bg-surface-muted">
                   {label}
                 </span>
               </div>
@@ -306,7 +307,7 @@ function AuthorityGroupComparisonPanel({
                   <AuthorityExpertMini expert={expertB!} side="B" score={getScore(expertB!)} onExpertClick={setExpertModal} />
                 </div>
               </div>
-              <div className="mx-2 mb-2 rounded-lg overflow-hidden">
+              <div className="mx-2 mb-2 rounded-md overflow-hidden">
                 <MiniGroupSlider
                   value={groupRatings[key]}
                   onChange={(v) => onGroupRatingChange(key, v)}
@@ -320,11 +321,11 @@ function AuthorityGroupComparisonPanel({
         {autoGroups.length > 0 && (
           <>
             <div className="flex items-center gap-2 py-1 px-1">
-              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              <div className="flex-1 h-px bg-surface-sunken" />
+              <span className="text-[10px] text-fg-muted uppercase tracking-wider whitespace-nowrap">
                 Assegnati automaticamente
               </span>
-              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+              <div className="flex-1 h-px bg-surface-sunken" />
             </div>
 
             {autoGroups.map(({ key, label }) => {
@@ -337,15 +338,15 @@ function AuthorityGroupComparisonPanel({
                   ? "✓ Punto a A"
                   : "✓ Punto a B";
               const badgeColor = same
-                ? "bg-gray-100 text-gray-400 dark:bg-gray-800/50 dark:text-gray-500"
+                ? "bg-surface-muted text-fg-muted"
                 : expertA
-                  ? "bg-blue-50 text-blue-400 dark:bg-blue-900/20 dark:text-blue-400"
-                  : "bg-indigo-50 text-indigo-400 dark:bg-indigo-900/20 dark:text-indigo-400";
+                  ? "bg-brand-soft text-brand-fg"
+                  : "bg-notice-soft text-notice-fg";
 
               return (
-                <div key={key} className="rounded-xl mb-2 bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800/20 opacity-60">
+                <div key={key} className="rounded-lg mb-2 bg-surface-muted opacity-60">
                   <div className="flex justify-center items-center gap-1.5 pt-2 pb-0.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800/50">
+                    <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-sm text-fg-muted bg-surface-muted">
                       {label}
                     </span>
                   </div>
@@ -379,7 +380,7 @@ function AuthorityExpertMini({ expert, side, score, onExpertClick }: {
   onExpertClick?: (expert: Expert) => void;
 }) {
   const groupConfig = config.politicalGroups[expert.group as keyof typeof config.politicalGroups];
-  const groupColor = groupConfig?.color || "#6B7280";
+  const groupColor = groupConfig?.color || "var(--ink-600)";
   const isA = side === "A";
 
   const primaryCommittee = expert.committees?.[0] || expert.committee || null;
@@ -388,9 +389,9 @@ function AuthorityExpertMini({ expert, side, score, onExpertClick }: {
   return (
     <div
       className={cn(
-        "flex items-start gap-2 py-2 px-2 rounded-xl w-full transition-colors",
+        "flex items-start gap-2 py-2 px-2 rounded-md w-full transition-colors",
         isA ? "flex-row-reverse text-right" : "flex-row text-left",
-        onExpertClick && "cursor-pointer hover:bg-white/80 dark:hover:bg-gray-800/60 hover:shadow-sm"
+        onExpertClick && "cursor-pointer hover:bg-surface-muted"
       )}
       onClick={() => onExpertClick?.({ ...expert, authority_score: score })}
     >
@@ -399,11 +400,11 @@ function AuthorityExpertMini({ expert, side, score, onExpertClick }: {
         <img
           src={expert.photo}
           alt={displayName}
-          className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-gray-800 shadow-sm"
+          className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-surface"
         />
       ) : (
         <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ring-2 ring-white dark:ring-gray-800 shadow-sm"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ring-2 ring-surface"
           style={{ backgroundColor: groupColor }}
         >
           {expert.first_name[0]}{expert.last_name[0]}
@@ -413,24 +414,24 @@ function AuthorityExpertMini({ expert, side, score, onExpertClick }: {
       {/* Content */}
       <div className="flex-1 min-w-0">
         {/* Name */}
-        <p className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-snug truncate">
+        <p className="text-sm font-bold text-fg leading-snug truncate">
           {displayName}
         </p>
 
         {/* Authority signals */}
         <div className={cn("mt-1 flex flex-col gap-0.5", isA ? "items-end" : "items-start")}>
           {expert.institutional_role && (
-            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 leading-none truncate max-w-full inline-block">
+            <span className="text-[11px] font-semibold text-fg-secondary leading-none truncate max-w-full inline-block">
               {expert.institutional_role}
             </span>
           )}
           {primaryCommittee && (
-            <span className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug truncate max-w-full block">
+            <span className="text-[11px] text-fg-muted leading-snug truncate max-w-full block">
               {primaryCommittee.length > 32 ? primaryCommittee.slice(0, 31) + "…" : primaryCommittee}
             </span>
           )}
           {expert.profession && (
-            <span className="text-[11px] text-gray-400 dark:text-gray-500 leading-snug truncate max-w-full block italic">
+            <span className="text-[11px] text-fg-muted leading-snug truncate max-w-full block italic">
               {expert.profession.length > 36 ? expert.profession.slice(0, 35) + "…" : expert.profession}
             </span>
           )}
@@ -445,11 +446,11 @@ function ExpertAbsent({ side }: { side: "A" | "B" }) {
   const isA = side === "A";
   return (
     <div className={cn(
-      "flex items-center justify-center py-3 px-2 rounded-xl w-full h-full",
-      "border border-dashed border-gray-200 dark:border-gray-700",
+      "flex items-center justify-center py-3 px-2 rounded-md w-full h-full",
+      "border border-dashed border-line",
       isA ? "text-right" : "text-left",
     )}>
-      <span className="text-[11px] text-gray-400 dark:text-gray-600 italic">
+      <span className="text-[11px] text-fg-muted italic">
         Nessun esperto citato
       </span>
     </div>
@@ -469,9 +470,9 @@ function MiniGroupSlider({
   onChange: (v: number) => void;
 }) {
   const options = [
-    { v: -1, label: "A migliore", activeClass: "bg-blue-500 text-white border-blue-500 shadow-sm" },
-    { v:  0, label: "Pari",       activeClass: "bg-gray-600 text-white border-gray-600 shadow-sm" },
-    { v:  1, label: "B migliore", activeClass: "bg-indigo-500 text-white border-indigo-500 shadow-sm" },
+    { v: -1, label: "A migliore", activeClass: "bg-brand text-on-brand border-brand" },
+    { v:  0, label: "Pari",       activeClass: "bg-brand text-on-brand border-brand" },
+    { v:  1, label: "B migliore", activeClass: "bg-brand text-on-brand border-brand" },
   ] as const;
 
   const isUnanswered = value === undefined;
@@ -480,10 +481,10 @@ function MiniGroupSlider({
     <div className={cn(
       "w-full px-2 pt-2 pb-2 border-t border-dashed transition-colors",
       isUnanswered
-        ? "border-gray-300 dark:border-gray-600"
-        : "border-gray-200 dark:border-gray-700"
+        ? "border-line-strong"
+        : "border-line"
     )}>
-      <p className="text-[10px] text-center mb-1.5 leading-tight text-gray-400 dark:text-gray-500">
+      <p className="text-[10px] text-center mb-1.5 leading-tight text-fg-muted">
         {isUnanswered ? "Qual è il deputato più autorevole su questo tema?" : "Valutazione assegnata:"}
       </p>
       <div className="flex items-stretch gap-1.5">
@@ -495,11 +496,11 @@ function MiniGroupSlider({
               type="button"
               onClick={() => onChange(opt.v)}
               className={cn(
-                "flex-1 py-2 rounded-lg border text-xs font-semibold text-center",
+                "flex-1 py-2 rounded-full border text-xs font-semibold text-center",
                 "transition-all duration-150 cursor-pointer select-none",
                 isActive
                   ? opt.activeClass
-                  : "bg-white border-gray-200 text-gray-500 hover:border-gray-400 hover:bg-gray-50 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
+                  : "bg-surface border-line-strong text-fg-secondary hover:border-line-control hover:bg-surface-muted"
               )}
             >
               {opt.label}
@@ -1143,7 +1144,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
       if (match[1] !== undefined) {
         // **bold** → deputy name
         parts.push(
-          <strong key={key++} className="font-semibold text-gray-900 dark:text-gray-100">
+          <strong key={key++} className="font-semibold text-fg">
             {match[1]}
           </strong>
         );
@@ -1156,7 +1157,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
           parts.push(
             <span
               key={key++}
-              className="underline decoration-green-500 decoration-2 underline-offset-2"
+              className="underline decoration-brand decoration-2 underline-offset-2"
               title="Verbatim: testo identico al verbale parlamentare"
             >
               «{quote}»
@@ -1166,8 +1167,8 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
           parts.push(
             <span
               key={key++}
-              className="underline decoration-amber-400 decoration-2 underline-offset-2"
-              title="Parafrasi: attribuita al deputato, ma rielaborata — non corrisponde parola per parola al verbale"
+              className="underline decoration-notice decoration-2 decoration-dashed underline-offset-2"
+              title="Parafrasi: attribuita al deputato, ma rielaborata, non corrisponde parola per parola al verbale"
             >
               «{quote}»
             </span>
@@ -1176,7 +1177,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
           parts.push(
             <span
               key={key++}
-              className="underline decoration-blue-400 decoration-1 underline-offset-2"
+              className="underline decoration-line-control decoration-1 underline-offset-2"
               title="Citazione"
             >
               «{quote}»
@@ -1216,10 +1217,10 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
     const hasCitationData = (citations?.length ?? 0) > 0;
 
     const headingClass = side === "a"
-      ? "text-[11px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400 mt-4 mb-2 pb-1 border-b border-blue-100 dark:border-blue-900/30 first:mt-0"
+      ? "text-[11px] font-semibold uppercase tracking-wide text-brand-fg mt-4 mb-2 pb-1 border-b border-brand/20 first:mt-0"
       : side === "b"
-      ? "text-[11px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400 mt-4 mb-2 pb-1 border-b border-amber-100 dark:border-amber-900/30 first:mt-0"
-      : "text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-4 mb-2 pb-1 border-b border-gray-200 dark:border-gray-700 first:mt-0";
+      ? "text-[11px] font-semibold uppercase tracking-wide text-notice-fg mt-4 mb-2 pb-1 border-b border-notice/20 first:mt-0"
+      : "text-[11px] font-semibold uppercase tracking-wide text-fg-muted mt-4 mb-2 pb-1 border-b border-line first:mt-0";
 
     // Normalise line endings; remove technical refs
     const lines = text
@@ -1299,55 +1300,55 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
         <DialogHeader className={cn(
           "border-b shrink-0",
           fullScreen && step === "select"
-            ? "px-8 py-4 bg-gradient-to-r from-blue-700 to-indigo-800"
-            : "px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30"
+            ? "px-8 py-4 bg-surface border-line"
+            : "px-6 py-4 bg-surface border-line"
         )}>
           {fullScreen && step === "select" ? (
             /* ── Full-screen select: branded navbar ── */
             <div className="flex items-center justify-between">
               {/* Logo + brand */}
-              <DialogTitle className="flex items-center gap-3 text-white">
-                <svg viewBox="56 184 400 224" className="w-10 h-6 shrink-0" aria-hidden="true">
+              <DialogTitle className="flex items-center gap-3 text-fg">
+                <svg viewBox="56 184 400 224" className="w-10 h-6 shrink-0 text-brand" aria-hidden="true">
                   <path d="M 80 384 A 176 176 0 0 1 432 384" fill="none" stroke="white" strokeWidth="32" strokeLinecap="round" opacity="0.4"/>
                   <path d="M 136 384 A 120 120 0 0 1 376 384" fill="none" stroke="white" strokeWidth="32" strokeLinecap="round" opacity="0.65"/>
                   <path d="M 192 384 A 64 64 0 0 1 320 384" fill="none" stroke="white" strokeWidth="32" strokeLinecap="round" opacity="0.9"/>
                 </svg>
-                <span className="text-lg font-bold tracking-tight">ParliamentRAG</span>
-                <span className="text-white/30 font-light text-xl select-none">·</span>
-                <span className="text-sm font-normal text-blue-200">Valutazione Sistema</span>
+                <span className="text-lg font-semibold tracking-tight">Parliament<span className="text-brand-fg">RAG</span></span>
+                <span className="text-fg-faint font-light text-xl select-none">·</span>
+                <span className="text-sm font-normal text-fg-muted">Valutazione Sistema</span>
               </DialogTitle>
               {/* Greeting */}
               <div className="flex flex-col items-end gap-0.5">
                 {evaluatorId && (
-                  <p className="text-sm text-blue-200">
-                    Valutatore: <span className="font-semibold text-white">{toTitleCase(evaluatorId)}</span>
+                  <p className="text-sm text-fg-muted">
+                    Valutatore: <span className="font-semibold text-fg">{toTitleCase(evaluatorId)}</span>
                   </p>
                 )}
-                <p className="text-xs text-blue-300">I dati parlamentari sono aggiornati al <strong className="text-blue-100">{lastUpdate ?? "…"}</strong></p>
+                <p className="text-xs text-fg-muted">I dati parlamentari sono aggiornati al <strong className="text-fg-secondary">{lastUpdate ?? "…"}</strong></p>
               </div>
             </div>
           ) : (
             /* ── Normal modal header ── */
             <>
               <DialogTitle className="flex items-center gap-2 text-lg">
-                <ClipboardCheck className="w-5 h-5 text-blue-600" />
+                <ClipboardCheck className="w-5 h-5 text-brand" />
                 {dialogTitle()}
               </DialogTitle>
               {step === "form" && (
                 <div className="flex items-center gap-3 mt-2">
-                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="flex-1 h-2 bg-surface-sunken rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
+                      className="h-full rounded-full bg-brand transition-all duration-300"
                       style={{ width: `${completionPercentage()}%` }}
                     />
                   </div>
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  <span className="text-sm font-medium text-fg-secondary">
                     {completionPercentage()}%
                   </span>
                 </div>
               )}
               {step === "citations" && (
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-fg-muted mt-1">
                   Valuta ogni citazione singolarmente (opzionale - puoi saltare)
                 </p>
               )}
@@ -1360,11 +1361,11 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
           <div className={cn("flex flex-col", fullScreen ? "flex-1 min-h-0" : "h-[60vh]")}>
             {/* Greeting / refresh bar — hidden in fullScreen (greeting already in header) */}
             {!fullScreen && (
-              <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b">
+              <div className="px-6 py-3 bg-surface-muted border-b">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-fg-secondary">
                     {evaluatorId ? (
-                      <>Ciao <span className="font-semibold text-gray-800 dark:text-gray-200">{toTitleCase(evaluatorId)}</span> — seleziona una conversazione da valutare</>
+                      <>Ciao <span className="font-semibold text-fg">{toTitleCase(evaluatorId)}</span>, seleziona una conversazione da valutare</>
                     ) : (
                       "Seleziona una conversazione da valutare"
                     )}
@@ -1379,46 +1380,46 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
 
             {/* How-to instructions — fullScreen: rich card grid; normal: compact strip */}
             {fullScreen ? (
-              <div className="shrink-0 border-b bg-gray-50 dark:bg-gray-900/40 px-8 py-5">
+              <div className="shrink-0 border-b bg-surface-muted px-8 py-5">
                 <div className="grid grid-cols-3 gap-4">
                     {/* Step 1 */}
-                    <div className="flex gap-3 p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white text-sm font-bold">1</span>
+                    <div className="flex gap-3 p-3.5 rounded-lg bg-surface border border-line">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-soft-strong text-brand-fg text-sm font-semibold tabular">1</span>
                       <div>
-                        <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-0.5">Seleziona</p>
-                        <p className="text-xs text-blue-700 dark:text-blue-300 leading-snug">Scegli una delle conversazioni da valutare dalla lista</p>
+                        <p className="text-sm font-semibold text-fg mb-0.5">Seleziona</p>
+                        <p className="text-xs text-fg-muted leading-snug">Scegli una delle conversazioni da valutare dalla lista</p>
                       </div>
                     </div>
                     {/* Step 2 */}
-                    <div className="flex gap-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-sm font-bold">2</span>
+                    <div className="flex gap-3 p-3.5 rounded-lg bg-surface border border-line">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-soft-strong text-brand-fg text-sm font-semibold tabular">2</span>
                       <div>
-                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-0.5">Leggi A, poi B</p>
-                        <p className="text-xs text-amber-700 dark:text-amber-300 leading-snug">Leggi entrambe le risposte con attenzione, nell'ordine indicato</p>
+                        <p className="text-sm font-semibold text-fg mb-0.5">Leggi A, poi B</p>
+                        <p className="text-xs text-fg-muted leading-snug">Leggi entrambe le risposte con attenzione, nell'ordine indicato</p>
                       </div>
                     </div>
                     {/* Step 3 */}
-                    <div className="flex gap-3 p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white text-sm font-bold">3</span>
+                    <div className="flex gap-3 p-3.5 rounded-lg bg-surface border border-line">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-soft-strong text-brand-fg text-sm font-semibold tabular">3</span>
                       <div>
-                        <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100 mb-0.5">Valuta</p>
-                        <p className="text-xs text-indigo-700 dark:text-indigo-300 leading-snug">Esprimi un giudizio su ogni dimensione. Puoi rileggere le risposte in qualsiasi momento.</p>
+                        <p className="text-sm font-semibold text-fg mb-0.5">Valuta</p>
+                        <p className="text-xs text-fg-muted leading-snug">Esprimi un giudizio su ogni dimensione. Puoi rileggere le risposte in qualsiasi momento.</p>
                       </div>
                     </div>
                   </div>
                 </div>
             ) : (
-              <div className="px-6 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b">
-                <p className="text-[11px] font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide mb-2">Come funziona la valutazione</p>
+              <div className="px-6 py-3 bg-surface-brand border-b border-line">
+                <p className="label-mono mb-2">Come funziona la valutazione</p>
                 <div className="flex gap-4">
                   {[
                     { n: "1", label: "Seleziona una conversazione" },
                     { n: "2", label: "Leggi Risposta A, poi Risposta B" },
-                    { n: "3", label: "Valuta — puoi rileggere in ogni momento" },
+                    { n: "3", label: "Valuta: puoi rileggere in ogni momento" },
                   ].map(({ n, label }) => (
                     <div key={n} className="flex items-start gap-2 flex-1">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-bold mt-0.5">{n}</span>
-                      <p className="text-[11px] text-blue-700 dark:text-blue-200 leading-snug">{label}</p>
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand text-[10px] font-semibold tabular mt-0.5">{n}</span>
+                      <p className="text-[11px] text-fg-secondary leading-snug">{label}</p>
                     </div>
                   ))}
                 </div>
@@ -1429,7 +1430,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               <div>
                 {fullScreen && (
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    <p className="text-sm font-semibold text-fg-secondary">
                       Conversazioni da valutare
                     </p>
                     <Button variant="ghost" size="sm" onClick={loadData} disabled={isLoading} className="h-7 text-xs">
@@ -1440,24 +1441,24 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                 )}
                 {isLoading ? (
                   <div className="flex items-center justify-center h-40">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                    <Loader2 className="w-8 h-8 animate-spin text-brand-fg" />
                   </div>
                 ) : error ? (
-                  <div className="flex flex-col items-center justify-center h-40 text-red-500">
+                  <div className="flex flex-col items-center justify-center h-40 text-danger-fg">
                     <AlertCircle className="w-8 h-8 mb-2" />
                     <p>{error}</p>
                   </div>
                 ) : pendingChats.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+                  <div className="flex flex-col items-center justify-center h-40 text-fg-muted">
                     {evaluatedIds.size > 0 ? (
                       <>
-                        <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500" />
+                        <CheckCircle2 className="w-12 h-12 mb-3 text-brand" />
                         <p className="text-lg font-medium">Tutte le conversazioni sono state valutate!</p>
                         <p className="text-sm mt-1">Grazie per il tuo contributo.</p>
                       </>
                     ) : (
                       <>
-                        <AlertCircle className="w-12 h-12 mb-3 text-gray-400" />
+                        <AlertCircle className="w-12 h-12 mb-3 text-fg-muted" />
                         <p className="text-lg font-medium">Nessuna conversazione disponibile</p>
                         <p className="text-sm mt-1 text-center max-w-xs">
                           Non ci sono ancora conversazioni da valutare. Usa la chat per generarne.
@@ -1471,19 +1472,16 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                       <Card
                         key={chat.id}
                         className={cn(
-                          "cursor-pointer transition-all duration-200 hover:shadow-sm",
-                          chat.evaluation_type === "ab"
-                            ? "hover:border-blue-300 dark:hover:border-blue-700"
-                            : "hover:border-purple-300 dark:hover:border-purple-700"
+                          "cursor-pointer transition-colors duration-200 hover:border-brand/40 hover:bg-surface-muted"
                         )}
                         onClick={() => handleSelectChat(chat)}
                       >
                         <CardContent className="px-3 py-1.5">
                           <div className="flex items-center gap-2.5">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-[11px] font-bold text-gray-500 dark:text-gray-400">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[11px] font-bold text-fg-muted">
                               {idx + 1}
                             </span>
-                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-snug">
+                            <p className="text-sm font-medium text-fg leading-snug">
                               {chat.query}
                             </p>
                           </div>
@@ -1492,11 +1490,12 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                     ))}
                   </div>
                 )}
+                <NewsletterSignup source="valutazione" className="mt-6" />
               </div>
             </ScrollArea>
 
-            <div className="border-t bg-gray-50 dark:bg-gray-900/50 px-6 py-3">
-              <div className="flex items-center justify-between text-sm text-gray-500">
+            <div className="border-t bg-surface-muted px-6 py-3">
+              <div className="flex items-center justify-between text-sm text-fg-muted">
                 <span>
                   {pendingChats.filter(c => c.evaluation_type === "ab").length} A/B
                   {" · "}
@@ -1516,17 +1515,17 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
             {/* ── MOBILE LAYOUT (hidden on md+) ── */}
             <div className="md:hidden flex flex-col flex-1 min-h-0">
               {/* Question header */}
-              <div className="px-4 py-2.5 bg-blue-50 dark:bg-blue-950/30 border-b shrink-0">
-                <p className="text-sm font-medium text-blue-900 dark:text-blue-100 line-clamp-2">
-                  <span className="text-blue-600 dark:text-blue-400">Domanda:</span> {selectedChat.query}
+              <div className="px-4 py-2.5 bg-surface-brand border-b shrink-0">
+                <p className="text-sm font-medium text-fg line-clamp-2">
+                  <span className="text-brand-fg">Domanda:</span> {selectedChat.query}
                 </p>
                 {selectedChat.matched_topic && (
-                  <p className="text-xs text-blue-500 mt-0.5">Confronto su: {selectedChat.matched_topic}</p>
+                  <p className="text-xs text-brand-fg mt-0.5">Confronto su: {selectedChat.matched_topic}</p>
                 )}
               </div>
 
               {/* 3-tab bar */}
-              <div className="flex shrink-0 border-b bg-white dark:bg-gray-950">
+              <div className="flex shrink-0 border-b bg-surface">
                 {(["A", "B", "valuta"] as const).map((tab) => (
                   <button
                     key={tab}
@@ -1534,12 +1533,10 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                     className={cn(
                       "flex-1 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px inline-flex items-center justify-center gap-1",
                       mobileABTab === tab
-                        ? tab === "A"
-                          ? "border-blue-500 text-blue-700 dark:text-blue-300"
-                          : tab === "B"
-                          ? "border-amber-500 text-amber-700 dark:text-amber-300"
-                          : "border-indigo-500 text-indigo-700 dark:text-indigo-300"
-                        : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        ? tab === "B"
+                          ? "border-notice text-notice-fg"
+                          : "border-brand text-brand-fg"
+                        : "border-transparent text-fg-muted hover:text-fg-secondary"
                     )}
                   >
                     {tab === "A" && "Risposta A"}
@@ -1547,7 +1544,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                     {tab === "valuta" && (
                       <>
                         Valuta
-                        {completionPercentage() === 100 && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+                        {completionPercentage() === 100 && <Check className="w-3.5 h-3.5 text-brand-fg" />}
                       </>
                     )}
                   </button>
@@ -1558,28 +1555,28 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               {(mobileABTab === "A" || mobileABTab === "B") && (
                 <div className="flex flex-col flex-1 min-h-0">
                   {/* Legend */}
-                  <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-white dark:bg-gray-950 border-b shrink-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Legenda</span>
-                    <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full border border-gray-200 dark:border-gray-700 text-[10px]">
-                      <strong className="font-bold text-gray-900 dark:text-gray-100">Deputato</strong>
+                  <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-surface border-b shrink-0">
+                    <span className="label-mono">Legenda</span>
+                    <span className="inline-flex items-center gap-1 bg-surface-muted px-1.5 py-0.5 rounded-sm border border-line text-[10px]">
+                      <strong className="font-bold text-fg">Deputato</strong>
                     </span>
-                    <span title="Testo identico al verbale parlamentare" className="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded-full border border-green-200 dark:border-green-800 text-[10px]">
-                      <span className="underline decoration-green-500 decoration-2 underline-offset-2 text-gray-700 dark:text-gray-200">«cit»</span>
-                      <span className="font-semibold text-green-700 dark:text-green-400">✓ verbatim</span>
+                    <span title="Testo identico al verbale parlamentare" className="inline-flex items-center gap-1 bg-brand-soft px-1.5 py-0.5 rounded-sm border border-brand/25 text-[10px]">
+                      <span className="underline decoration-brand decoration-2 underline-offset-2 text-fg-secondary">«cit»</span>
+                      <span className="font-semibold text-brand-fg">✓ verbatim</span>
                     </span>
-                    <span title="Attribuita al deputato, ma il testo è rielaborato — non corrisponde parola per parola al verbale" className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 text-[10px]">
-                      <span className="underline decoration-amber-400 decoration-2 underline-offset-2 text-gray-700 dark:text-gray-200">«cit»</span>
-                      <span className="font-semibold text-amber-700 dark:text-amber-400">~ parafrasi</span>
+                    <span title="Attribuita al deputato, ma il testo è rielaborato, non corrisponde parola per parola al verbale" className="inline-flex items-center gap-1 bg-notice-soft px-1.5 py-0.5 rounded-sm border border-notice/25 text-[10px]">
+                      <span className="underline decoration-notice decoration-2 decoration-dashed underline-offset-2 text-fg-secondary">«cit»</span>
+                      <span className="font-semibold text-notice-fg">~ parafrasi</span>
                     </span>
-                    <span className="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 text-[10px]">
-                      <span className="underline decoration-blue-400 decoration-1 underline-offset-2 text-gray-700 dark:text-gray-200">«cit»</span>
-                      <span className="font-semibold text-blue-700 dark:text-blue-400">citata</span>
+                    <span className="inline-flex items-center gap-1 bg-surface-muted px-1.5 py-0.5 rounded-sm border border-line text-[10px]">
+                      <span className="underline decoration-line-control decoration-1 underline-offset-2 text-fg-secondary">«cit»</span>
+                      <span className="font-semibold text-fg-secondary">citata</span>
                     </span>
                   </div>
                   <ScrollArea className="flex-1 min-h-0 px-4 py-4">
                     {isLoadingDetails ? (
                       <div className="flex items-center justify-center h-40">
-                        <Loader2 className={cn("w-6 h-6 animate-spin", mobileABTab === "A" ? "text-blue-500" : "text-amber-500")} />
+                        <Loader2 className={cn("w-6 h-6 animate-spin", mobileABTab === "A" ? "text-brand" : "text-notice")} />
                       </div>
                     ) : (
                       <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
@@ -1596,7 +1593,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               {mobileABTab === "valuta" && (
                 <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                   {/* Category progress: numbered dots + current category name */}
-                  <div className="px-4 py-3 bg-white dark:bg-gray-950 border-b shrink-0">
+                  <div className="px-4 py-3 bg-surface border-b shrink-0">
                     <div className="flex items-center gap-3">
                       <div className="flex gap-1.5 shrink-0">
                         {categories.map((_, idx) => (
@@ -1606,10 +1603,10 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                             className={cn(
                               "w-6 h-6 rounded-full text-xs font-semibold transition-colors flex items-center justify-center",
                               idx === currentCategory
-                                ? "bg-blue-500 text-white shadow-sm"
+                                ? "bg-brand text-on-brand"
                                 : isCategoryComplete(idx)
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 ring-2 ring-emerald-400 ring-offset-1"
-                                : "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                                ? "bg-brand-soft-strong text-brand-fg ring-1 ring-brand/40"
+                                : "bg-surface-sunken text-fg-muted"
                             )}
                           >
                             {isCategoryComplete(idx)
@@ -1618,7 +1615,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                           </button>
                         ))}
                       </div>
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 min-w-0">
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-fg-secondary min-w-0">
                         <span className="shrink-0">{CATEGORY_ICONS[categories[currentCategory]?.name]}</span>
                         <span className="truncate">{categories[currentCategory]?.name}</span>
                       </div>
@@ -1628,22 +1625,22 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                   <ScrollArea className="flex-1 min-h-0 px-4 py-4">
                     <div className="space-y-4">
                       {/* Category instruction box — uniform across all categories (mobile) */}
-                      <div className="p-3 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950/30 dark:to-blue-950/30 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 mb-1.5">
+                      <div className="p-3 bg-surface-brand rounded-md">
+                        <p className="text-xs font-bold text-fg flex items-center gap-1.5 mb-1.5">
                           {CATEGORY_ICONS[categories[currentCategory].name]}
                           {CATEGORY_INSTRUCTIONS[categories[currentCategory].name]?.title ?? categories[currentCategory].name}
                         </p>
                         {categories[currentCategory].name === "Autorità Esperti" ? (
                           <>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            <p className="text-xs text-fg-secondary leading-relaxed">
                               Dai un voto stelle alle 3 dimensioni di autorità per ciascuna risposta.
                             </p>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-1.5 leading-snug">
-                              💡 Torna sulle schede <strong>Risposta A</strong> e <strong>Risposta B</strong> per confrontare gli esperti citati.
+                            <p className="text-[10px] text-fg-muted mt-1.5 leading-snug">
+                              Torna sulle schede <strong>Risposta A</strong> e <strong>Risposta B</strong> per confrontare gli esperti citati.
                             </p>
                           </>
                         ) : (
-                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-snug">
+                          <p className="text-xs text-fg-secondary leading-snug">
                             {CATEGORY_INSTRUCTIONS[categories[currentCategory].name]?.description}
                           </p>
                         )}
@@ -1653,18 +1650,18 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                           const dim = question.id as ABDimension;
                           const rating = formState[dim];
                           return (
-                            <div key={question.id} className="space-y-3 p-4 bg-white dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                            <div key={question.id} className="space-y-3 p-4 bg-surface rounded-lg border border-line">
                               <div>
-                                <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">{question.question}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">{question.description}</p>
+                                <p className="font-semibold text-sm text-fg">{question.question}</p>
+                                <p className="text-xs text-fg-muted mt-0.5 leading-snug">{question.description}</p>
                               </div>
                               <div className="space-y-2">
                                 <div className="flex flex-col gap-1">
-                                  <span className="text-xs font-semibold text-blue-600">Risposta A</span>
+                                  <span className="text-xs font-semibold text-brand-fg">Risposta A</span>
                                   <StarRating value={rating.rating_a} onChange={(val) => handleABRatingChange(dim, "rating_a", val)} size="md" />
                                 </div>
                                 <div className="flex flex-col gap-1">
-                                  <span className="text-xs font-semibold text-amber-600">Risposta B</span>
+                                  <span className="text-xs font-semibold text-notice-fg">Risposta B</span>
                                   <StarRating value={rating.rating_b} onChange={(val) => handleABRatingChange(dim, "rating_b", val)} size="md" />
                                 </div>
                               </div>
@@ -1673,11 +1670,11 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                         })
                       ) : (
                         <>
-                          <div className="space-y-3 p-4 bg-white dark:bg-gray-950 rounded-lg border">
-                            <p className="font-medium text-sm text-gray-900 dark:text-gray-100">Soddisfazione complessiva</p>
+                          <div className="space-y-3 p-4 bg-surface rounded-lg border">
+                            <p className="font-medium text-sm text-fg">Soddisfazione complessiva</p>
                             <div className="space-y-2.5">
                               <div className="flex flex-col gap-1">
-                                <span className="text-xs font-semibold text-blue-600">Risposta A</span>
+                                <span className="text-xs font-semibold text-brand-fg">Risposta A</span>
                                 <StarRating value={formState.overall_satisfaction_a}
                                   onChange={(val) => setFormState(prev => ({
                                     ...prev,
@@ -1686,7 +1683,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                                   }))} size="md" />
                               </div>
                               <div className="flex flex-col gap-1">
-                                <span className="text-xs font-semibold text-amber-600">Risposta B</span>
+                                <span className="text-xs font-semibold text-notice-fg">Risposta B</span>
                                 <StarRating value={formState.overall_satisfaction_b}
                                   onChange={(val) => setFormState(prev => ({
                                     ...prev,
@@ -1696,34 +1693,34 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                               </div>
                             </div>
                           </div>
-                          <div className="p-4 bg-white dark:bg-gray-950 rounded-lg border">
-                            <p className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-3">
+                          <div className="p-4 bg-surface rounded-lg border">
+                            <p className="font-medium text-sm text-fg mb-3">
                               Consiglieresti questo sistema?
                             </p>
                             <div className="flex gap-3">
                               <Button type="button"
                                 variant={formState.would_recommend ? "default" : "outline"}
                                 onClick={() => setFormState(prev => ({ ...prev, would_recommend: true }))}
-                                className={cn("flex-1", formState.would_recommend && "bg-emerald-600 hover:bg-emerald-700")}>
+                                className="flex-1">
                                 <ThumbsUp className="w-4 h-4 mr-1" /> Sì
                               </Button>
                               <Button type="button"
                                 variant={!formState.would_recommend ? "default" : "outline"}
                                 onClick={() => setFormState(prev => ({ ...prev, would_recommend: false }))}
-                                className={cn("flex-1", !formState.would_recommend && "bg-gray-600 hover:bg-gray-700")}>
+                                className="flex-1">
                                 No
                               </Button>
                             </div>
                           </div>
-                          <div className="p-4 bg-white dark:bg-gray-950 rounded-lg border space-y-4">
+                          <div className="p-4 bg-surface rounded-lg border space-y-4">
                             <div className="space-y-2">
-                              <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Cosa ha funzionato bene? (opzionale)</label>
+                              <label className="text-sm font-medium text-fg">Cosa ha funzionato bene? (opzionale)</label>
                               <Textarea placeholder="Aspetti positivi..." value={formState.feedback_positive}
                                 onChange={(e) => setFormState(prev => ({ ...prev, feedback_positive: e.target.value }))}
                                 className="min-h-[70px] resize-none" />
                             </div>
                             <div className="space-y-2">
-                              <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Suggerimenti? (opzionale)</label>
+                              <label className="text-sm font-medium text-fg">Suggerimenti? (opzionale)</label>
                               <Textarea placeholder="Come migliorare..." value={formState.feedback_improvement}
                                 onChange={(e) => setFormState(prev => ({ ...prev, feedback_improvement: e.target.value }))}
                                 className="min-h-[70px] resize-none" />
@@ -1737,9 +1734,9 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               )}
 
               {/* Mobile footer */}
-              <div className="px-4 py-3 border-t bg-white dark:bg-gray-950 shrink-0">
+              <div className="px-4 py-3 border-t bg-surface shrink-0">
                 {error && (
-                  <div className="mb-2 p-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-xs rounded-lg flex items-center gap-2">
+                  <div className="mb-2 p-2 bg-danger-soft text-danger-fg text-xs rounded-md flex items-center gap-2">
                     <AlertCircle className="w-4 h-4" /> {error}
                   </div>
                 )}
@@ -1772,8 +1769,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                       Avanti <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
                   ) : (
-                    <Button size="sm" onClick={handleGoToCitations} disabled={!isFormComplete()}
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                    <Button size="sm" onClick={handleGoToCitations} disabled={!isFormComplete()}>
                       Citazioni <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
                   )}
@@ -1784,10 +1780,10 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
             {/* ── DESKTOP LAYOUT (hidden on mobile) ── */}
             <div className="hidden md:flex flex-row flex-1 min-h-0">
               {/* Left Panel: Side-by-side A/B Responses */}
-              <div className="md:w-3/5 md:border-r flex flex-col bg-white dark:bg-gray-950 min-h-0 overflow-hidden">
-                <div className="px-4 py-3 bg-blue-50 dark:bg-blue-950/30 border-b">
-                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100 line-clamp-2">
-                    <span className="text-blue-600 dark:text-blue-400">Domanda:</span> {selectedChat.query}
+              <div className="md:w-3/5 md:border-r flex flex-col bg-surface min-h-0 overflow-hidden">
+                <div className="px-4 py-3 bg-surface-brand border-b">
+                  <p className="text-sm font-medium text-fg line-clamp-2">
+                    <span className="text-brand-fg">Domanda:</span> {selectedChat.query}
                   </p>
                 </div>
                 <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -1803,25 +1799,25 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                   ) : (
                     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                       {/* Legend */}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2.5 bg-white dark:bg-gray-950 border-b shrink-0">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Legenda</span>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2.5 bg-surface border-b shrink-0">
+                        <span className="label-mono">Legenda</span>
                         {/* Green: verbatim */}
-                        <span className="inline-flex flex-col bg-green-50 dark:bg-green-900/20 px-2.5 py-1 rounded-lg border border-green-200 dark:border-green-800 text-[11px]">
+                        <span className="inline-flex flex-col bg-brand-soft px-2.5 py-1 rounded-md border border-brand/25 text-[11px]">
                           <span className="flex items-center gap-1.5">
-                            <span className="underline decoration-green-500 decoration-2 underline-offset-2 text-gray-700 dark:text-gray-200">«citazione»</span>
-                            <span className="font-semibold text-green-700 dark:text-green-400">✓ verbatim</span>
+                            <span className="underline decoration-brand decoration-2 underline-offset-2 text-fg-secondary">«citazione»</span>
+                            <span className="font-semibold text-brand-fg">✓ verbatim</span>
                           </span>
-                          <span className="text-green-600/70 dark:text-green-500/70 text-[10px] leading-tight mt-0.5">
+                          <span className="text-fg-muted text-[10px] leading-tight mt-0.5">
                             testo identico al verbale parlamentare
                           </span>
                         </span>
                         {/* Amber: paraphrased */}
-                        <span className="inline-flex flex-col bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-800 text-[11px]">
+                        <span className="inline-flex flex-col bg-notice-soft px-2.5 py-1 rounded-md border border-notice/25 text-[11px]">
                           <span className="flex items-center gap-1.5">
-                            <span className="underline decoration-amber-400 decoration-2 underline-offset-2 text-gray-700 dark:text-gray-200">«citazione»</span>
-                            <span className="font-semibold text-amber-700 dark:text-amber-400">~ parafrasata</span>
+                            <span className="underline decoration-notice decoration-2 decoration-dashed underline-offset-2 text-fg-secondary">«citazione»</span>
+                            <span className="font-semibold text-notice-fg">~ parafrasata</span>
                           </span>
-                          <span className="text-amber-600/70 dark:text-amber-500/70 text-[10px] leading-tight mt-0.5">
+                          <span className="text-fg-muted text-[10px] leading-tight mt-0.5">
                             attribuita al deputato, ma non riscontrabile parola per parola nei verbali (rielaborazione o parafrasi)
                           </span>
                         </span>
@@ -1829,18 +1825,18 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
 
                       {/* Sticky column headers */}
                       <div className="grid grid-cols-2 shrink-0 border-b">
-                        <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-center border-r">
-                          <span className="font-semibold text-blue-700 dark:text-blue-300 text-sm">Risposta A</span>
+                        <div className="px-3 py-2 bg-brand-soft text-center border-r border-line">
+                          <span className="font-semibold text-brand-fg text-sm">Risposta A</span>
                         </div>
-                        <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 text-center">
-                          <span className="font-semibold text-amber-700 dark:text-amber-300 text-sm">Risposta B</span>
+                        <div className="px-3 py-2 bg-notice-soft text-center">
+                          <span className="font-semibold text-notice-fg text-sm">Risposta B</span>
                         </div>
                       </div>
 
                       {/* Section-aligned columns — sections match by canonical title */}
                       {isLoadingDetails ? (
                         <div className="flex items-center justify-center flex-1">
-                          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                          <Loader2 className="w-6 h-6 animate-spin text-fg-muted" />
                         </div>
                       ) : (
                         <div className="flex-1 overflow-y-auto">
@@ -1854,25 +1850,25 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                             return aligned.map(({ a, b, heading }) => (
                               <div key={heading} className="border-b last:border-b-0">
                                 {/* Shared section heading */}
-                                <div className="grid grid-cols-2 bg-gray-50 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-800">
-                                  <div className="px-3 py-1.5 border-r border-gray-100 dark:border-gray-800">
-                                    <p className="text-[11px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">{heading}</p>
+                                <div className="grid grid-cols-2 bg-surface-muted border-b border-line">
+                                  <div className="px-3 py-1.5 border-r border-line">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-fg">{heading}</p>
                                   </div>
                                   <div className="px-3 py-1.5">
-                                    <p className="text-[11px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">{heading}</p>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-notice-fg">{heading}</p>
                                   </div>
                                 </div>
                                 {/* Section content */}
                                 <div className="grid grid-cols-2">
-                                  <div className="px-4 py-3 border-r border-gray-100 dark:border-gray-800">
+                                  <div className="px-4 py-3 border-r border-line">
                                     {a
                                       ? renderContent(a.content, citA, "a", localAbAssignment?.["A"] === "system")
-                                      : <p className="text-sm text-gray-400 italic">—</p>}
+                                      : <p className="text-sm text-fg-muted italic">—</p>}
                                   </div>
                                   <div className="px-4 py-3">
                                     {b
                                       ? renderContent(b.content, citB, "b", localAbAssignment?.["B"] === "system")
-                                      : <p className="text-sm text-gray-400 italic">—</p>}
+                                      : <p className="text-sm text-fg-muted italic">—</p>}
                                   </div>
                                 </div>
                               </div>
@@ -1886,37 +1882,37 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               </div>
 
               {/* Right Panel: A/B Survey Form */}
-              <div className="md:w-2/5 flex flex-col bg-gray-50 dark:bg-gray-900/30 min-h-0 overflow-hidden relative">
+              <div className="md:w-2/5 flex flex-col bg-surface-muted min-h-0 overflow-hidden relative">
                 {/* Reading phase overlay */}
                 {!hasConfirmedReading && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white dark:bg-gray-950 px-8 py-6 text-center gap-6">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-                      <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface px-8 py-6 text-center gap-6">
+                    <div className="w-16 h-16 rounded-lg bg-brand-soft flex items-center justify-center">
+                      <BookOpen className="w-8 h-8 text-brand-fg" />
                     </div>
                     <div className="space-y-2">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Prima leggi entrambe le risposte</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed max-w-xs mx-auto">
+                      <h3 className="text-lg font-semibold text-fg">Prima leggi entrambe le risposte</h3>
+                      <p className="text-sm text-fg-muted leading-relaxed max-w-xs mx-auto">
                         Nel pannello a sinistra trovi la{" "}
-                        <span className="font-semibold text-blue-600">Risposta A</span> e la{" "}
-                        <span className="font-semibold text-amber-600">Risposta B</span> affiancate.
+                        <span className="font-semibold text-brand-fg">Risposta A</span> e la{" "}
+                        <span className="font-semibold text-notice-fg">Risposta B</span> affiancate.
                         Leggile entrambe prima di iniziare a valutare.
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 leading-relaxed">
+                      <p className="text-xs text-fg-muted mt-2 leading-relaxed">
                         Potrai rileggere le risposte in qualsiasi momento durante la valutazione.
                       </p>
                     </div>
                     <Button
                       onClick={() => setHasConfirmedReading(true)}
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 gap-2 px-6"
+                      className="gap-2 px-6"
                       size="lg"
                     >
-                      Ho letto entrambe — inizia a valutare
+                      Ho letto entrambe, inizia a valutare
                       <ChevronRight className="w-4 h-4" />
                     </Button>
                   </div>
                 )}
                 {/* Category tabs — short labels + icons to avoid overflow */}
-                <div className="px-3 py-2 border-b bg-white dark:bg-gray-950 flex gap-1 overflow-x-auto shrink-0 items-center">
+                <div className="px-3 py-2 border-b bg-surface flex gap-1 overflow-x-auto shrink-0 items-center">
                   {categories.map((cat, idx) => (
                     <button
                       key={cat.name}
@@ -1924,14 +1920,14 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                       className={cn(
                         "flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap",
                         currentCategory === idx
-                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 shadow-sm"
-                          : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800",
-                        isCategoryComplete(idx) && "ring-2 ring-emerald-400 ring-offset-1"
+                          ? "bg-brand-soft-strong text-brand-fg"
+                          : "text-fg-muted hover:bg-surface-muted",
+                        isCategoryComplete(idx) && "ring-1 ring-brand/40"
                       )}
                     >
                       {CATEGORY_ICONS[cat.name]}
                       {CATEGORY_SHORT_LABELS[cat.name] ?? cat.name}
-                      {isCategoryComplete(idx) && <Check className="w-3 h-3 text-emerald-500" />}
+                      {isCategoryComplete(idx) && <Check className="w-3 h-3 text-brand-fg" />}
                     </button>
                   ))}
                 </div>
@@ -1939,28 +1935,28 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                 <ScrollArea className="flex-1 min-h-0 px-4 py-4">
                   <div className="space-y-5">
                     {/* Category instruction box — uniform across all categories */}
-                    <div className="p-3.5 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950/30 dark:to-blue-950/30 rounded-xl border border-slate-200 dark:border-slate-700">
-                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 mb-1.5">
+                    <div className="p-3.5 bg-surface-brand rounded-md">
+                      <p className="text-xs font-bold text-fg flex items-center gap-1.5 mb-1.5">
                         {CATEGORY_ICONS[categories[currentCategory].name]}
                         {CATEGORY_INSTRUCTIONS[categories[currentCategory].name]?.title ?? categories[currentCategory].name}
                       </p>
                       {categories[currentCategory].name === "Autorità Esperti" ? (
                         <div className="space-y-2">
                           <div className="flex items-start gap-2">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-bold mt-0.5">1</span>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-snug">
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">Pannello sinistro:</span> per ogni gruppo politico, clicca quale risposta ha citato l'esperto più autorevole secondo te.
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand text-[10px] font-semibold tabular mt-0.5">1</span>
+                            <p className="text-xs text-fg-secondary leading-snug">
+                              <span className="font-semibold text-fg-secondary">Pannello sinistro:</span> per ogni gruppo politico, clicca quale risposta ha citato l'esperto più autorevole secondo te.
                             </p>
                           </div>
                           <div className="flex items-start gap-2">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-bold mt-0.5">2</span>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-snug">
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">Qui sotto:</span> assegna un voto stelle alle 3 dimensioni globali di autorità.
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand text-[10px] font-semibold tabular mt-0.5">2</span>
+                            <p className="text-xs text-fg-secondary leading-snug">
+                              <span className="font-semibold text-fg-secondary">Qui sotto:</span> assegna un voto stelle alle 3 dimensioni globali di autorità.
                             </p>
                           </div>
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-snug">
+                        <p className="text-xs text-fg-secondary leading-snug">
                           {CATEGORY_INSTRUCTIONS[categories[currentCategory].name]?.description}
                         </p>
                       )}
@@ -1970,18 +1966,18 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                         const dim = question.id as ABDimension;
                         const rating = formState[dim];
                         return (
-                          <div key={question.id} className="space-y-3 p-4 bg-white dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                          <div key={question.id} className="space-y-3 p-4 bg-surface rounded-lg border border-line">
                             <div>
-                              <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">{question.question}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">{question.description}</p>
+                              <p className="font-semibold text-sm text-fg">{question.question}</p>
+                              <p className="text-xs text-fg-muted mt-0.5 leading-snug">{question.description}</p>
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center gap-3">
-                                <span className="text-xs font-semibold text-blue-600 w-20 shrink-0">Risposta A</span>
+                                <span className="text-xs font-semibold text-brand-fg w-20 shrink-0">Risposta A</span>
                                 <StarRating value={rating.rating_a} onChange={(val) => handleABRatingChange(dim, "rating_a", val)} size="md" />
                               </div>
                               <div className="flex items-center gap-3">
-                                <span className="text-xs font-semibold text-amber-600 w-20 shrink-0">Risposta B</span>
+                                <span className="text-xs font-semibold text-notice-fg w-20 shrink-0">Risposta B</span>
                                 <StarRating value={rating.rating_b} onChange={(val) => handleABRatingChange(dim, "rating_b", val)} size="md" />
                               </div>
                             </div>
@@ -1990,13 +1986,13 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                       })
                     ) : (
                       <>
-                        <div className="space-y-3 p-4 bg-white dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                        <div className="space-y-3 p-4 bg-surface rounded-lg border border-line">
                           <div>
-                            <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Soddisfazione complessiva</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Valutazione generale dell'esperienza</p>
+                            <p className="font-semibold text-sm text-fg">Soddisfazione complessiva</p>
+                            <p className="text-xs text-fg-muted mt-0.5">Valutazione generale dell'esperienza</p>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-blue-600 w-20 shrink-0">Risposta A</span>
+                            <span className="text-xs font-semibold text-brand-fg w-20 shrink-0">Risposta A</span>
                             <StarRating value={formState.overall_satisfaction_a}
                               onChange={(val) => setFormState(prev => ({
                                 ...prev,
@@ -2005,7 +2001,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                               }))} size="md" />
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-amber-600 w-20 shrink-0">Risposta B</span>
+                            <span className="text-xs font-semibold text-notice-fg w-20 shrink-0">Risposta B</span>
                             <StarRating value={formState.overall_satisfaction_b}
                               onChange={(val) => setFormState(prev => ({
                                 ...prev,
@@ -2017,36 +2013,36 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
 
                         <Separator className="my-4" />
 
-                        <div className="space-y-3 p-4 bg-white dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                          <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                        <div className="space-y-3 p-4 bg-surface rounded-lg border border-line">
+                          <p className="font-semibold text-sm text-fg">
                             Consiglieresti questo tipo di sistema ai tuoi colleghi?
                           </p>
                           <div className="flex gap-3">
                             <Button type="button"
                               variant={formState.would_recommend ? "default" : "outline"}
                               onClick={() => setFormState(prev => ({ ...prev, would_recommend: true }))}
-                              className={cn("flex-1", formState.would_recommend && "bg-emerald-600 hover:bg-emerald-700")}>
+                              className="flex-1">
                               <ThumbsUp className="w-4 h-4 mr-2" />
                               Si
                             </Button>
                             <Button type="button"
                               variant={!formState.would_recommend ? "default" : "outline"}
                               onClick={() => setFormState(prev => ({ ...prev, would_recommend: false }))}
-                              className={cn("flex-1", !formState.would_recommend && "bg-gray-600 hover:bg-gray-700")}>
+                              className="flex-1">
                               No
                             </Button>
                           </div>
                         </div>
 
-                        <div className="space-y-4 p-4 bg-white dark:bg-gray-950 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                        <div className="space-y-4 p-4 bg-surface rounded-lg border border-line">
                           <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Cosa ha funzionato bene? (opzionale)</label>
+                            <label className="text-sm font-medium text-fg">Cosa ha funzionato bene? (opzionale)</label>
                             <Textarea placeholder="Descrivi gli aspetti positivi..." value={formState.feedback_positive}
                               onChange={(e) => setFormState(prev => ({ ...prev, feedback_positive: e.target.value }))}
                               className="min-h-[80px] resize-none" />
                           </div>
                           <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Suggerimenti per migliorare? (opzionale)</label>
+                            <label className="text-sm font-medium text-fg">Suggerimenti per migliorare? (opzionale)</label>
                             <Textarea placeholder="Come potremmo migliorare il sistema..." value={formState.feedback_improvement}
                               onChange={(e) => setFormState(prev => ({ ...prev, feedback_improvement: e.target.value }))}
                               className="min-h-[80px] resize-none" />
@@ -2057,9 +2053,9 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                   </div>
                 </ScrollArea>
 
-                <div className="px-4 py-4 border-t bg-white dark:bg-gray-950">
+                <div className="px-4 py-4 border-t bg-surface">
                   {error && (
-                    <div className="mb-3 p-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-sm rounded-lg flex items-center gap-2">
+                    <div className="mb-3 p-2 bg-danger-soft text-danger-fg text-sm rounded-md flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
                       {error}
                     </div>
@@ -2074,8 +2070,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                         Avanti <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
                     ) : (
-                      <Button onClick={handleGoToCitations} disabled={!isFormComplete()}
-                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                      <Button onClick={handleGoToCitations} disabled={!isFormComplete()}>
                         Valuta Citazioni <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
                     )}
@@ -2093,21 +2088,21 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
             {/* ── MOBILE: tab layout ── */}
             <div className="md:hidden flex flex-col flex-1 min-h-0">
               {/* Question header */}
-              <div className="px-4 py-2.5 bg-purple-50 dark:bg-purple-950/30 border-b shrink-0">
-                <p className="text-sm font-medium text-purple-900 dark:text-purple-100 line-clamp-2">
-                  <span className="text-purple-600 dark:text-purple-400">Domanda:</span> {selectedChat.query}
+              <div className="px-4 py-2.5 bg-surface-brand border-b shrink-0">
+                <p className="text-sm font-medium text-fg line-clamp-2">
+                  <span className="text-brand-fg">Domanda:</span> {selectedChat.query}
                 </p>
               </div>
 
               {/* Tab bar */}
-              <div className="flex shrink-0 border-b bg-white dark:bg-gray-950">
+              <div className="flex shrink-0 border-b bg-surface">
                 <button
                   onClick={() => setMobileSimpleTab("response")}
                   className={cn(
                     "flex-1 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px",
                     mobileSimpleTab === "response"
-                      ? "border-purple-500 text-purple-700 dark:text-purple-300"
-                      : "border-transparent text-gray-500 hover:text-gray-700"
+                      ? "border-brand text-brand-fg"
+                      : "border-transparent text-fg-muted hover:text-fg-secondary"
                   )}
                 >
                   Risposta
@@ -2117,12 +2112,12 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                   className={cn(
                     "flex-1 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px inline-flex items-center justify-center gap-1.5",
                     mobileSimpleTab === "form"
-                      ? "border-purple-500 text-purple-700 dark:text-purple-300"
-                      : "border-transparent text-gray-500 hover:text-gray-700"
+                      ? "border-brand text-brand-fg"
+                      : "border-transparent text-fg-muted hover:text-fg-secondary"
                   )}
                 >
                   Valuta
-                  {isSimpleFormComplete() && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+                  {isSimpleFormComplete() && <Check className="w-3.5 h-3.5 text-brand-fg" />}
                 </button>
               </div>
 
@@ -2132,7 +2127,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                   <div className="px-4 py-4">
                     {isLoadingDetails ? (
                       <div className="flex items-center justify-center h-40">
-                        <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+                        <Loader2 className="w-6 h-6 animate-spin text-brand-fg" />
                       </div>
                     ) : (
                       <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
@@ -2143,8 +2138,8 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                 ) : (
                   <div className="px-4 py-4 space-y-4">
                     {SIMPLE_DIMENSIONS.map((dim) => (
-                      <div key={dim} className="p-4 bg-white dark:bg-gray-950 rounded-lg border space-y-2">
-                        <p className="font-medium text-gray-900 dark:text-gray-100">
+                      <div key={dim} className="p-4 bg-surface rounded-lg border space-y-2">
+                        <p className="font-medium text-fg">
                           {SIMPLE_DIMENSION_LABELS[dim]}
                         </p>
                         <StarRating
@@ -2154,8 +2149,8 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                         />
                       </div>
                     ))}
-                    <div className="p-4 bg-white dark:bg-gray-950 rounded-lg border space-y-2">
-                      <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <div className="p-4 bg-surface rounded-lg border space-y-2">
+                      <label className="text-sm font-medium text-fg">
                         Commento libero (opzionale)
                       </label>
                       <Textarea
@@ -2173,16 +2168,16 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
             {/* ── DESKTOP: side-by-side layout ── */}
             <div className="hidden md:flex flex-1 min-h-0">
               {/* Left: System Response */}
-              <div className="w-1/2 border-r flex flex-col bg-white dark:bg-gray-950 min-h-0 overflow-hidden">
-                <div className="px-4 py-2 bg-purple-50 dark:bg-purple-950/30 border-b shrink-0">
-                  <p className="text-sm font-medium text-purple-900 dark:text-purple-100 line-clamp-2">
-                    <span className="text-purple-600 dark:text-purple-400">Domanda:</span> {selectedChat.query}
+              <div className="w-1/2 border-r flex flex-col bg-surface min-h-0 overflow-hidden">
+                <div className="px-4 py-2 bg-surface-brand border-b shrink-0">
+                  <p className="text-sm font-medium text-fg line-clamp-2">
+                    <span className="text-brand-fg">Domanda:</span> {selectedChat.query}
                   </p>
                 </div>
                 <ScrollArea className="flex-1 px-4 py-4">
                   {isLoadingDetails ? (
                     <div className="flex items-center justify-center h-40">
-                      <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+                      <Loader2 className="w-6 h-6 animate-spin text-brand-fg" />
                     </div>
                   ) : (
                     <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
@@ -2193,17 +2188,17 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               </div>
 
               {/* Right: Simple Rating Form */}
-              <div className="w-1/2 flex flex-col bg-gray-50 dark:bg-gray-900/30 min-h-0 overflow-hidden">
-                <div className="px-4 py-3 border-b bg-white dark:bg-gray-950 shrink-0">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <div className="w-1/2 flex flex-col bg-surface-muted min-h-0 overflow-hidden">
+                <div className="px-4 py-3 border-b bg-surface shrink-0">
+                  <p className="text-sm font-medium text-fg-secondary">
                     Valuta la risposta del sistema su 4 dimensioni
                   </p>
                 </div>
                 <ScrollArea className="flex-1 px-4 py-4">
                   <div className="space-y-4">
                     {SIMPLE_DIMENSIONS.map((dim) => (
-                      <div key={dim} className="p-4 bg-white dark:bg-gray-950 rounded-lg border space-y-2">
-                        <p className="font-medium text-gray-900 dark:text-gray-100">
+                      <div key={dim} className="p-4 bg-surface rounded-lg border space-y-2">
+                        <p className="font-medium text-fg">
                           {SIMPLE_DIMENSION_LABELS[dim]}
                         </p>
                         <StarRating
@@ -2213,8 +2208,8 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                         />
                       </div>
                     ))}
-                    <div className="p-4 bg-white dark:bg-gray-950 rounded-lg border space-y-2">
-                      <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <div className="p-4 bg-surface rounded-lg border space-y-2">
+                      <label className="text-sm font-medium text-fg">
                         Commento libero (opzionale)
                       </label>
                       <Textarea
@@ -2230,9 +2225,9 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
             </div>
 
             {/* Footer — sempre visibile su mobile e desktop */}
-            <div className="px-4 py-4 border-t bg-white dark:bg-gray-950 shrink-0">
+            <div className="px-4 py-4 border-t bg-surface shrink-0">
               {error && (
-                <div className="mb-3 p-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-sm rounded-lg flex items-center gap-2">
+                <div className="mb-3 p-2 bg-danger-soft text-danger-fg text-sm rounded-md flex items-center gap-2">
                   <AlertCircle className="w-4 h-4" />
                   {error}
                 </div>
@@ -2245,7 +2240,6 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                 <Button
                   onClick={handleSimpleSubmit}
                   disabled={!isSimpleFormComplete() || isSubmitting}
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Invia Valutazione
@@ -2295,7 +2289,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               isSubmitting={isSubmitting}
             />
             {error && (
-              <div className="px-4 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-sm flex items-center gap-2 border-t">
+              <div className="px-4 py-2 bg-danger-soft text-danger-fg text-sm flex items-center gap-2 border-t">
                 <AlertCircle className="w-4 h-4" />
                 {error}
               </div>
@@ -2305,15 +2299,15 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
 
         {/* Step: Success */}
         {step === "success" && (
-          <div className="flex flex-col items-center justify-center h-[40vh] px-6 py-8">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+          <div className="flex flex-col items-center justify-center min-h-[40vh] px-6 py-8">
+            <div className="w-16 h-16 rounded-full bg-brand-soft flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-10 h-10 text-brand-fg" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            <h3 className="text-xl font-semibold text-fg mb-2">
               Grazie per la tua valutazione!
             </h3>
-            <p className="text-gray-500 dark:text-gray-400 text-center max-w-sm mb-6">
-              Il tuo feedback e prezioso per migliorare il sistema.
+            <p className="text-fg-muted text-center max-w-sm mb-6">
+              Il tuo feedback è prezioso per migliorare il sistema.
             </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => { setStep("select"); loadData(); }}>
@@ -2321,6 +2315,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               </Button>
               <Button onClick={onClose}>Chiudi</Button>
             </div>
+            <NewsletterSignup source="survey_done" className="mt-8 w-full max-w-lg text-left" />
           </div>
         )}
       </DialogContent>

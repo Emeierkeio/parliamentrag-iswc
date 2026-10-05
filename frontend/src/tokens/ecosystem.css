@@ -1,0 +1,270 @@
+/*
+ * Ecosystem tokens shared with Stenografo (stenografo.it). The source of truth is
+ * aulachiara/apps/web/src/tokens: ink and paper neutrals, the vote-outcome
+ * colours, type, radii, shadows and motion are copied verbatim. Only the brand
+ * roles differ: each product keeps one accent (Stenografo green, ParliamentRAG
+ * blue) so a visitor can tell which service answers.
+ *
+ * Unlike Stenografo, the Tailwind default scales are not reset: about 1100
+ * existing class names (text-sm, rounded-lg, bg-gray-*) still compile while the
+ * screens move to the semantic utilities below.
+ *
+ * Contrast is WCAG 2.2, measured on --bg, --surface and --surface-sunken:
+ * - ink-500 never carries small text (3.7:1): placeholders use fg-muted.
+ * - brand-600 is a fill (white text 6.7:1); text and links use brand-700 (8.6:1).
+ */
+:root {
+  --ink-950: #14201c;
+  --ink-900: #1b2924;
+  --ink-800: #293732;
+  --ink-700: #40504a;
+  --ink-600: #5e6b66;
+  --ink-500: #78837e;
+  --ink-400: #87918c;
+
+  --paper-50: #f7f8f5;
+  --paper-100: #f0f2ee;
+  --paper-200: #e4e8e4;
+  --paper-300: #d4dad5;
+  --white: #ffffff;
+
+  /* Stenografo's brand green: in ParliamentRAG only the "favorevole" outcome. */
+  --eco-green-600: #167a68;
+  --eco-green-400: #55b29e;
+
+  /* ParliamentRAG accent: the ecosystem blue (#4d78a8) as a full scale. */
+  --brand-700: #1f4a73;
+  --brand-600: #2d5f8f;
+  --brand-500: #4d78a8;
+  --brand-400: #7a9cc4;
+  --brand-300: #a5c0e0;
+  --brand-100: #dce7f3;
+  --brand-50: #eef3f9;
+
+  --accent-sand: #eedfbf;
+  --accent-coral: #c85c4a;
+  --accent-violet: #7568a8;
+
+  --bg: var(--paper-50);
+  --surface: var(--white);
+  --surface-muted: var(--paper-100);
+  --surface-sunken: var(--paper-200);
+  --surface-brand: var(--brand-50);
+  --surface-inverse: var(--ink-950);
+
+  --fg: var(--ink-950); /* 15.7:1 on bg */
+  --fg-secondary: var(--ink-700); /* 8.0:1 */
+  --fg-muted: var(--ink-600); /* 5.2:1, 4.5:1 on surface-sunken */
+  --fg-faint: var(--ink-500); /* icons, disabled, text >= 18px only */
+  --fg-inverse: var(--paper-50);
+
+  --line: var(--paper-200);
+  --line-strong: var(--paper-300);
+  --line-control: var(--ink-400); /* input boundaries: 3.05:1 on bg */
+  --focus: var(--brand-600);
+
+  --brand: var(--brand-600);
+  --brand-hover: var(--brand-700);
+  --brand-fg: var(--brand-700);
+  --brand-soft: var(--brand-50);
+  --brand-soft-strong: var(--brand-100);
+  --on-brand: var(--white);
+
+  --danger: var(--accent-coral);
+  --danger-fg: #a8432f;
+  --danger-soft: #fbefec;
+  --info: var(--brand-500);
+  --info-fg: var(--brand-700);
+  --info-soft: var(--brand-50);
+  --notice: #9a7530;
+  --notice-fg: #6f5320;
+  --notice-soft: #faf4e6;
+  --highlight: var(--accent-sand);
+
+  /* Vote outcomes, identical across the ecosystem: never green/red as good/bad,
+     always paired with a shape, an icon and a label. */
+  --vote-favor: var(--eco-green-600);
+  --vote-against: var(--accent-violet);
+  --vote-abstain: var(--notice);
+  --vote-absent: var(--ink-400);
+
+  --scrim: rgb(20 32 28 / 0.42);
+  --stage: var(--paper-100);
+
+  --shadow-float-value: 0 1px 2px rgb(20 32 28 / 0.04), 0 8px 24px -12px rgb(20 32 28 / 0.18);
+  --shadow-overlay-value: 0 24px 64px -24px rgb(20 32 28 / 0.32);
+
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 320ms;
+  --duration-deliberate: 480ms;
+
+  --z-raised: 10;
+  --z-dock: 20;
+  --z-header: 30;
+  --z-overlay: 40;
+  --z-dialog: 50;
+  --z-skip: 60;
+  --header-h: 3.5rem;
+
+  color-scheme: light;
+}
+
+/* Dark is its own palette, not an inversion: greenish near-black, surfaces
+   lighten with elevation, the brand brightens. */
+[data-theme="dark"] {
+  --bg: #0f1714;
+  --surface: #151f1b;
+  --surface-muted: #1a2420;
+  --surface-sunken: #1c2823;
+  --surface-brand: #142233;
+  --surface-inverse: #ecf0ec;
+
+  --fg: #ecf0ec; /* 15.8:1 */
+  --fg-secondary: #b4bfb9; /* 9.6:1 */
+  --fg-muted: #909c96; /* 6.4:1, 5.4:1 on sunken */
+  --fg-faint: #6f7c76;
+  --fg-inverse: #0f1714;
+
+  --line: #233029;
+  --line-strong: #2f3d36;
+  --line-control: #5e6c66;
+  --focus: var(--brand-300);
+
+  --brand: var(--brand-400); /* dark text on it 6.4:1 */
+  --brand-hover: var(--brand-300);
+  --brand-fg: var(--brand-300); /* 9.8:1 */
+  --brand-soft: #142233;
+  --brand-soft-strong: #1b2d42;
+  --on-brand: #0f1714;
+
+  --danger: #e58a78;
+  --danger-fg: #eea092;
+  --danger-soft: #2c1a16;
+  --info: var(--brand-400);
+  --info-fg: var(--brand-300);
+  --info-soft: #142233;
+  --notice: #d2b270;
+  --notice-fg: #e0c68e;
+  --notice-soft: #2a2414;
+  --highlight: #3a3318;
+
+  --vote-favor: var(--eco-green-400);
+  --vote-against: #a79cdb;
+  --vote-abstain: #d2b270;
+  --vote-absent: #6f7c76;
+
+  --scrim: rgb(0 0 0 / 0.6);
+  --stage: #141d19;
+
+  --shadow-float-value: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-overlay-value: 0 24px 64px -24px rgb(0 0 0 / 0.7);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-brand: var(--surface-brand);
+  --color-surface-inverse: var(--surface-inverse);
+
+  --color-fg: var(--fg);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-fg-inverse: var(--fg-inverse);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-line-control: var(--line-control);
+  --color-focus: var(--focus);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-strong: var(--brand-soft-strong);
+  --color-on-brand: var(--on-brand);
+
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-fg: var(--info-fg);
+  --color-info-soft: var(--info-soft);
+  --color-notice: var(--notice);
+  --color-notice-fg: var(--notice-fg);
+  --color-notice-soft: var(--notice-soft);
+  --color-highlight: var(--highlight);
+
+  --color-vote-favor: var(--vote-favor);
+  --color-vote-against: var(--vote-against);
+  --color-vote-abstain: var(--vote-abstain);
+  --color-vote-absent: var(--vote-absent);
+  --color-scrim: var(--scrim);
+  --color-stage: var(--stage);
+
+  --shadow-float: var(--shadow-float-value);
+  --shadow-overlay: var(--shadow-overlay-value);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-serif: var(--font-source-serif), "Iowan Old Style", Georgia, serif;
+}
+
+/* Shape rule: citation markers 4, badges 6, controls 10, cards and panels 14,
+   the composer 20, sheets 28. Actions (buttons, chips) are pills. */
+@theme {
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  --text-display-xl: 4rem;
+  --text-display-xl--line-height: 4.25rem;
+  --text-display-l: 3.25rem;
+  --text-display-l--line-height: 3.625rem;
+  --text-display-m: 2.75rem;
+  --text-display-m--line-height: 3.125rem;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.125rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+
+  --tracking-display: -0.035em;
+  --tracking-serif: -0.03em;
+  --tracking-heading: -0.02em;
+  --tracking-label: 0.06em;
+
+  --container-prose: 68ch;
+  --container-reading: 720px;
+  --container-chat: 880px;
+  --container-panel: 400px;
+  --container-page: 1280px;
+
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+
+  --animate-skeleton: skeleton 1.6s ease-in-out infinite;
+  --animate-rise: rise var(--duration-slow) var(--ease-enter) both;
+  --animate-fade: fade var(--duration-normal) var(--ease-enter) both;
+  @keyframes skeleton {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+  @keyframes rise {
+    /* 0.01, not 0: Chrome skips fully transparent nodes as LCP candidates. */
+    from { opacity: 0.01; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}

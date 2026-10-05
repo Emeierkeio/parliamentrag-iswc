@@ -25,24 +25,23 @@ interface AnswerFeedbackDialogProps {
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-// Green and red reuse the site's existing signals: green-600 for positive
-// states (TraceCard, MessageBubble), the bordeaux --destructive for negative.
+// The product accent for "useful" and the danger role for "not useful": green
+// in the ecosystem is reserved for the "favorevole" vote outcome.
 const VOTE_TONE: Record<Vote, { selected: string; hover: string; iconHover: string }> = {
   up: {
-    selected:
-      "border-green-600 bg-green-50 text-green-800 ring-1 ring-green-600 dark:bg-green-950/40 dark:text-green-300",
-    hover: "hover:border-green-600/60 hover:bg-green-50/70 dark:hover:bg-green-950/20",
-    iconHover: "group-hover:text-green-600 group-hover:-translate-y-0.5",
+    selected: "border-brand bg-brand-soft text-brand-fg ring-1 ring-brand",
+    hover: "hover:border-brand/60 hover:bg-surface-brand",
+    iconHover: "group-hover:text-brand-fg group-hover:-translate-y-0.5",
   },
   down: {
-    selected: "border-destructive bg-destructive/[0.07] text-destructive ring-1 ring-destructive",
-    hover: "hover:border-destructive/50 hover:bg-destructive/[0.04]",
-    iconHover: "group-hover:text-destructive group-hover:translate-y-0.5",
+    selected: "border-danger bg-danger-soft text-danger-fg ring-1 ring-danger",
+    hover: "hover:border-danger/50 hover:bg-danger-soft/60",
+    iconHover: "group-hover:text-danger-fg group-hover:translate-y-0.5",
   },
 };
 
 const FIELD =
-  "w-full bg-background border border-border text-sm text-foreground placeholder:text-muted-foreground/80 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-[border-color,box-shadow]";
+  "w-full rounded-md bg-surface border border-line-control text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:border-focus focus:ring-2 focus:ring-focus/20 transition-[border-color,box-shadow]";
 
 export function AnswerFeedbackDialog({
   open,
@@ -109,12 +108,11 @@ export function AnswerFeedbackDialog({
         onClick={() => onVote(value)}
         aria-pressed={selected}
         className={cn(
-          "group flex items-center justify-center gap-3 h-16 border text-[15px] font-medium",
-          "animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both motion-reduce:animate-none",
+          "group flex items-center justify-center gap-3 h-14 rounded-full border text-[15px] font-medium",
+          "animate-in fade-in slide-in-from-bottom-2 duration-300 fill-mode-both motion-reduce:animate-none",
           delay,
           "transition-[background-color,border-color,color,opacity,box-shadow] duration-200 cursor-pointer active:scale-[0.98]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-          selected ? tone.selected : cn("border-border bg-background text-foreground", tone.hover),
+          selected ? tone.selected : cn("border-line-strong bg-surface text-fg", tone.hover),
           dimmed && "opacity-50 hover:opacity-100",
         )}
       >
@@ -123,7 +121,7 @@ export function AnswerFeedbackDialog({
             "h-5 w-5 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:transition-none",
             selected
               ? cn("scale-110 fill-current", value === "up" ? "-rotate-12" : "rotate-12")
-              : cn("text-muted-foreground", tone.iconHover),
+              : cn("text-fg-muted", tone.iconHover),
           )}
           strokeWidth={1.75}
         />
@@ -148,7 +146,7 @@ export function AnswerFeedbackDialog({
         )}
         showCloseButton={false}
       >
-        <header className="relative isolate overflow-hidden bg-primary px-6 pt-7 pb-6 sm:px-8 text-primary-foreground">
+        <header className="relative isolate overflow-hidden bg-brand px-6 pt-7 pb-6 sm:px-8 text-on-brand">
           <Image
             src="/logo.svg"
             alt=""
@@ -157,14 +155,14 @@ export function AnswerFeedbackDialog({
             aria-hidden
             className="pointer-events-none absolute -right-10 -bottom-12 -z-10 w-56 opacity-[0.09]"
           />
-          <DialogTitle className="pr-8 [font-family:var(--font-display)] text-2xl sm:text-[28px] font-medium tracking-tight leading-tight text-left">
+          <DialogTitle className="pr-8 serif-display text-2xl sm:text-[28px] leading-tight text-left">
             {t("title")}
           </DialogTitle>
-          <DialogDescription className="mt-2 text-sm leading-relaxed text-primary-foreground/75">
+          <DialogDescription className="mt-2 text-sm leading-relaxed text-on-brand/80">
             {t("subtitle")}
           </DialogDescription>
           <DialogClose
-            className="absolute top-4 right-4 p-1 text-primary-foreground/60 hover:text-primary-foreground transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground/60"
+            className="absolute top-3 right-3 inline-flex size-9 items-center justify-center rounded-full text-on-brand/70 hover:text-on-brand hover:bg-on-brand/10 transition-colors cursor-pointer focus-visible:outline-on-brand"
           >
             <X className="h-4 w-4" />
             <span className="sr-only">{t("close")}</span>
@@ -179,7 +177,7 @@ export function AnswerFeedbackDialog({
 
           {vote === "down" && (
             <fieldset className="mt-5 animate-in fade-in slide-in-from-top-1 duration-200">
-              <legend className="text-[13px] text-foreground mb-2">{t("reasonsLabel")}</legend>
+              <legend className="text-[13px] text-fg mb-2">{t("reasonsLabel")}</legend>
               <div className="flex flex-wrap gap-2">
                 {REASONS.map((r) => {
                   const on = reasons.includes(r);
@@ -190,10 +188,10 @@ export function AnswerFeedbackDialog({
                       onClick={() => toggleReason(r)}
                       aria-pressed={on}
                       className={cn(
-                        "px-3 py-1.5 border text-[13px] transition-colors cursor-pointer",
+                        "min-h-9 rounded-full px-3.5 py-1.5 border text-[13px] transition-[background-color,border-color,color,transform] duration-[var(--duration-fast)] active:scale-[0.98] cursor-pointer",
                         on
-                          ? "border-destructive bg-destructive/[0.07] text-destructive"
-                          : "border-border text-muted-foreground hover:border-destructive/50 hover:text-foreground",
+                          ? "border-danger bg-danger-soft text-danger-fg"
+                          : "border-line-strong text-fg-secondary hover:border-fg hover:text-fg",
                       )}
                     >
                       {t(`reason_${r}`)}
@@ -206,7 +204,7 @@ export function AnswerFeedbackDialog({
 
           {vote && (
             <div className="mt-5 grid gap-2 animate-in fade-in duration-200">
-              <label htmlFor={`${ids}-comment`} className="text-[13px] text-foreground">
+              <label htmlFor={`${ids}-comment`} className="text-[13px] text-fg">
                 {t("commentLabel")}
               </label>
               <textarea
@@ -222,17 +220,17 @@ export function AnswerFeedbackDialog({
           )}
 
           {showNewsletter && (
-            <section className="mt-6 border-l-2 border-primary/40 bg-primary/[0.04] px-5 py-5 grid gap-4 sm:grid-cols-[1fr_1.15fr] sm:gap-6">
+            <section className="mt-6 rounded-md bg-surface-brand px-5 py-5 grid gap-4 sm:grid-cols-[1fr_1.15fr] sm:gap-6">
               <div>
-                <h3 className="flex items-center gap-2 text-[15px] font-medium text-foreground">
-                  <Mail className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.75} aria-hidden />
+                <h3 className="flex items-center gap-2 text-[15px] font-medium text-fg">
+                  <Mail className="h-4 w-4 shrink-0 text-brand-fg" strokeWidth={1.75} aria-hidden />
                   {t("newsletterTitle")}
                 </h3>
-                <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">{t("newsletterBody")}</p>
+                <p className="mt-1.5 text-[13px] leading-5 text-fg-secondary">{t("newsletterBody")}</p>
               </div>
               <div className="grid gap-2.5 content-start">
                 <div className="grid gap-1.5">
-                  <label htmlFor={`${ids}-email`} className="text-[12px] text-foreground">
+                  <label htmlFor={`${ids}-email`} className="text-[12px] text-fg">
                     {t("emailLabel")}
                   </label>
                   <input
@@ -249,13 +247,13 @@ export function AnswerFeedbackDialog({
                 </div>
                 {/* Consent only matters once there is an address to consent for */}
                 {trimmedEmail && (
-                  <label htmlFor={`${ids}-consent`} className="flex items-start gap-2.5 text-[12px] leading-5 text-muted-foreground cursor-pointer animate-in fade-in slide-in-from-top-1 duration-200">
+                  <label htmlFor={`${ids}-consent`} className="flex items-start gap-2.5 text-[12px] leading-5 text-fg-secondary cursor-pointer animate-in fade-in slide-in-from-top-1 duration-200">
                     <input
                       id={`${ids}-consent`}
                       type="checkbox"
                       checked={consent}
                       onChange={(e) => { setConsent(e.target.checked); setError(null); }}
-                      className="mt-[3px] h-3.5 w-3.5 shrink-0 accent-[var(--primary)] cursor-pointer"
+                      className="mt-[3px] h-3.5 w-3.5 shrink-0 accent-[var(--brand)] cursor-pointer"
                     />
                     <span>
                       {t.rich("consent", {
@@ -264,7 +262,7 @@ export function AnswerFeedbackDialog({
                             href="/privacy#newsletter"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="underline underline-offset-2 text-foreground hover:text-primary"
+                            className="underline underline-offset-2 text-fg hover:text-brand-fg"
                           >
                             {chunks}
                           </a>
@@ -278,11 +276,11 @@ export function AnswerFeedbackDialog({
           )}
 
           {error && (
-            <p role="alert" className="mt-3 text-[13px] text-destructive">{error}</p>
+            <p role="alert" className="mt-3 text-[13px] text-danger-fg">{error}</p>
           )}
 
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
-            <p className="flex items-start gap-1.5 text-[11px] leading-4 text-muted-foreground sm:max-w-sm">
+            <p className="flex items-start gap-1.5 text-xs leading-4 text-fg-muted sm:max-w-sm">
               <Lock className="mt-px h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden />
               {t("anonNote")}
             </p>
@@ -291,10 +289,10 @@ export function AnswerFeedbackDialog({
               onClick={submit}
               disabled={!canSubmit}
               className={cn(
-                "h-11 w-full sm:w-auto sm:min-w-40 shrink-0 px-8 text-sm font-medium tracking-wide whitespace-nowrap transition-colors",
+                "h-11 w-full sm:w-auto sm:min-w-40 shrink-0 rounded-full px-8 text-sm font-medium whitespace-nowrap transition-[background-color,color,transform] duration-200",
                 canSubmit
-                  ? "bg-primary text-primary-foreground hover:bg-foreground cursor-pointer active:scale-[0.99]"
-                  : "bg-muted text-muted-foreground cursor-not-allowed",
+                  ? "bg-brand text-on-brand hover:bg-brand-hover cursor-pointer active:scale-[0.98]"
+                  : "bg-surface-muted text-fg-muted opacity-45 cursor-not-allowed",
               )}
             >
               {submitLabel}

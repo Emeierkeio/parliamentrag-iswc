@@ -326,7 +326,7 @@ function ToggleSwitch({
         ].join(" ")}
       />
       <span
-        className="pointer-events-none absolute rounded-full bg-white shadow transition-all"
+        className="pointer-events-none absolute rounded-full bg-surface transition-all"
         style={{ width: 18, height: 18, top: 3, left: checked ? 19 : 3 }}
       />
       {label && (

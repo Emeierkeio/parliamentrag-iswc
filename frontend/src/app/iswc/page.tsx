@@ -6,11 +6,12 @@
 
 import { useCallback, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { config } from "@/config";
 import { cn } from "@/lib/utils";
+import { CentroBar } from "@/components/shell/CentroBar";
+import { Button } from "@/components/ui/button";
 
 const QUESTION_KEYS = ["q1", "q2", "q3", "q4"] as const;
 const ROLE_KEYS = ["researcher", "journalist", "student", "citizen", "other"] as const;
@@ -52,44 +53,48 @@ export default function IswcBoothPage() {
 
   if (submitted) {
     return (
-      <main className="min-h-dvh bg-background flex items-center justify-center px-6">
-        <div className="max-w-sm text-center space-y-4">
-          <Check className="h-8 w-8 mx-auto text-primary" strokeWidth={1.5} />
-          <h1 className="[font-family:var(--font-display)] text-2xl font-medium tracking-tight">
+      <div className="min-h-dvh bg-bg">
+      <CentroBar />
+      <main className="container-page pt-16 pb-20 md:pt-24">
+        <div className="max-w-sm space-y-4">
+          <Check className="h-8 w-8 text-brand-fg" strokeWidth={1.5} aria-hidden />
+          <h1 className="serif-display text-3xl text-fg">
             {t("thanksTitle")}
           </h1>
-          <p className="text-[15px] leading-7 text-muted-foreground">{t("thanksBody")}</p>
+          <p className="text-[15px] leading-7 text-fg-secondary">{t("thanksBody")}</p>
           <Link
-            href="/home"
-            className="group inline-flex items-center gap-1.5 border-b border-border pb-1 text-sm text-foreground/80 hover:border-primary hover:text-primary transition-colors"
+            href="/sistemi"
+            className="link group inline-flex items-center gap-1.5 text-sm"
           >
             {t("tryCta")}
             <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
           </Link>
         </div>
       </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-dvh bg-background overflow-x-hidden">
-      <div className="max-w-md mx-auto px-5 sm:px-6 py-10">
+    <div className="min-h-dvh overflow-x-hidden bg-bg">
+      <CentroBar />
+      <main className="container-page py-10">
+      <div className="max-w-md">
         <header className="mb-8">
-          <Image src="/logo-blue.svg" alt="ParliamentRAG" width={34} height={24} className="mb-5 dark:invert" />
-          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
+          <p className="label-mono mb-2">
             ISWC 2026 · Bari
           </p>
-          <h1 className="[font-family:var(--font-display)] text-3xl font-medium tracking-tight leading-tight">
+          <h1 className="serif-display text-3xl leading-tight text-fg">
             {t("title")}
           </h1>
-          <p className="mt-3 text-[15px] leading-7 text-muted-foreground">{t("intro")}</p>
+          <p className="mt-3 text-[15px] leading-7 text-fg-secondary">{t("intro")}</p>
         </header>
 
         <div className="space-y-7">
           {QUESTION_KEYS.map((key, i) => (
             <fieldset key={key}>
-              <legend className="text-[15px] leading-6 text-foreground mb-3">
-                <span className="[font-family:var(--font-display)] text-muted-foreground mr-2">{i + 1}.</span>
+              <legend className="mb-3 text-[15px] leading-6 text-fg">
+                <span className="tabular mr-2 text-fg-muted">{i + 1}.</span>
                 {t(key)}
               </legend>
               <div>
@@ -100,17 +105,17 @@ export default function IswcBoothPage() {
                       onClick={() => setAnswers((a) => ({ ...a, [key]: v }))}
                       aria-label={`${v}/5`}
                       className={cn(
-                        "h-10 flex-1 border text-sm tabular-nums transition-colors cursor-pointer",
+                        "tabular h-11 flex-1 cursor-pointer rounded-full border text-sm transition-colors active:scale-[0.98]",
                         answers[key] === v
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border text-muted-foreground hover:border-foreground hover:text-foreground",
+                          ? "border-brand bg-brand text-on-brand"
+                          : "border-line-control text-fg-secondary hover:border-fg hover:text-fg",
                       )}
                     >
                       {v}
                     </button>
                   ))}
                 </div>
-                <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
+                <div className="mt-1.5 flex justify-between text-caption text-fg-muted">
                   <span>{t("scaleLow")}</span>
                   <span>{t("scaleHigh")}</span>
                 </div>
@@ -119,17 +124,17 @@ export default function IswcBoothPage() {
           ))}
 
           <fieldset>
-            <legend className="text-[13px] text-muted-foreground mb-3">{t("roleLabel")}</legend>
-            <div className="flex flex-wrap gap-x-5 gap-y-2.5">
+            <legend className="mb-3 text-label text-fg-muted">{t("roleLabel")}</legend>
+            <div className="flex flex-wrap gap-2">
               {ROLE_KEYS.map((r) => (
                 <button
                   key={r}
                   onClick={() => setRole(role === r ? null : r)}
                   className={cn(
-                    "border-b pb-0.5 text-sm transition-colors cursor-pointer",
+                    "h-11 cursor-pointer rounded-full border px-4 text-sm transition-colors active:scale-[0.98]",
                     role === r
-                      ? "border-primary text-primary"
-                      : "border-border text-foreground/70 hover:border-foreground hover:text-foreground",
+                      ? "border-brand bg-brand-soft text-brand-fg"
+                      : "border-line-strong text-fg-secondary hover:border-line-control hover:text-fg",
                   )}
                 >
                   {t(`role_${r}`)}
@@ -139,7 +144,7 @@ export default function IswcBoothPage() {
           </fieldset>
 
           <div>
-            <label htmlFor="booth-comment" className="text-[13px] text-muted-foreground block mb-2">
+            <label htmlFor="booth-comment" className="mb-2 block text-label text-fg-muted">
               {t("commentLabel")}
             </label>
             <textarea
@@ -149,24 +154,22 @@ export default function IswcBoothPage() {
               maxLength={1000}
               rows={3}
               placeholder={t("commentPlaceholder")}
-              className="w-full bg-transparent border border-border p-3 text-[15px] leading-6 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground transition-colors resize-none"
+              className="w-full resize-none rounded-md border border-line-control bg-surface p-3 text-[15px] leading-6 text-fg transition-colors placeholder:text-fg-muted focus:border-fg focus:outline-none"
             />
           </div>
 
-          <button
+          <Button
             onClick={submit}
             disabled={!complete || sending}
-            className={cn(
-              "w-full py-3.5 text-[15px] font-medium tracking-wide transition-colors",
-              complete
-                ? "bg-primary text-primary-foreground hover:bg-foreground cursor-pointer"
-                : "bg-muted text-muted-foreground cursor-not-allowed",
-            )}
+            size="lg"
+            variant={complete ? "default" : "secondary"}
+            className={cn("w-full", !complete && "text-fg-muted disabled:opacity-100")}
           >
             {complete ? t("submit") : t("submitIncomplete")}
-          </button>
+          </Button>
         </div>
       </div>
-    </main>
+      </main>
+    </div>
   );
 }

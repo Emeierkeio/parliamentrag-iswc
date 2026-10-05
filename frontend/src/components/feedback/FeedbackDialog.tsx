@@ -61,7 +61,7 @@ export function FeedbackDialog({ open, onClose, tool, context }: FeedbackDialogP
       <DialogContent
         className={cn(
           "sm:max-w-md gap-0 p-6 max-h-[88dvh] overflow-y-auto",
-          // Sotto i 640px: bottom sheet, non modale centrato — con la
+          // Sotto i 640px: bottom sheet, non modale centrato: con la
           // tastiera aperta un dialog centrato balla, il sheet no
           "max-sm:!top-auto max-sm:!bottom-0 max-sm:!left-0 max-sm:!right-0",
           "max-sm:!translate-x-0 max-sm:!translate-y-0 max-sm:!max-w-full",
@@ -71,7 +71,7 @@ export function FeedbackDialog({ open, onClose, tool, context }: FeedbackDialogP
         )}
       >
         <DialogHeader className="mb-4">
-          <DialogTitle className="[font-family:var(--font-display)] text-xl font-medium tracking-tight text-left">
+          <DialogTitle className="serif-display text-2xl text-fg text-left">
             {tf("dialogTitle")}
           </DialogTitle>
         </DialogHeader>
@@ -79,8 +79,8 @@ export function FeedbackDialog({ open, onClose, tool, context }: FeedbackDialogP
         <div className="space-y-5">
           {QUESTION_KEYS.map((key, i) => (
             <fieldset key={key}>
-              <legend className="text-[13px] leading-5 text-foreground mb-2">
-                <span className="[font-family:var(--font-display)] text-muted-foreground mr-1.5">{i + 1}.</span>
+              <legend className="text-[13px] leading-5 text-fg mb-2">
+                <span className="font-mono text-xs text-fg-muted mr-1.5">{i + 1}.</span>
                 {tb(key)}
               </legend>
               <div>
@@ -92,17 +92,17 @@ export function FeedbackDialog({ open, onClose, tool, context }: FeedbackDialogP
                         a[key] === v ? { ...a, [key]: undefined } : { ...a, [key]: v })}
                       aria-label={`${v}/5`}
                       className={cn(
-                        "h-10 sm:h-8 flex-1 border text-[13px] tabular-nums transition-colors cursor-pointer",
+                        "h-10 sm:h-9 flex-1 rounded-full border font-mono text-[13px] tabular transition-[background-color,border-color,color,transform] duration-[var(--duration-fast)] active:scale-[0.98] cursor-pointer",
                         answers[key] === v
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border text-muted-foreground hover:border-foreground hover:text-foreground",
+                          ? "border-brand bg-brand text-on-brand"
+                          : "border-line-strong text-fg-secondary hover:border-fg hover:text-fg",
                       )}
                     >
                       {v}
                     </button>
                   ))}
                 </div>
-                <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                <div className="mt-1 flex justify-between text-[11px] text-fg-muted">
                   <span>{tb("scaleLow")}</span>
                   <span>{tb("scaleHigh")}</span>
                 </div>
@@ -116,17 +116,17 @@ export function FeedbackDialog({ open, onClose, tool, context }: FeedbackDialogP
             maxLength={1000}
             rows={2}
             placeholder={tb("commentPlaceholder")}
-            className="w-full bg-transparent border border-border p-2.5 text-[13px] leading-5 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground transition-colors resize-none"
+            className="w-full rounded-md bg-surface border border-line-control p-2.5 text-[13px] leading-5 text-fg placeholder:text-fg-muted focus:outline-none focus:border-focus transition-colors resize-none"
           />
 
           <div className="flex items-center gap-3">
             <button
               onClick={submit}
               className={cn(
-                "flex-1 py-3 sm:py-2.5 text-sm font-medium tracking-wide transition-colors cursor-pointer",
+                "flex-1 rounded-full py-3 sm:py-2.5 text-sm font-medium transition-[background-color,color,transform] duration-200 active:scale-[0.98] cursor-pointer",
                 hasContent
-                  ? "bg-primary text-primary-foreground hover:bg-foreground"
-                  : "bg-muted text-muted-foreground",
+                  ? "bg-brand text-on-brand hover:bg-brand-hover"
+                  : "bg-surface-muted text-fg-secondary hover:bg-surface-sunken",
               )}
             >
               {hasContent ? tb("submit") : tf("skip")}

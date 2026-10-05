@@ -20,7 +20,7 @@
   "MessageBubble": {
     "you": "Tu",
     "originalLabel": "Originale",
-    "chamberTitle": "Camera dei Deputati — XIX Legislatura",
+    "chamberTitle": "Camera dei Deputati, XIX Legislatura",
     "evidenceScale": "{interventions} interventi · {deputies} deputati",
     "expertsTitle": "Fonti selezionate per autorità",
     "expertsSectionDesc": "Questi parlamentari sono stati identificati come le voci più competenti sul tema e usati come fonti prioritarie per costruire la risposta: l'autorità decide chi citare per ogni gruppo, non chi ha ragione. Il punteggio combina sei criteri con pesi dichiarati: leggi <method>come funziona</method> oppure <ranking>sperimenta coi pesi nell'analisi dell'autorità</ranking>.",
@@ -183,7 +183,11 @@
     "deputies": "Parlamentari",
     "groups": "Gruppi",
     "explore": "Esplora",
-    "analyze": "Analizza"
+    "analyze": "Analizza",
+    "collapseMenu": "Comprimi menu",
+    "stenografo": "Stenografo, fatti puntuali",
+    "themeLight": "Tema chiaro",
+    "themeDark": "Tema scuro"
   },
   "Chat": {
     "placeholder": "Chiedi qualcosa sui dibattiti parlamentari...",
@@ -359,7 +363,7 @@
       "superbonus 110%": "Superbonus 110%"
     },
     "topicQuery": "Qual è la posizione dei gruppi parlamentari sul tema: {topic}?",
-    "researchNote": "Le conversazioni sono salvate in forma anonima per finalità di ricerca.",
+    "researchNote": "Salviamo domande e risposte sul nostro server per finalità di ricerca.",
     "lastTopics": "Ultimi argomenti discussi",
     "lastTopicsTab": "Ultimi argomenti",
     "trendingTab": "Trending",
@@ -703,7 +707,16 @@
     "phasesNoSpeeches": "+ {count, plural, one {# fase senza interventi} other {# fasi senza interventi}}",
     "phasesHeading": "Ordine dei lavori",
     "voteMistoComponents": "Componenti del Gruppo Misto",
-    "actionTitle": "Sfoglia le sedute dell'Aula, con sintesi di dibattiti e votazioni"
+    "actionTitle": "Sfoglia le sedute dell'Aula, con sintesi di dibattiti e votazioni",
+    "railTitle": "Nel periodo",
+    "railSittings": "{count, plural, one {# seduta} other {# sedute}}",
+    "railLoadedNote": "Conteggi sulle sedute caricate finora: scorri per caricarne altre.",
+    "moreTopics": "{count, plural, one {+ # argomento} other {+ # argomenti}}",
+    "sessionNumber": "Seduta {n}",
+    "lead": "Ogni seduta con gli argomenti trattati, i dibattiti con gli interventi e le votazioni per appello nominale.",
+    "seatPlanLabel": "Emiciclo della Camera: ogni deputato al suo posto",
+    "seatPlanNote": "Posti di oggi, da camera.it",
+    "seatPlanUnseated": "{count, plural, one {# deputato non più in carica, senza posto} other {# deputati non più in carica, senza posto}}"
   },
   "RankingsPage": {
     "headerTitle": "Analisi Autorità",
@@ -950,6 +963,12 @@
     "closingHeadline": "Ciò che il Parlamento ha detto davvero, parola per parola.",
     "ctaStart": "Inizia la consultazione",
     "footerThesis": "Un progetto di Mirko Tritella",
+    "footerBy": "Un progetto di <link>{name}</link>",
+    "footerOn": "{name} su {network}",
+    "footerSystems": "Sistemi",
+    "footerCentre": "Centro di ricerca",
+    "footerLicense": "Licenza CC BY-SA 4.0",
+    "footerDisclaimer": "Progetto indipendente: non è affiliato alla Camera dei Deputati e non parla a suo nome.",
     "footerAuthors": "Prof. Matteo Palmonari · Dott. Riccardo Pozzi",
     "tocFirstPage": "Prima pagina",
     "tocInstruments": "Strumenti",
@@ -965,6 +984,7 @@
     "mcpConnector": "Connettore AI (MCP)",
     "footerFunding": "Con il sostegno del programma EU Horizon Europe",
     "footerPrivacy": "Privacy",
+    "footerTerms": "Termini",
     "footerUni": "Università di Milano-Bicocca",
     "dataBandKicker": "Dati aperti",
     "dataBandTitle": "Sotto ogni risposta c'è un knowledge graph",
@@ -973,32 +993,194 @@
     "footerData": "Dati aperti (RDF)",
     "tocData": "Dati",
     "footerGrants": "grant",
-    "footerMethod": "Metodo"
+    "footerMethod": "Metodo",
+    "navTools": "Strumenti",
+    "statsSessions": "sedute",
+    "statsSpeeches": "interventi",
+    "statsVotes": "voti individuali",
+    "statsAsOf": "dati al {date}",
+    "toolsSub": "Partono tutti dagli stessi resoconti della Camera. Cambia la domanda che fai.",
+    "openTool": "Apri",
+    "guaranteesLead": "Ogni frase della risposta ha un intervento dietro.",
+    "reteTitle": "Per i fatti puntuali c'è Stenografo",
+    "reteBody": "ParliamentRAG mette a confronto le posizioni dei gruppi. Se ti serve un fatto preciso, come un voto, una seduta o chi presiede una commissione, Stenografo risponde in una frase con la fonte ufficiale.",
+    "reteCta": "Vai a Stenografo",
+    "reteEx1": "Come ha votato Schlein sul decreto Cutro?",
+    "reteEx2": "Chi presiede la commissione Bilancio?",
+    "reteEx3": "Quanti deputati ha Fratelli d'Italia?",
+    "researchTitle": "Ricerca aperta",
+    "researchBody": "Codice, articoli e dati sono pubblici: puoi verificare il metodo, segnalare un errore o riusare il grafo.",
+    "footerColService": "Il servizio",
+    "footerColResearch": "Ricerca",
+    "footerColLegal": "Note legali",
+    "footerNetwork": "Rete",
+    "skipToContent": "Vai al contenuto"
   },
   "Privacy": {
-    "title": "Privacy e note legali",
-    "updated": "Ultimo aggiornamento: 30 settembre 2026",
-    "introTitle": "In breve",
-    "intro": "ParliamentRAG è un progetto di ricerca accademica senza fini commerciali. Il sito non usa analytics, pubblicità né profilazione — solo cookie tecnici. Le domande poste in chat vengono salvate sul nostro server per finalità di ricerca scientifica.",
-    "s1t": "Titolare del trattamento",
-    "s1b": "Il titolare del trattamento è Mirko Tritella (progetto di ricerca — Università di Milano-Bicocca). Per qualsiasi richiesta privacy: m.tritella@campus.unimib.it.",
-    "s2t": "Cosa raccogliamo",
-    "s2b": "Le query della chat e le risposte generate sono salvate sul nostro server per valutare e migliorare il sistema nell'ambito di ricerca scientifica pubblicata. I provider di hosting conservano i normali log tecnici (es. indirizzi IP nei log del server) per sicurezza. La cronologia chat è conservata anche localmente nel tuo browser (localStorage) e puoi cancellarla in qualsiasi momento.",
-    "s3t": "Cookie",
-    "s3b": "Il sito imposta solo cookie tecnici di prima parte strettamente necessari: preferenza di lingua e stato dell'interfaccia (es. sidebar). Per questi cookie non è richiesto alcun banner di consenso. Non usiamo cookie di analytics, pubblicità o tracciamento di terze parti.",
-    "s4t": "Finalità e base giuridica",
-    "s4b": "I dati sono trattati esclusivamente per ricerca scientifica (valutazione del sistema per pubblicazioni peer-reviewed) sulla base del legittimo interesse per finalità di ricerca (art. 6(1)(f) e art. 89 GDPR). Ti chiediamo di non inserire dati personali nelle domande: le query devono riguardare temi parlamentari.",
-    "s5t": "Conservazione",
-    "s5b": "Le conversazioni salvate sono conservate per la durata del progetto di ricerca e delle relative pubblicazioni, poi cancellate o anonimizzate in modo irreversibile.",
-    "s6t": "Dati parlamentari",
-    "s6b": "Il knowledge graph contiene dati sui membri del Parlamento (nomi, interventi, voti, carriere) provenienti dagli open data ufficiali della Camera dei Deputati (dati.camera.it), trattati nel loro ruolo di titolari di cariche pubbliche secondo le licenze aperte della fonte.",
-    "s7t": "Contenuti generati da AI",
-    "s7b": "Le risposte sono generate da intelligenza artificiale e possono contenere errori o imprecisioni nonostante la verifica delle citazioni. ParliamentRAG è un progetto di ricerca indipendente, non affiliato né approvato dalla Camera dei Deputati. Verifica sempre le citazioni sul resoconto ufficiale linkato in ogni citazione.",
-    "s8t": "I tuoi diritti",
-    "s8b": "Il sito non richiede account e non collega le conversazioni all'identità di chi scrive: i dati salvati sono quindi, in generale, anonimi. Puoi eliminare direttamente una conversazione — anche dal nostro server — con l'icona del cestino nella cronologia della chat. Per ogni altra richiesta (accesso, rettifica, cancellazione di dati personali eventualmente inseriti in una domanda) scrivi a m.tritella@campus.unimib.it. Resta fermo il diritto di reclamo al Garante per la protezione dei dati personali.",
-    "s9t": "Feedback e aggiornamenti via email",
-    "s9b": "Sotto le risposte puoi lasciare un feedback: voto, motivi e un commento facoltativo. Lo salviamo con il riferimento alla conversazione, senza dati che ti identifichino, per le finalità di ricerca descritte sopra. Se vuoi ricevere novità sul progetto e sondaggi di valutazione, puoi lasciare il tuo indirizzo email. Lo trattiamo sulla base del tuo consenso (art. 6(1)(a) GDPR). L'indirizzo non passa dal nostro database: lo inviamo a Brevo SAS (Francia, UE), il servizio che gestisce la lista come responsabile del trattamento (art. 28 GDPR). Brevo ti manda un'email di conferma e registra data e indirizzo IP della conferma come prova del consenso. Non colleghiamo l'indirizzo alle domande poste in chat né ai feedback, non lo cediamo ad altri e non tracciamo aperture o clic delle email. Ogni email contiene un link di disiscrizione: con un clic esci dalla lista. Puoi revocare il consenso anche scrivendo a m.tritella@campus.unimib.it. Alla chiusura del progetto cancelliamo l'intera lista. Lasciare l'email è facoltativo e non cambia nulla nell'uso del sito.",
-    "backHome": "Torna alla home"
+    "metaTitle": "Privacy",
+    "title": "Informativa sulla privacy",
+    "updated": "Ultimo aggiornamento: 3 ottobre 2026",
+    "sections": [
+      {
+        "h": "Chi tratta i dati",
+        "p": [
+          "Titolare del trattamento è Mirko Tritella, persona fisica, domiciliato per il progetto presso Università degli Studi di Milano-Bicocca, Laboratorio DataAI, Edificio U14, Viale Sarca 336, 20126 Milano. Email: privacy@parliamentrag.it",
+          "L'Università è solo l'indirizzo del progetto. Non è titolare del trattamento e non decide come usiamo i dati.",
+          "www.parliamentrag.it è il sito di ParliamentRAG, un progetto di ricerca senza fini commerciali. Per le domande che non riguardano la privacy scrivi a contatti@parliamentrag.it."
+        ]
+      },
+      {
+        "h": "Quali dati trattiamo",
+        "p": [
+          "Per usare ParliamentRAG non serve un account. Trattiamo questi dati:",
+          "Dati tecnici di navigazione: indirizzo IP, data e ora, pagina richiesta e tipo di browser. Il fornitore di hosting li registra per far funzionare il sito e per sicurezza.",
+          "Risposte ai questionari facoltativi, come quello della demo: i punteggi, il ruolo che indichi e il commento, se lo scrivi.",
+          "Indirizzo email, se ti iscrivi alla newsletter. Lo gestisce Brevo (vedi «Newsletter»).",
+          "Richieste di token per le API, se ce le mandi: nome, email e il token che ti assegniamo. Per le domande che invii alle API vale l'informativa di Fascicoli (www.fascicoli.it/privacy)."
+        ]
+      },
+      {
+        "h": "Perché e su quale base",
+        "p": [
+          "Facciamo funzionare il servizio e lo proteggiamo da abusi e attacchi. La base giuridica è il nostro legittimo interesse (art. 6, par. 1, lett. f del GDPR).",
+          "Se ci lasci domande, giudizi o risposte a un questionario, li usiamo per valutare il sistema, migliorarlo e pubblicare ricerca scientifica. La base giuridica è il legittimo interesse, con le garanzie per la ricerca dell'art. 89 del GDPR.",
+          "Ti mandiamo la newsletter solo con il tuo consenso (art. 6, par. 1, lett. a del GDPR). Puoi revocarlo quando vuoi.",
+          "Quando scrivi una domanda o un commento, non inserire dati personali, tuoi o di altre persone, e non indicare le tue opinioni politiche. Non servono per rispondere e li salveremmo insieme al testo."
+        ]
+      },
+      {
+        "h": "A chi arrivano i dati",
+        "p": [
+          "Ci affidiamo a questi fornitori. Trattano i dati per conto nostro, come responsabili del trattamento (art. 28 del GDPR).",
+          "Railway Corp. (Stati Uniti): ospita il sito.",
+          "Hetzner Online GmbH (Germania): ospita il database con le risposte ai questionari, su un server in Finlandia.",
+          "Sendinblue SAS, marchio Brevo (Francia): gestisce la newsletter.",
+          "Non vendiamo i dati e non li cediamo a terzi per pubblicità. Li comunichiamo alle autorità solo se la legge lo impone."
+        ]
+      },
+      {
+        "h": "Trasferimenti fuori dall'UE",
+        "p": [
+          "Alcuni fornitori hanno sede negli Stati Uniti. Per questi trasferimenti ci basiamo sull'EU-US Data Privacy Framework o sulle clausole contrattuali standard approvate dalla Commissione europea."
+        ]
+      },
+      {
+        "h": "Per quanto tempo",
+        "p": [
+          "Risposte ai questionari: fino al 31 dicembre 2027.",
+          "Richieste di token: finché il token resta attivo, al massimo fino al 31 dicembre 2027.",
+          "Dati tecnici di navigazione: per il tempo di conservazione dei log del fornitore di hosting, al massimo 30 giorni.",
+          "Dopo queste scadenze cancelliamo i dati."
+        ]
+      },
+      {
+        "h": "Cookie e memoria del browser",
+        "p": [
+          "ParliamentRAG usa solo strumenti tecnici di prima parte: servono a far funzionare il sito e a ricordare le tue scelte. Non usiamo strumenti di analisi, pubblicità o profilazione.",
+          "Per questi strumenti non serve il tuo consenso, quindi non trovi un banner (linee guida del Garante del 10 giugno 2021).",
+          "La memoria locale del browser resta finché non la cancelli. La memoria di sessione sparisce quando chiudi la scheda. Nel tuo browser salviamo:",
+          "NEXT_LOCALE (cookie, 1 anno): la lingua che scegli.",
+          "prag-newsletter (memoria locale): ricorda che ti sei iscritto alla newsletter, così non ti riproponiamo il modulo.",
+          "kgStatsCache e lastUpdateIso (memoria locale): una copia dei numeri del database e della data dell'ultimo aggiornamento, per mostrare la pagina più in fretta.",
+          "launched e logoDrawn (memoria di sessione): evitano di ripetere l'animazione di apertura.",
+          "Puoi cancellare questi dati dalle impostazioni del browser. Il sito continua a funzionare."
+        ]
+      },
+      {
+        "h": "Newsletter",
+        "id": "newsletter",
+        "p": [
+          "Puoi iscriverti alla newsletter di ParliamentRAG dai siti del progetto. La lista la gestisce Brevo (Sendinblue SAS, Francia). Non salviamo il tuo indirizzo email nei nostri sistemi e non lo colleghiamo alle domande che fai.",
+          "L'iscrizione richiede una conferma via email (doppio opt-in). Brevo registra la data e l'indirizzo IP della conferma come prova del consenso.",
+          "Ogni email contiene il link per disiscriverti. Puoi revocare il consenso anche scrivendo a privacy@parliamentrag.it. Teniamo l'indirizzo finché resti iscritto."
+        ]
+      },
+      {
+        "h": "I tuoi diritti",
+        "p": [
+          "Puoi chiedere l'accesso ai tuoi dati, la rettifica, la cancellazione, la limitazione del trattamento e la portabilità (artt. 15-22 del GDPR).",
+          "Puoi opporti in ogni momento ai trattamenti basati sul legittimo interesse (art. 21 del GDPR).",
+          "Scrivi a privacy@parliamentrag.it. Senza account non sappiamo chi ha scritto cosa: per trovare i tuoi dati indicaci il testo della domanda, la data o il link. Ti rispondiamo entro un mese.",
+          "Se pensi che trattiamo i tuoi dati in modo illecito, puoi presentare reclamo al Garante per la protezione dei dati personali (www.garanteprivacy.it)."
+        ]
+      },
+      {
+        "h": "Altre informazioni",
+        "p": [
+          "Darci i dati è facoltativo. Senza i dati tecnici di navigazione, però, il sito non può funzionare.",
+          "Non prendiamo decisioni automatizzate che producano effetti giuridici su di te (art. 22 del GDPR).",
+          "ParliamentRAG è rivolto a chi ha almeno 14 anni."
+        ]
+      },
+      {
+        "h": "Dati sui parlamentari",
+        "p": [
+          "ParliamentRAG mostra dati su deputati e membri del Governo: nomi, interventi, voti e incarichi. Li prendiamo dagli open data ufficiali della Camera dei Deputati (dati.camera.it) e li trattiamo per il ruolo pubblico di queste persone.",
+          "Se trovi un errore che ti riguarda, scrivi a privacy@parliamentrag.it: lo verifichiamo e lo correggiamo."
+        ]
+      },
+      {
+        "h": "Modifiche",
+        "p": [
+          "Se cambiamo questa informativa, aggiorniamo la data in cima alla pagina."
+        ]
+      }
+    ]
+  },
+  "Terms": {
+    "metaTitle": "Termini",
+    "title": "Termini d'uso",
+    "updated": "Ultimo aggiornamento: 3 ottobre 2026",
+    "sections": [
+      {
+        "h": "Chi gestisce il sito",
+        "p": [
+          "Mirko Tritella, persona fisica, gestisce questo sito. www.parliamentrag.it è il sito di ParliamentRAG, un progetto di ricerca senza fini commerciali. L'Università degli Studi di Milano-Bicocca è l'indirizzo del progetto e non gestisce il sito.",
+          "Se usi il sito, accetti questi termini."
+        ]
+      },
+      {
+        "h": "Progetto indipendente",
+        "p": [
+          "La Camera dei Deputati e il Senato della Repubblica non gestiscono ParliamentRAG, non lo approvano e non lo finanziano."
+        ]
+      },
+      {
+        "h": "Dati e licenza",
+        "p": [
+          "I dati parlamentari provengono da dati.camera.it, che li pubblica con licenza CC BY-SA 4.0. Se riusi i dati, cita la Camera dei Deputati come fonte e rispetta la licenza."
+        ]
+      },
+      {
+        "h": "Uso consentito",
+        "p": [
+          "Il servizio è gratuito. Per tenerlo disponibile a tutti possiamo applicare limiti d'uso, per esempio un numero massimo di richieste all'ora e al giorno.",
+          "Non puoi scaricare i contenuti in modo massivo con programmi automatici né aggirare i limiti. Se ti serve un accesso automatico, chiedi un token per le API a contatti@parliamentrag.it.",
+          "Possiamo bloccare l'accesso a chi viola queste regole."
+        ]
+      },
+      {
+        "h": "Età",
+        "p": [
+          "Per usare ParliamentRAG devi avere almeno 14 anni."
+        ]
+      },
+      {
+        "h": "Nessuna garanzia",
+        "p": [
+          "Offriamo il servizio così com'è. Non garantiamo che sia sempre disponibile, completo o esatto.",
+          "Nei limiti consentiti dalla legge, non rispondiamo di danni o di decisioni prese in base ai contenuti del sito."
+        ]
+      },
+      {
+        "h": "Legge applicabile e contatti",
+        "p": [
+          "Questi termini seguono la legge italiana. Restano salvi i diritti che la legge ti riconosce come consumatore.",
+          "Per domande scrivi a contatti@parliamentrag.it. Per la privacy scrivi a privacy@parliamentrag.it.",
+          "Se cambiamo questi termini, aggiorniamo la data in cima alla pagina."
+        ]
+      }
+    ]
   },
   "DataPage": {
     "backHome": "Torna alla home",
@@ -1019,9 +1201,9 @@
     "idea1Title": "Ogni cosa ha un indirizzo",
     "idea1Body": "Un deputato non è una riga in una tabella privata: è un URI ufficiale di dati.camera.it, lo stesso che usa la Camera. Chi cita quell'indirizzo parla della stessa persona, senza ambiguità.",
     "idea2Title": "Vocabolari condivisi",
-    "idea2Body": "Per dire «persona», «organizzazione», «tema» usiamo vocabolari standard — FOAF, W3C ORG, SKOS — invece di inventare nomi nostri. Così i nostri dati si incrociano con quelli di archivi, giornali e ricercatori senza tabelle di conversione.",
+    "idea2Body": "Per dire «persona», «organizzazione», «tema» usiamo vocabolari standard (FOAF, W3C ORG, SKOS) invece di inventare nomi nostri. Così i nostri dati si incrociano con quelli di archivi, giornali e ricercatori senza tabelle di conversione.",
     "idea3Title": "Fatti elementari",
-    "idea3Body": "La conoscenza è scomposta in frasi minime soggetto–predicato–oggetto: «Aiello, è membro di, MoVimento 5 Stelle». Una macchina le legge senza sforzo e le combina per rispondere a domande complesse.",
+    "idea3Body": "La conoscenza è scomposta in frasi minime soggetto-predicato-oggetto: «Aiello, è membro di, MoVimento 5 Stelle». Una macchina le legge senza sforzo e le combina per rispondere a domande complesse.",
     "sec3Title": "Un deputato, in triple",
     "sec3Intro": "Le triple qui sotto vengono dal dump: descrivono il deputato {name}, la sua anagrafica e l'iscrizione al gruppo.",
     "exCaption": "Estratto abbreviato dal dump parliamentrag_kg.ttl (URI accorciati per leggibilità).",
@@ -1061,7 +1243,7 @@
     "licenseNote": "I dati derivano dagli open data della Camera dei Deputati (dati.camera.it, licenza CC BY-SA 4.0) e dal thesaurus EuroVoc dell'Ufficio delle pubblicazioni dell'UE. Gli embedding vettoriali, le conversazioni degli utenti e i riassunti generati dall'AI non fanno parte dell'export.",
     "downloadCta": "Scarica il file",
     "readyNote": "disponibile",
-    "heroGraphNote": "Nodi e archi reali del grafo — deputato {id}",
+    "heroGraphNote": "Nodi e archi reali del grafo, deputato {id}",
     "updatedAt": "aggiornato al {date}",
     "archivedSnapshot": "snapshot Zenodo · {date}"
   },
@@ -1100,7 +1282,7 @@
     "errorServer": "Iscrizione non riuscita. Riprova tra poco.",
     "sending": "Invio…",
     "submit": "Invia",
-    "anonNote": "Il feedback resta anonimo. Salviamo l'email a parte, senza collegarla alle tue domande.",
+    "anonNote": "Il feedback non contiene il tuo nome. Se lasci l'email, la gestisce Brevo e non la colleghiamo alle tue domande.",
     "checkInbox": "Ti abbiamo scritto: conferma l'iscrizione dal link nella email.",
     "submitSubscribe": "Iscriviti",
     "submitBoth": "Invia e iscriviti",
@@ -1109,7 +1291,7 @@
   },
   "Booth": {
     "title": "Due minuti su ParliamentRAG",
-    "intro": "Quattro affermazioni e una nota facoltativa. Anonimo, finisce dritto nella valutazione del sistema.",
+    "intro": "Quattro affermazioni e una nota facoltativa. Non ti chiediamo nome né email: le risposte vanno nella valutazione del sistema.",
     "q1": "Le risposte mi hanno fatto capire le posizioni dei gruppi.",
     "q2": "Le citazioni testuali rendono le risposte affidabili.",
     "q3": "L'interfaccia si usa senza istruzioni.",
@@ -1245,7 +1427,7 @@
     "compassP2": "Due cautele di lettura. Le coordinate di un gruppo possono poggiare su insiemi diversi di interventi per i due assi, e il numero di interventi dietro ogni coordinata è indicato nel tooltip. I punti al centro non prendono posizione: la bussola descrive ciò che i gruppi hanno argomentato in Aula su questa domanda, non certifica il loro posizionamento politico."
   },
   "Entities": {
-    "deputiesTitle": "Parlamentari",
+    "deputiesTitle": "Deputati",
     "deputiesIntro": "Cerca un deputato e apri gruppi, commissioni e interventi",
     "searchDeputyPlaceholder": "Cerca un deputato…",
     "allGroups": "Tutti i gruppi",
@@ -1286,7 +1468,16 @@
     "role_president": "Capogruppo",
     "role_vice_president": "Vicepresidente",
     "role_treasurer": "Tesoriere",
-    "role_secretary": "Segretario"
+    "role_secretary": "Segretario",
+    "compositionTitle": "Composizione",
+    "factsTitle": "In sintesi",
+    "statSpeeches": "Interventi",
+    "statActs": "Atti presentati",
+    "coalitionLabel": "Schieramento",
+    "componentsTitle": "Componenti politiche",
+    "seatShare": "{share}% dei seggi",
+    "otherGroups": "Altri gruppi",
+    "filterGroupHint": "Scegli un gruppo per filtrare l'elenco"
   },
   "NewsletterConfirmed": {
     "title": "Iscrizione confermata",
@@ -1308,5 +1499,324 @@
         "body": "Da dove vengono le risposte e come scegliamo chi citare."
       }
     }
+  },
+  "Brand": {
+    "descriptor": "Le posizioni dei gruppi, dalle parole in Aula"
+  },
+  "Dossier": {
+    "scope": "Camera · XIX legislatura",
+    "answeredOn": "Dossier del {date}",
+    "stats": "{interventions} interventi di {speakers} deputati",
+    "period": "dal {from} al {to}",
+    "ask": "Fai una domanda",
+    "method": "Metodo",
+    "copyLink": "Copia link",
+    "copied": "Link copiato",
+    "fullAnswer": "Risposta completa",
+    "inBrief": "In breve",
+    "sides": "Verso «{label}»: {groups}.",
+    "coverageAll": "Hanno parlato del tema tutti i {total} gruppi",
+    "coverageSome": "Hanno parlato del tema {present} gruppi su {total}",
+    "coverageMissing": "Nessun intervento: {groups}",
+    "navPositions": "Posizioni",
+    "navSaidVoted": "Detto e votato",
+    "navVoices": "Voci",
+    "navCompass": "Bussola",
+    "bloc_governo": "Governo",
+    "bloc_maggioranza": "Maggioranza",
+    "bloc_opposizione": "Opposizione",
+    "bloc_misto": "Misto",
+    "interventionsShort": "{n} int.",
+    "interventionsLong": "{n, plural, one {# intervento} other {# interventi}}",
+    "readSummary": "Leggi la sintesi",
+    "verified": "Testo trovato nel resoconto",
+    "noQuote": "Nessuna citazione per questo gruppo.",
+    "voicesTitle": "Voci più autorevoli",
+    "voicesLegend": "Autorevolezza sul tema da 0 a 100, calcolata su sei criteri. Apri un nome per vederli tutti.",
+    "dim_speeches": "Interventi",
+    "dim_acts": "Atti",
+    "dim_committee": "Commissione",
+    "dim_profession": "Professione",
+    "dim_education": "Istruzione",
+    "dim_role": "Ruolo",
+    "compassTitle": "Bussola · primo asse",
+    "compassNote": "Posizioni stimate da un modello sugli interventi. Cerchio vuoto: pochi interventi.",
+    "compassUnstable": "Asse poco stabile: leggilo come indicazione.",
+    "svTitle": "Detto e votato",
+    "svLead": "Accanto a ciò che ogni gruppo ha detto sul tema, come hanno votato i suoi deputati.",
+    "svPick": "Votazione",
+    "svOtherVotes": "{n, plural, one {# votazione} other {# votazioni}} sugli atti del tema",
+    "svColGroup": "Gruppo",
+    "svColSaid": "Ha detto",
+    "svColVoted": "Ha votato · un segno per deputato",
+    "svColResult": "Nel gruppo",
+    "favor": "favorevoli",
+    "against": "contrari",
+    "abstain": "astenuti",
+    "absent": "assenti o non votanti",
+    "approved": "Approvato",
+    "rejected": "Respinto",
+    "svNote": "Gruppo alla data del voto. Nessun punteggio di coerenza: il confronto lo fai tu.",
+    "svEmpty": "Nessuna votazione nominale trovata sugli atti del tema.",
+    "svSecret": "Voto segreto: i voti dei singoli deputati non sono pubblici.",
+    "svOnCamera": "Atto su camera.it",
+    "svLoading": "Carico la votazione",
+    "svError": "Non riesco a caricare questa votazione.",
+    "ecoTitle": "Dalla stessa famiglia",
+    "ecoBody": "Per sapere cosa è successo in una seduta o come ha votato un deputato, chiedi a Stenografo.",
+    "ecoCta": "Vai a Stenografo",
+    "notFound": "Questo dossier non esiste o non è più disponibile.",
+    "backHome": "Torna alla home",
+    "sourceNote": "Sintesi generata da un modello e ancorata ai resoconti: ogni citazione rimanda al testo originale.",
+    "svFinal": "Voti finali",
+    "svOther": "Emendamenti, articoli e altre votazioni",
+    "voicesScore": "Punteggio di autorevolezza",
+    "voicesMore": "dettaglio",
+    "voicesProfile": "Scheda su camera.it",
+    "blocCount": "{n, plural, one {# intervento} other {# interventi}}",
+    "voicesWeights": "Pesi in uso: {weights}. Si cambiano nelle Impostazioni; il punteggio si ricalcola su queste {n} voci.",
+    "readerIndex": "Indice",
+    "svSessionNote": "Nessun atto del tema è stato votato per appello nominale: queste sono votazioni finali e mozioni delle stesse sedute degli interventi, non per forza sul tema.",
+    "openRecord": "Apri il resoconto su camera.it"
+  },
+  "Shell": {
+    "searchTrigger": "Cerca un tema, un deputato o chiedi",
+    "search": "Cerca",
+    "navAula": "Aula",
+    "navDeputies": "Deputati",
+    "navGroups": "Gruppi",
+    "menu": "Menu",
+    "method": "Metodo",
+    "data": "Dati aperti",
+    "stenografo": "Stenografo, fatti puntuali",
+    "settings": "Impostazioni",
+    "docs": "Documentazione",
+    "dataAt": "Dati al {date}",
+    "placeholder": "Un tema, un nome, una domanda",
+    "groupAsk": "Chiedi",
+    "askPositions": "Posizioni dei gruppi su «{q}»",
+    "askStenografo": "Domanda puntuale? Chiedila a Stenografo",
+    "groupTopics": "Temi pronti",
+    "groupDeputies": "Deputati",
+    "groupGroups": "Gruppi",
+    "groupGo": "Vai a",
+    "empty": "Nessun risultato.",
+    "topicMeta": "{n} interventi",
+    "hintOpen": "Invio apre",
+    "hintClose": "Esc chiude",
+    "home": "Home",
+    "language": "Lingua",
+    "scopeTitle": "Legislatura",
+    "scopeCamera": "Camera",
+    "scopeSenato": "Senato",
+    "scopeBoth": "Camera e Senato",
+    "scopeLegislature": "{n} legislatura",
+    "scopeLegislatureTitle": "Legislatura del dossier",
+    "scopeLeg19Sub": "dal 13 ottobre 2022",
+    "scopeLeg18Sub": "2018-2022",
+    "scopeSoon": "In arrivo",
+    "scopeNoteCamera": "Oggi i dati coprono la Camera dei Deputati. Quando arriverà il Senato, ogni dossier cercherà in entrambi i rami della legislatura scelta.",
+    "scopeNoteBoth": "Ogni dossier cerca negli interventi di Camera e Senato della legislatura scelta."
+  },
+  "Home": {
+    "readyTitle": "Temi pronti",
+    "readyLead": "Dossier già composti sui temi più chiesti: si aprono subito.",
+    "dossierMeta": "{interventions} interventi · {speakers} deputati",
+    "updated": "Dossier del {date}",
+    "opening": "Apro il dossier",
+    "composing": "Compongo il dossier",
+    "askHint": "Scrivi un tema o una domanda. Se il dossier esiste già lo apriamo, altrimenti lo componiamo dagli interventi in Aula.",
+    "liveStatus": "Compongo il dossier · passo {n} di {total}: {label}",
+    "cancel": "Annulla",
+    "pendingCompass": "Calcolo la bussola dei gruppi",
+    "pendingPositions": "Scrivo le posizioni dei gruppi",
+    "pendingVoices": "Cerco le voci più autorevoli",
+    "factualTitle": "Domanda puntuale",
+    "factualBody": "Stenografo risponde a domande come questa con il fatto e la fonte. ParliamentRAG confronta le posizioni dei gruppi su un tema.",
+    "factualStenografo": "Chiedi a Stenografo",
+    "factualAnyway": "Confronta le posizioni comunque"
+  },
+  "Newsletter": {
+    "menuLabel": "Aggiornamenti via email",
+    "emailLabel": "La tua email",
+    "emailPlaceholder": "nome@esempio.it",
+    "submit": "Iscriviti",
+    "sending": "Invio…",
+    "consent": "Ho letto l’<link>informativa privacy</link> e accetto di ricevere aggiornamenti su ParliamentRAG",
+    "errorEmail": "Scrivi un indirizzo email completo, ad esempio nome@esempio.it.",
+    "errorConsent": "Per iscriverti devi accettare l'informativa.",
+    "errorServer": "Non riesco a completare l'iscrizione adesso. Riprova tra poco.",
+    "checkInbox": "Controlla la posta: ti abbiamo inviato un link per confermare l'iscrizione.",
+    "panelTitle": "Resta aggiornato su ParliamentRAG",
+    "panelLead": "Lascia la tua email: ti scriviamo quando arrivano funzioni nuove o nuovi dati della Camera.",
+    "panelPoint1": "Le nuove funzioni, appena escono",
+    "panelPoint2": "Gli aggiornamenti sui dati della Camera",
+    "panelPoint3": "Poche email, ti disiscrivi con un clic",
+    "panelPrivacy": "Usiamo Brevo per l'invio. La tua email non viene collegata alle domande che fai."
+  },
+  "Centro": {
+    "navHome": "Home",
+    "navSystems": "Sistemi",
+    "navPublications": "Pubblicazioni",
+    "navData": "Dati",
+    "navDevelopers": "Sviluppatori",
+    "navMethod": "Metodo",
+    "navUpdates": "Aggiornamenti",
+    "navLabel": "Sezioni del sito",
+    "homeLabel": "ParliamentRAG, pagina iniziale",
+    "language": "Lingua",
+    "menuOpen": "Apri il menu",
+    "menuClose": "Chiudi il menu",
+    "menuTitle": "Menu",
+    "skip": "Vai al contenuto",
+    "descriptor": "Ricerca aperta sui dati del Parlamento italiano",
+    "colProject": "Progetto",
+    "colSystems": "Sistemi",
+    "soon": "In arrivo",
+    "visit": "Visita",
+    "visitDomain": "Visita {domain}",
+    "soonDomain": "{domain} · in arrivo",
+    "readMore": "Scopri di più",
+    "stenografoJob": "Chiedi un fatto sulla Camera e ricevi la risposta con la fonte ufficiale.",
+    "fascicoliJob": "Scegli un tema: cosa dicono i gruppi in Aula, chi ne parla con più autorevolezza e come hanno votato.",
+    "scrannoJob": "Entra nell'Aula di Montecitorio in 3D: i 400 seggi, ognuno con il suo deputato, secondo la piantina ufficiale.",
+    "homeKicker": "Progetto di ricerca · Università di Milano-Bicocca",
+    "homeTitle": "Ricerca aperta sui dati del Parlamento italiano.",
+    "homeLead": "Un knowledge graph della Camera dei Deputati, un metodo di retrieval che tiene conto di chi parla, dati e codice aperti.",
+    "homeCtaSystems": "Scopri i sistemi",
+    "homeCtaPapers": "Leggi le pubblicazioni",
+    "pillarsLabel": "Il progetto in tre punti",
+    "pillar1Title": "Il knowledge graph della Camera",
+    "pillar1Body": "Sedute, interventi, atti, votazioni e deputati della XIX legislatura, collegati agli open data ufficiali.",
+    "pillar2Title": "Retrieval che pesa l'autorevolezza",
+    "pillar2Body": "Le fonti si scelgono per pertinenza e per la competenza dell'oratore sul tema: commissioni, atti, interventi.",
+    "pillar3Title": "Tutto aperto",
+    "pillar3Body": "Dump RDF, dataset su Zenodo e Hugging Face, codice su GitHub, un server MCP per gli assistenti AI.",
+    "statsLabel": "Nel grafo",
+    "systemsTitle": "Tre sistemi, un solo grafo",
+    "systemsLead": "Ognuno risponde a una domanda diversa sul Parlamento italiano.",
+    "systemsMore": "Come si collegano",
+    "systemOf": "Sistema {n} di {total}",
+    "pubsTitle": "Pubblicazioni",
+    "pubsLead": "Due articoli accettati a ISWC 2026, a Bari dal 25 al 29 ottobre.",
+    "pubsAll": "Tutte le pubblicazioni",
+    "pub1Venue": "ISWC 2026 · In-Use Track",
+    "pub2Venue": "ISWC 2026 · Posters & Demos",
+    "authorsShort": "M. Tritella, R. Pozzi, M. Palmonari",
+    "readPdf": "Leggi il PDF",
+    "dataTitle": "Dati aperti",
+    "dataLead": "Il knowledge graph si scarica intero in RDF, allineato ai vocabolari del web semantico, ed è pubblicato anche in forma tabellare.",
+    "dataCta": "Vai ai dati",
+    "devCta": "API e MCP",
+    "dotsLabel": "Schermate della pagina",
+    "dotsGo": "Schermata {n} di {total}: {label}",
+    "sysKicker": "Sistemi",
+    "sysTitle": "Tre sistemi\nsugli stessi dati",
+    "sysLead": "Ognuno fa una cosa sola. Tutti leggono lo stesso knowledge graph della Camera dei Deputati.",
+    "labelWhat": "Cosa fa",
+    "labelFor": "Per chi",
+    "stenografoWhat": "Fai una domanda puntuale, come chi ha presentato un atto o come è finita una votazione, e ricevi una risposta breve con il link al resoconto ufficiale.",
+    "stenografoFor": "Chi ha bisogno di un fatto preciso e verificabile: giornalisti, uffici studi, cittadini.",
+    "fascicoliWhat": "Su un tema compone un fascicolo: le posizioni di ogni gruppo con citazioni dagli interventi, i deputati più autorevoli e le votazioni collegate. È lo strumento che prima stava su questo sito.",
+    "fascicoliFor": "Chi deve capire un dibattito nel suo insieme: ricercatori, analisti, redazioni, studenti.",
+    "scrannoWhat": "Ricostruisce in 3D l'Aula di Montecitorio con i seggi disposti secondo la piantina ufficiale. Ogni seggio porta al suo deputato.",
+    "scrannoFor": "Chi vuole orientarsi nell'Aula e vedere chi siede dove, anche durante una votazione.",
+    "linksTitle": "Come si collegano",
+    "link1Title": "Da Stenografo a Fascicoli",
+    "link1Body": "Se a Stenografo chiedi un tema invece di un fatto, la domanda passa a Fascicoli già compilata.",
+    "link2Title": "Dai voti a Scranno",
+    "link2Body": "Le votazioni si aprono nell'Aula 3D di Scranno, seggio per seggio.",
+    "link3Title": "Un solo grafo",
+    "link3Body": "I tre sistemi leggono lo stesso knowledge graph e ricevono gli stessi aggiornamenti dei dati.",
+    "linksCta": "I dati in comune",
+    "pubKicker": "Ricerca",
+    "pubLead": "Articoli e interventi pubblici del progetto, con i PDF e i riferimenti per citarli.",
+    "pubConfLabel": "Conferenza",
+    "pubDatesLabel": "Date",
+    "iswcDates": "25–29 ottobre 2026",
+    "groupPapers": "Articoli",
+    "groupTalks": "Interventi",
+    "pub1Meta": "ISWC 2026 · In-Use Track · LNCS 17128, capitolo 24",
+    "pub2Meta": "ISWC 2026 · Posters & Demos",
+    "cite": "Cita",
+    "citeTitle": "Citare l'articolo In-Use",
+    "citeLabel": "Who Speaks Matters",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "talkMeta": "Milano Digital Week 2026 · 1 ottobre 2026",
+    "talkPlace": "Università di Milano-Bicocca",
+    "eventPage": "Pagina dell'evento",
+    "iswcProgram": "Programma ISWC",
+    "devKicker": "API · MCP · Dump",
+    "devTitle": "Sviluppatori",
+    "devLead": "Un server MCP per gli assistenti AI e i dump completi del grafo, aperti e senza credenziali. Le API HTTP sono disponibili su richiesta.",
+    "mcpTitle": "Server MCP",
+    "mcpBody": "Un assistente compatibile con il Model Context Protocol (Claude, ChatGPT, Cursor, VS Code e altri) legge direttamente i resoconti ufficiali: ricerca su interventi e atti, sedute con riassunto, votazioni con il voto di ogni deputato, testo degli emendamenti votati, emicicli come immagini.",
+    "mcpRemoteLabel": "Endpoint remoto, niente da installare",
+    "mcpLocalLabel": "In locale con Claude Code",
+    "mcpToolsLabel": "Strumenti esposti",
+    "mcpGuide": "Guida per ogni client su GitHub",
+    "apiTitle": "API HTTP",
+    "apiBody": "Le stesse interrogazioni che usano i nostri sistemi, in JSON. Ogni richiesta interroga il grafo e ha un costo di calcolo, per questo l'accesso passa da un token personale.",
+    "dumpTitle": "Dump e dataset",
+    "dumpBody": "Il grafo completo in RDF, la copia archiviata con DOI e la versione tabellare.",
+    "dumpRdf": "Dump RDF (Turtle) dalla pagina Dati",
+    "dumpZenodo": "Archivio su Zenodo, con DOI",
+    "dumpHf": "Dataset tabellare su Hugging Face",
+    "dumpCode": "Pipeline di costruzione del grafo su GitHub",
+    "license": "I dati derivano dagli open data della Camera dei Deputati e restano sotto licenza CC BY-SA 4.0.",
+    "updKicker": "Notizie dal progetto",
+    "updTitle": "Aggiornamenti",
+    "updLead": "Articoli, interventi pubblici, nuovi sistemi e nuovi dati. Iscriviti per riceverli via email.",
+    "latestTitle": "Ultime novità",
+    "news1When": "25–29 ottobre 2026",
+    "news1Tag": "Pubblicazioni",
+    "news1Title": "Due articoli accettati a ISWC 2026",
+    "news1Body": "L'articolo In-Use «Who Speaks Matters» e la demo di ParliamentRAG saranno presentati alla International Semantic Web Conference, a Bari.",
+    "news1Cta": "Leggi gli articoli",
+    "news2When": "1 ottobre 2026",
+    "news2Tag": "Interventi",
+    "news2Title": "ParliamentRAG alla Milano Digital Week",
+    "news2Body": "Il progetto è stato presentato all'Università di Milano-Bicocca durante la Milano Digital Week 2026.",
+    "news2Cta": "Tutti gli interventi",
+    "news3When": "3 ottobre 2026",
+    "news3Tag": "Sistemi",
+    "news3Title": "Fascicoli è online",
+    "news3Body": "Lo strumento dei dossier tematici è ora un sistema a sé, su fascicoli.it. Il Senato della Repubblica arriverà più avanti.",
+    "news3Cta": "Scopri i sistemi",
+    "confNextSystemsTitle": "Sistemi",
+    "confNextSystemsBody": "Stenografo, Fascicoli e Scranno: cosa fanno e come si collegano.",
+    "confNextPapersTitle": "Pubblicazioni",
+    "confNextPapersBody": "Gli articoli di ISWC 2026, con PDF e citazione.",
+    "confNextDataTitle": "Dati aperti",
+    "confNextDataBody": "Il knowledge graph della Camera, da scaricare in RDF.",
+    "meta": {
+      "systemsTitle": "Sistemi",
+      "systemsDesc": "Stenografo, Fascicoli e Scranno: tre sistemi sullo stesso knowledge graph della Camera dei Deputati, e come si collegano.",
+      "publicationsTitle": "Pubblicazioni",
+      "publicationsDesc": "Gli articoli di ParliamentRAG a ISWC 2026 (In-Use Track e Posters & Demos) e gli interventi pubblici, con PDF e BibTeX.",
+      "developersTitle": "Sviluppatori",
+      "developersDesc": "Server MCP e dump RDF del knowledge graph della Camera dei Deputati; API HTTP disponibili su richiesta.",
+      "updatesTitle": "Aggiornamenti",
+      "updatesDesc": "Le novità del progetto ParliamentRAG: pubblicazioni, interventi, nuovi sistemi e nuovi dati.",
+      "dataTitle": "Dati aperti",
+      "dataDesc": "Il knowledge graph della Camera dei Deputati in RDF: statistiche, modello dei dati, download e archivio su Zenodo.",
+      "methodTitle": "Metodo",
+      "methodDesc": "Come ParliamentRAG recupera le fonti, pesa l'autorevolezza degli oratori e verifica le citazioni.",
+      "privacyTitle": "Privacy",
+      "privacyDesc": "Informativa privacy di ParliamentRAG: quali dati trattiamo e perché.",
+      "terminiTitle": "Termini",
+      "terminiDesc": "Termini d'uso di ParliamentRAG: chi gestisce il sito, licenza dei dati e regole d'uso."
+    },
+    "apiOffer1": "Ricerca ibrida su interventi in Aula e atti parlamentari",
+    "apiOffer2": "Sedute e dibattiti, con riassunti, atti discussi e oratori",
+    "apiOffer3": "Votazioni con esiti per gruppo e voti dei singoli deputati",
+    "apiOffer4": "Statistiche e indice dei dati aperti del knowledge graph",
+    "accessTitle": "Accesso su richiesta",
+    "accessBody": "Le API sono disponibili su richiesta: scrivici e ti mandiamo un token personale.",
+    "accessCta": "Richiedi un token",
+    "onThisPage": "In questa pagina",
+    "privacyContactTitle": "Contatti privacy",
+    "privacyContactBody": "Per accesso, rettifica o cancellazione dei dati scrivi al titolare del trattamento."
   }
 }

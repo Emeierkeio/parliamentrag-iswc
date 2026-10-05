@@ -1,7 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
-  <!-- Full-bleed square: the OS applies the rounded-corner mask -->
-  <rect width="512" height="512" fill="#1B3A5C"/>
-  <!-- Parliament diagram 220° + speaker dome, flat cream -->
-  <path d="M 96.2 370.1 A 170 170 0 1 1 415.8 370.1 L 345.3 344.5 A 95 95 0 1 0 166.7 344.5 Z" fill="#ECE1CE"/>
-  <path d="M 222 370.1 A 34 34 0 0 1 290 370.1 Z" fill="#ECE1CE"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" rx="0" fill="#F7F8F5"/><g transform="translate(111.670 138.088) scale(1.28866)"><path d="M 35.91 139.73 A 81 81 0 1 1 188.09 139.73" fill="none" stroke="#14201C" stroke-width="32" stroke-linecap="round"/><circle cx="112" cy="146" r="22" fill="#2D5F8F"/></g></svg>

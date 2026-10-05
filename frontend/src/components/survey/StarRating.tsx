@@ -51,7 +51,7 @@ export function StarRating({
               onMouseEnter={() => !disabled && setHoverValue(starValue)}
               onMouseLeave={() => setHoverValue(0)}
               className={cn(
-                "transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded",
+                "transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded-full",
                 disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:scale-110"
               )}
               aria-label={`${starValue} su ${max} stelle`}
@@ -61,9 +61,9 @@ export function StarRating({
                   sizeClasses[size],
                   "transition-colors duration-150",
                   isFilled
-                    ? "fill-amber-400 text-amber-400"
-                    : "fill-transparent text-gray-300 dark:text-gray-600",
-                  isHovered && !isFilled && "text-amber-200"
+                    ? "fill-brand text-brand"
+                    : "fill-transparent text-line-control",
+                  isHovered && !isFilled && "text-brand/50"
                 )}
               />
             </button>
@@ -71,14 +71,7 @@ export function StarRating({
         })}
         {showLabel && value > 0 && (
           <span
-            className={cn(
-              "ml-2 text-sm font-medium transition-opacity duration-150",
-              value <= 2
-                ? "text-red-500"
-                : value === 3
-                ? "text-amber-500"
-                : "text-emerald-500"
-            )}
+            className="ml-2 text-sm font-medium text-fg-secondary transition-opacity duration-150"
           >
             {LABELS[value]}
           </span>

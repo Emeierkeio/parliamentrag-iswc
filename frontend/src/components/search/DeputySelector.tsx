@@ -87,13 +87,13 @@ export function DeputySelector({ selectedDeputies, onSelect }: DeputySelectorPro
           {selectedDeputies.map((deputy) => (
             <div
               key={deputy.id}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-brand-soft text-brand-fg text-xs font-medium"
             >
-              <div className="h-4 w-4 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden shrink-0">
+              <div className="h-4 w-4 rounded-full bg-brand-soft-strong flex items-center justify-center overflow-hidden shrink-0">
                 {deputy.imgUrl ? (
                   <img src={deputy.imgUrl} alt="Foto" className="h-full w-full object-cover" />
                 ) : (
-                  <User className="h-2.5 w-2.5 text-primary" />
+                  <User className="h-2.5 w-2.5 text-brand-fg" />
                 )}
               </div>
               <span className="truncate max-w-[120px]">
@@ -101,7 +101,7 @@ export function DeputySelector({ selectedDeputies, onSelect }: DeputySelectorPro
               </span>
               <button
                 onClick={() => removeDeputy(deputy.id)}
-                className="ml-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                className="ml-0.5 text-fg-muted hover:text-fg transition-colors"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -113,7 +113,7 @@ export function DeputySelector({ selectedDeputies, onSelect }: DeputySelectorPro
       {/* Search input */}
       <div className="relative w-full" ref={wrapperRef}>
         <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-fg-muted" />
           <Input
             placeholder="Cerca deputato..."
             value={query}
@@ -124,12 +124,12 @@ export function DeputySelector({ selectedDeputies, onSelect }: DeputySelectorPro
             }}
           />
           {loading && (
-            <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+            <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-fg-muted" />
           )}
         </div>
 
         {isOpen && suggestions.length > 0 && (
-          <Card className="absolute top-full mt-1 w-full z-50 max-h-60 overflow-y-auto shadow-lg border-border bg-popover">
+          <Card className="absolute top-full mt-1 w-full z-50 max-h-60 gap-0 overflow-y-auto rounded-md py-0 shadow-overlay border-line bg-surface">
             <ul className="py-1">
               {suggestions.map((deputy) => {
                 const isSelected = selectedDeputies.some((d) => d.id === deputy.id);
@@ -137,25 +137,25 @@ export function DeputySelector({ selectedDeputies, onSelect }: DeputySelectorPro
                   <li
                     key={deputy.id}
                     className={cn(
-                      "px-3 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center gap-3 transition-colors",
-                      isSelected && "bg-primary/5"
+                      "px-3 py-2 hover:bg-surface-muted hover:text-fg cursor-pointer flex items-center gap-3 transition-colors",
+                      isSelected && "bg-brand-soft"
                     )}
                     onClick={() => toggleDeputy(deputy)}
                   >
-                    <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center shrink-0">
-                      <User className="h-4 w-4 text-muted-foreground" />
+                    <div className="h-8 w-8 rounded-full bg-surface-muted flex items-center justify-center shrink-0">
+                      <User className="h-4 w-4 text-fg-muted" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">
+                      <p className="text-sm font-medium text-fg">
                         {deputy.first_name} {deputy.last_name}
                       </p>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-xs text-fg-muted truncate">
                         {deputy.group}
                       </p>
                     </div>
                     {isSelected && (
-                      <div className="h-4 w-4 rounded-full bg-primary flex items-center justify-center shrink-0">
-                        <X className="h-2.5 w-2.5 text-primary-foreground" />
+                      <div className="h-4 w-4 rounded-full bg-brand flex items-center justify-center shrink-0">
+                        <X className="h-2.5 w-2.5 text-on-brand" />
                       </div>
                     )}
                   </li>

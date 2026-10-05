@@ -127,13 +127,13 @@ export function ResultDetailDialog({
         <DialogTitle className="sr-only">{t("detailTitle")}</DialogTitle>
         {loading && (
           <div className="flex flex-col items-center justify-center py-12 space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">{t("loading")}</p>
+            <Loader2 className="h-8 w-8 animate-spin text-fg-faint" aria-hidden />
+            <p className="text-sm text-fg-muted">{t("loading")}</p>
           </div>
         )}
 
         {error && (
-          <div className="text-center py-8 text-destructive">
+          <div role="alert" className="rounded-md bg-danger-soft px-4 py-6 text-center text-sm text-danger-fg">
             <p>{error}</p>
           </div>
         )}
@@ -165,13 +165,13 @@ function SpeechDetailContent({
     <>
       <DialogHeader>
         <div className="flex items-center gap-2 mb-1">
-          <MessageSquareQuote className="h-5 w-5 text-primary shrink-0" />
-          <h2 className="text-lg font-semibold leading-none tracking-tight">
+          <MessageSquareQuote className="h-5 w-5 text-fg-muted shrink-0" aria-hidden />
+          <h2 className="text-lg font-semibold leading-tight tracking-[var(--tracking-heading)] text-fg">
             {t("sessionOf", { number: detail.session_number ?? "", date: formatDate(detail.date, locale) })}
           </h2>
         </div>
         {detail.debate_title && (
-          <p className="text-sm text-muted-foreground pl-7">
+          <p className="text-sm text-fg-muted pl-7">
             {detail.debate_title}
           </p>
         )}
@@ -180,8 +180,8 @@ function SpeechDetailContent({
       <div className="space-y-4 mt-2">
         {/* Speaker info */}
         <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="font-semibold text-foreground">
+          <User className="h-4 w-4 text-fg-muted shrink-0" />
+          <span className="font-semibold text-fg">
             {detail.first_name} {detail.last_name}
           </span>
           <Badge
@@ -196,21 +196,21 @@ function SpeechDetailContent({
             {getGroupShortLabel(detail.group)}
           </Badge>
           {!item.is_exact && item.score != null && (
-            <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap ml-auto">
+            <span className="tabular text-xs text-fg-muted whitespace-nowrap ml-auto">
               {t("sortRelevance")} {(item.score * 100).toFixed(0)}%
             </span>
           )}
         </div>
 
         {/* Full text */}
-        <div className="pl-4 pr-2 border-l-2 border-primary/20 text-sm leading-relaxed text-foreground whitespace-pre-line break-words max-h-[50vh] overflow-y-auto overflow-x-hidden max-w-full">
+        <div className="serif-display pl-4 pr-2 border-l-2 border-line-strong text-base leading-relaxed text-fg whitespace-pre-line break-words max-h-[50vh] overflow-y-auto overflow-x-hidden max-w-full">
           {detail.full_text}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-2 border-t">
+        <div className="flex items-center justify-between pt-2 border-t border-line">
           {detail.date && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs text-fg-muted">
               <Calendar className="h-3 w-3" />
               {formatDate(detail.date, locale)}
             </div>
@@ -220,7 +220,7 @@ function SpeechDetailContent({
               href={`https://www.camera.it/leg19/410?idSeduta=${detail.session_number}&tipo=seduta`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline flex items-center gap-1"
+              className="link text-xs flex items-center gap-1"
             >
               {t("officialSource")} <ExternalLink className="h-3 w-3" />
             </a>
@@ -255,23 +255,23 @@ function ActDetailContent({
     <>
       <DialogHeader>
         <div className="flex items-center gap-2 mb-1">
-          <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <Badge className={`text-xs font-semibold ${typeColor}`}>
+          <FileText className="h-5 w-5 text-fg-muted shrink-0" aria-hidden />
+          <Badge variant="secondary" className={`text-xs font-semibold ${typeColor}`}>
             {typeLabel}
           </Badge>
           {detail.act_number && (
-            <span className="text-sm text-muted-foreground font-mono">
+            <span className="text-sm text-fg-muted font-mono">
               n. {detail.act_number}
             </span>
           )}
           {!item.is_exact && item.score != null && (
-            <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap ml-auto">
+            <span className="tabular text-xs text-fg-muted whitespace-nowrap ml-auto">
               {t("sortRelevance")} {(item.score * 100).toFixed(0)}%
             </span>
           )}
         </div>
         {detail.act_title && (
-          <h2 className="text-base font-semibold leading-none tracking-tight pl-7">
+          <h2 className="text-base font-semibold leading-snug text-fg pl-7">
             {detail.act_title}
           </h2>
         )}
@@ -280,11 +280,11 @@ function ActDetailContent({
       <div className="space-y-4 mt-2">
         {/* Signatory */}
         <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="text-xs text-muted-foreground">
+          <User className="h-4 w-4 text-fg-muted shrink-0" />
+          <span className="text-xs text-fg-muted">
             {t("primarySignatory")}
           </span>
-          <span className="font-semibold text-sm text-foreground">
+          <span className="font-semibold text-sm text-fg">
             {detail.first_name} {detail.last_name}
           </span>
           <Badge
@@ -302,11 +302,11 @@ function ActDetailContent({
 
         {/* Destinatario */}
         {detail.destinatario && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-fg-muted">
             <Building2 className="h-4 w-4 shrink-0" />
             <span>
               {t("recipient")}{" "}
-              <span className="font-medium text-foreground">
+              <span className="font-medium text-fg">
                 {detail.destinatario}
               </span>
             </span>
@@ -315,7 +315,7 @@ function ActDetailContent({
 
         {/* Full description */}
         {detail.description && (
-          <div className="pl-4 pr-2 border-l-2 border-emerald-500/20 text-sm leading-relaxed text-foreground whitespace-pre-line break-words max-h-[50vh] overflow-y-auto overflow-x-hidden max-w-full">
+          <div className="text-sm leading-relaxed text-fg-secondary whitespace-pre-line break-words max-h-[50vh] overflow-y-auto overflow-x-hidden max-w-full">
             {detail.description}
           </div>
         )}
@@ -323,7 +323,7 @@ function ActDetailContent({
         {/* EuroVoc topics */}
         {topics.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <Tag className="h-3.5 w-3.5 text-fg-muted shrink-0" />
             {topics.map((topic, i) => (
               <Badge
                 key={i}
@@ -338,8 +338,8 @@ function ActDetailContent({
 
         {/* Footer */}
         {detail.date && (
-          <div className="flex items-center justify-between pt-2 border-t">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between pt-2 border-t border-line">
+            <div className="flex items-center gap-2 text-xs text-fg-muted">
               <Calendar className="h-3 w-3" />
               {formatDate(detail.date, locale)}
             </div>

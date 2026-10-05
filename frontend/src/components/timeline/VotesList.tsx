@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { Badge } from "@/components/ui/badge";
+import { CircleCheck, CircleX } from "lucide-react";
 import { KIND_LABEL_KEYS, voteKind, voteTitle } from "@/lib/vote-utils";
 import { VoteDetailDialog } from "./VoteDetailDialog";
+import { OutcomeShape } from "./outcomes";
 import type { VoteInfo } from "@/types/timeline";
 
 interface VotesListProps {
@@ -47,29 +48,31 @@ export function VotesList({ votes }: VotesListProps) {
     <div>
       {votes.length > VOTES_COLLAPSE_THRESHOLD && (
         <div className="mb-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
-            <span className="text-emerald-700 dark:text-emerald-500">
+          <div className="tabular flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-secondary">
+            <span className="inline-flex items-center gap-1">
+              <CircleCheck className="h-3.5 w-3.5" aria-hidden />
               {t("votesApproved", { count: approvedCount })}
             </span>
-            <span className="text-red-700 dark:text-red-500">
+            <span className="inline-flex items-center gap-1">
+              <CircleX className="h-3.5 w-3.5" aria-hidden />
               {t("votesRejected", { count: rejectedCount })}
             </span>
             {otherCount > 0 && (
-              <span className="text-muted-foreground">
+              <span className="text-fg-muted">
                 {t("votesOther", { count: otherCount })}
               </span>
             )}
           </div>
-          <div className="mt-1.5 flex h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+          <div className="mt-1.5 flex h-1 w-full max-w-xs gap-px overflow-hidden rounded-full bg-surface-sunken" aria-hidden>
             {approvedCount > 0 && (
               <div
-                className="bg-emerald-600"
+                className="bg-fg-secondary"
                 style={{ width: `${(approvedCount / votes.length) * 100}%` }}
               />
             )}
             {rejectedCount > 0 && (
               <div
-                className="bg-red-600"
+                className="bg-line-control"
                 style={{ width: `${(rejectedCount / votes.length) * 100}%` }}
               />
             )}
@@ -85,45 +88,51 @@ export function VotesList({ votes }: VotesListProps) {
             key={vote.id}
             type="button"
             onClick={() => setSelectedVote(vote)}
-            className="group flex w-full flex-wrap items-center gap-2 rounded-md px-2 py-1 -mx-2 text-left text-xs transition-colors hover:bg-muted/60"
+            className="group flex w-full flex-wrap items-center gap-2 rounded-md px-2 py-1 -mx-2 text-left text-xs transition-colors hover:bg-surface-muted"
             title={t("voteDetailHint")}
           >
             {kind && (
-              <span className="shrink-0 rounded border border-border/60 px-1 py-px text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="shrink-0 rounded-xs border border-line-strong px-1 py-px font-mono text-[10px] uppercase tracking-[var(--tracking-label)] text-fg-muted">
                 {t(KIND_LABEL_KEYS[kind])}
               </span>
             )}
             {title && (
-              <span className="text-muted-foreground group-hover:text-foreground group-hover:underline underline-offset-2">
+              <span className="text-fg-secondary group-hover:text-fg group-hover:underline underline-offset-2">
                 {title}
               </span>
             )}
             {vote.outcome && (
-              <Badge
-                variant={vote.outcome === "approved" ? "default" : "secondary"}
-                className="text-xs"
-              >
+              <span className="inline-flex items-center gap-1 rounded-full border border-line-control px-2 py-px font-medium text-fg">
+                {vote.outcome === "approved" ? (
+                  <CircleCheck className="h-3 w-3" aria-hidden />
+                ) : vote.outcome === "rejected" ? (
+                  <CircleX className="h-3 w-3" aria-hidden />
+                ) : null}
                 {vote.outcome === "approved"
                   ? t("outcomeApproved")
                   : vote.outcome === "rejected"
                     ? t("outcomeRejected")
                     : vote.outcome}
-              </Badge>
+              </span>
             )}
             {(vote.in_favor !== null ||
               vote.against !== null ||
               vote.abstained !== null) && (
-              <span className="tabular-nums">
-                <span className="text-emerald-700 dark:text-emerald-500">
-                  {vote.in_favor ?? "–"}
+              <span className="tabular inline-flex items-center gap-2 text-fg-secondary">
+                <span className="inline-flex items-center gap-1" title={t("voteFavor")}>
+                  <OutcomeShape outcome="favor" size={8} />
+                  <span className="sr-only">{t("voteFavor")}</span>
+                  {vote.in_favor ?? "-"}
                 </span>
-                <span className="text-muted-foreground/50"> / </span>
-                <span className="text-red-700 dark:text-red-500">
-                  {vote.against ?? "–"}
+                <span className="inline-flex items-center gap-1" title={t("voteAgainst")}>
+                  <OutcomeShape outcome="against" size={8} />
+                  <span className="sr-only">{t("voteAgainst")}</span>
+                  {vote.against ?? "-"}
                 </span>
-                <span className="text-muted-foreground/50"> / </span>
-                <span className="text-muted-foreground">
-                  {vote.abstained ?? "–"}
+                <span className="inline-flex items-center gap-1" title={t("voteAbstained")}>
+                  <OutcomeShape outcome="abstain" size={8} />
+                  <span className="sr-only">{t("voteAbstained")}</span>
+                  {vote.abstained ?? "-"}
                 </span>
               </span>
             )}
@@ -134,7 +143,7 @@ export function VotesList({ votes }: VotesListProps) {
           <button
             type="button"
             onClick={() => setShowAll((v) => !v)}
-            className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+            className="mt-1 min-h-8 text-xs text-fg-muted underline underline-offset-2 hover:text-fg transition-colors"
           >
             {showAll
               ? t("showFewerVotes")

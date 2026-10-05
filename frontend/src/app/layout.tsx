@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
+import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getLocale, getTranslations } from 'next-intl/server';
@@ -7,8 +8,8 @@ import { cookies } from 'next/headers';
 import { SidebarStateProvider } from '@/components/layout/SidebarStateProvider';
 import { Suspense } from "react";
 import { UrlParamSync } from "@/components/layout/UrlParamSync";
-import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { BackendWakeGate } from "@/components/layout/BackendWakeGate";
+import { LaunchScreen } from "@/components/brand/LaunchScreen";
 import "./globals.css";
 
 // ─── Maintenance mode ────────────────────────────────────────────────────────
@@ -18,14 +19,13 @@ const MAINTENANCE_MODE = false;
 async function MaintenancePage() {
   const t = await getTranslations('Maintenance');
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white text-gray-900 px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-bg text-fg px-6">
       <div className="max-w-md text-center space-y-6">
-        <div className="text-6xl">🔧</div>
         <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
-        <p className="text-gray-500 text-base leading-relaxed">
+        <p className="text-fg-secondary text-base leading-relaxed">
           {t('description')}
         </p>
-        <p className="text-gray-400 text-sm">ParliamentRAG</p>
+        <p className="label-mono">ParliamentRAG</p>
       </div>
     </div>
   );
@@ -41,12 +41,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Editorial display serif — usable app-wide via [font-family:var(--font-display)]
-const fraunces = Fraunces({
+// Display headlines and verbatim quotes only (serif-display utility); the
+// optical-size axis is pinned to the text cut there, as in Stenografo.
+const serif = Source_Serif_4({
   subsets: ["latin"],
   style: ["normal", "italic"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-display",
+  axes: ["opsz"],
+  variable: "--font-source-serif",
   display: "swap",
 });
 
@@ -55,19 +56,49 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  // Paints the iOS/Android browser chrome (status bar area) in the page
-  // cream instead of default white
-  themeColor: "#FBFAF8",
+  // Paints the iOS/Android browser chrome (status bar area) in the page colour
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f8f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1714" },
+  ],
 };
+
+/*
+ * iOS launch images (apple-touch-startup-image), portrait, light and dark by
+ * system scheme. Each is the first frame of LaunchScreen at that size, written
+ * by scripts/generate_splash.py, whose device list must match this one.
+ */
+const SPLASH_DEVICES = [
+  [440, 956, 3], // 16 Pro Max, 17 Pro Max
+  [430, 932, 3], // 14 Pro Max, 15 Plus / Pro Max, 16 Plus
+  [428, 926, 3], // 12-13 Pro Max, 14 Plus
+  [420, 912, 3], // Air
+  [414, 896, 3], // XS Max, 11 Pro Max
+  [414, 896, 2], // XR, 11
+  [402, 874, 3], // 16 Pro, 17, 17 Pro
+  [393, 852, 3], // 14 Pro, 15, 15 Pro, 16
+  [390, 844, 3], // 12, 13, 14, 12-13 Pro
+  [375, 812, 3], // X, XS, 11 Pro, 12-13 mini
+  [375, 667, 2], // SE 2nd and 3rd gen, 8
+] as const;
+
+function startupImages() {
+  return SPLASH_DEVICES.flatMap(([w, h, dpr]) =>
+    (["light", "dark"] as const).map((scheme) => ({
+      url: `/splash/apple-splash-${w * dpr}x${h * dpr}-${scheme}.png`,
+      media: `(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait) and (prefers-color-scheme: ${scheme})`,
+    })),
+  );
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.parliamentrag.it"),
   title: {
     default: "ParliamentRAG",
-    template: "%s | ParliamentRAG",
+    template: "%s · ParliamentRAG",
   },
   description:
-    "Esplora i dibattiti della Camera dei Deputati: ricerca atti, confronta posizioni politiche e visualizza il posizionamento ideologico dei gruppi parlamentari su qualsiasi tema.",
+    "Progetto di ricerca dell'Università di Milano-Bicocca sui dati del Parlamento italiano: knowledge graph della Camera dei Deputati, retrieval che tiene conto dell'autorevolezza di chi parla, dati aperti. Casa di Stenografo, Fascicoli e Scranno.",
   keywords: [
     "parlamento italiano",
     "camera dei deputati",
@@ -77,14 +108,14 @@ export const metadata: Metadata = {
     "RAG",
     "retrieval augmented generation",
     "NLP",
-    "posizionamento politico",
-    "compasso ideologico",
+    "knowledge graph",
+    "open data",
     "gruppi parlamentari",
     "interventi parlamentari",
   ],
   authors: [{ name: "Mirko Tritella" }],
   // Installed-app launch on iOS: without startup images the WebView boots on
-  // a blank screen (black in dark mode). One cream splash per device size.
+  // a blank screen (black in dark mode). Light and dark, one per device size.
   // Next emits only the modern mobile-web-app-capable meta; iOS honours the
   // startup images below only with the apple- prefixed one present too
   other: {
@@ -94,23 +125,12 @@ export const metadata: Metadata = {
     capable: true,
     title: "ParliamentRAG",
     statusBarStyle: "default",
-    startupImage: [
-      { url: "/splash/apple-splash-750x1334.png", media: "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" },
-      { url: "/splash/apple-splash-828x1792.png", media: "(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)" },
-      { url: "/splash/apple-splash-1125x2436.png", media: "(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/apple-splash-1242x2688.png", media: "(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/apple-splash-1170x2532.png", media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/apple-splash-1284x2778.png", media: "(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/apple-splash-1179x2556.png", media: "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/apple-splash-1290x2796.png", media: "(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/apple-splash-1206x2622.png", media: "(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3)" },
-      { url: "/splash/apple-splash-1320x2868.png", media: "(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3)" },
-    ],
+    startupImage: startupImages(),
   },
   openGraph: {
     title: "ParliamentRAG",
     description:
-      "Esplora i dibattiti della Camera dei Deputati. Ricerca atti, confronta posizioni e visualizza il posizionamento ideologico dei gruppi parlamentari.",
+      "Progetto di ricerca sui dati del Parlamento italiano: knowledge graph della Camera dei Deputati, pubblicazioni, dati aperti e i sistemi Stenografo, Fascicoli e Scranno.",
     siteName: "ParliamentRAG",
     url: "https://www.parliamentrag.it",
     locale: "it_IT",
@@ -120,14 +140,12 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "ParliamentRAG",
     description:
-      "Esplora i dibattiti della Camera dei Deputati. Ricerca atti, confronta posizioni e visualizza il posizionamento ideologico dei gruppi parlamentari.",
+      "Progetto di ricerca sui dati del Parlamento italiano: knowledge graph della Camera dei Deputati, pubblicazioni, dati aperti e i sistemi Stenografo, Fascicoli e Scranno.",
   },
-  robots: {
-    index: true,
-    follow: true,
-  },
+  // NOINDEX=1 marks a preview deployment that search engines must skip.
+  robots: process.env.NOINDEX === "1" ? { index: false, follow: false } : { index: true, follow: true },
   icons: {
-    icon: "/favicon.svg",
+    icon: [{ url: "/favicon.svg?v=2", type: "image/svg+xml" }],
     apple: "/apple-icon.png",
   },
 };
@@ -143,13 +161,18 @@ export default async function RootLayout({
   const initialCollapsed = sidebarCookie === undefined ? null : sidebarCookie === "true";
 
   return (
-    <html lang={locale} className="light" suppressHydrationWarning>
+    <html
+      lang={locale}
+      className={`${geistSans.variable} ${geistMono.variable} ${serif.variable}`}
+      suppressHydrationWarning
+    >
       <body
         // bg-background, NOT bg-white: Safari paints the status-bar /
-        // safe-area strip with the body background — white here was the
-        // white band above every page on iPhone
-        className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} antialiased bg-background text-foreground`}
+        // safe-area strip with the body background
+        className="antialiased bg-background text-foreground"
       >
+        <ThemeProvider>
+        <LaunchScreen />
         {MAINTENANCE_MODE ? (
           <MaintenancePage />
         ) : (
@@ -161,13 +184,11 @@ export default async function RootLayout({
             <TooltipProvider delayDuration={0}>
               <BackendWakeGate />
               {children}
-              <Suspense fallback={null}>
-                <MobileBottomNav />
-              </Suspense>
             </TooltipProvider>
             </SidebarStateProvider>
           </NextIntlClientProvider>
         )}
+        </ThemeProvider>
       </body>
     </html>
   );

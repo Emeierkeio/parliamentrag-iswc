@@ -79,25 +79,25 @@ export function FeedbackPulse({ tool, context, className }: FeedbackPulseProps) 
   return (
     <div
       className={cn(
-        "group/fb mt-6 pt-3 border-t border-border/60 text-[13px] text-muted-foreground",
+        "group/fb mt-6 pt-3 border-t border-line text-[13px] text-fg-muted",
         className,
       )}
     >
       {(stage === "idle" || stage === "dialog") && (
         <div className="flex items-center gap-4">
-          <span className="text-foreground">{t("prompt")}</span>
+          <span className="text-fg">{t("prompt")}</span>
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => vote("up")}
               aria-label={t("voteUpAria")}
-              className="p-1 -m-1 text-muted-foreground hover:text-primary transition-all duration-150 hover:-translate-y-0.5 cursor-pointer"
+              className="inline-flex size-8 -m-1 items-center justify-center rounded-full text-fg-muted hover:text-brand-fg hover:bg-surface-muted transition-[color,background-color,transform] duration-150 motion-safe:hover:-translate-y-0.5 cursor-pointer"
             >
               <ThumbsUp className="h-4 w-4" strokeWidth={1.75} />
             </button>
             <button
               onClick={() => vote("down")}
               aria-label={t("voteDownAria")}
-              className="p-1 -m-1 text-muted-foreground hover:text-primary transition-all duration-150 hover:translate-y-0.5 cursor-pointer"
+              className="inline-flex size-8 -m-1 items-center justify-center rounded-full text-fg-muted hover:text-brand-fg hover:bg-surface-muted transition-[color,background-color,transform] duration-150 motion-safe:hover:translate-y-0.5 cursor-pointer"
             >
               <ThumbsDown className="h-4 w-4" strokeWidth={1.75} />
             </button>
@@ -105,7 +105,7 @@ export function FeedbackPulse({ tool, context, className }: FeedbackPulseProps) 
           <button
             onClick={dismiss}
             aria-label={t("dismissAria")}
-            className="ml-auto p-1 -m-1 text-muted-foreground/0 group-hover/fb:text-muted-foreground/60 hover:!text-foreground transition-colors cursor-pointer"
+            className="ml-auto inline-flex size-8 -m-1 items-center justify-center rounded-full text-fg-faint opacity-0 group-hover/fb:opacity-100 focus-visible:opacity-100 hover:text-fg transition-[color,opacity] cursor-pointer"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -220,7 +220,7 @@ export function AnswerFeedback({ context, fresh = false, className }: AnswerFeed
       postedVoteRef.current = voted;
     }
     if (email) {
-      if (!(await subscribeNewsletter(email))) return "email_failed";
+      if (!(await subscribeNewsletter(email, "feedback"))) return "email_failed";
       markSubscribed();
       subscribedNowRef.current = true;
     }
@@ -248,22 +248,22 @@ export function AnswerFeedback({ context, fresh = false, className }: AnswerFeed
     <div
       ref={rootRef}
       className={cn(
-        "mt-5 inline-block border border-border bg-muted/40 px-4 py-2.5",
-        "animate-in fade-in slide-in-from-bottom-1 duration-500",
+        "mt-5 inline-block rounded-full bg-surface-muted pl-4 pr-1.5 py-1",
+        "animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:slide-in-from-bottom-0",
         className,
       )}
     >
       <div className="flex items-center gap-4">
-        {!voted && <span className="text-[13px] text-foreground">{t("prompt")}</span>}
-        <div className="flex items-center gap-3">
+        {!voted && <span className="text-[13px] text-fg">{t("prompt")}</span>}
+        <div className="flex items-center gap-0.5">
           <button
             onClick={() => !voted && voteInline("up")}
             disabled={voted !== null}
             aria-label={t("voteUpAria")}
             className={cn(
-              "p-1 -m-1 transition-all duration-150",
-              voted === "up" ? "text-primary" : "text-muted-foreground",
-              !voted && "hover:text-primary hover:-translate-y-0.5 cursor-pointer",
+              "inline-flex size-9 items-center justify-center rounded-full transition-[color,background-color,opacity,transform] duration-150",
+              voted === "up" ? "text-brand-fg bg-brand-soft" : "text-fg-muted",
+              !voted && "hover:text-brand-fg hover:bg-surface motion-safe:hover:-translate-y-0.5 cursor-pointer",
               voted === "down" && "opacity-30",
             )}
           >
@@ -274,9 +274,9 @@ export function AnswerFeedback({ context, fresh = false, className }: AnswerFeed
             disabled={voted !== null}
             aria-label={t("voteDownAria")}
             className={cn(
-              "p-1 -m-1 transition-all duration-150",
-              voted === "down" ? "text-primary" : "text-muted-foreground",
-              !voted && "hover:text-primary hover:translate-y-0.5 cursor-pointer",
+              "inline-flex size-9 items-center justify-center rounded-full transition-[color,background-color,opacity,transform] duration-150",
+              voted === "down" ? "text-brand-fg bg-brand-soft" : "text-fg-muted",
+              !voted && "hover:text-brand-fg hover:bg-surface motion-safe:hover:translate-y-0.5 cursor-pointer",
               voted === "up" && "opacity-30",
             )}
           >
@@ -284,7 +284,7 @@ export function AnswerFeedback({ context, fresh = false, className }: AnswerFeed
           </button>
         </div>
         {thanks && (
-          <span role="status" className="text-[13px] text-muted-foreground animate-in fade-in duration-300">
+          <span role="status" className="pr-2.5 text-[13px] text-fg-muted animate-in fade-in duration-300">
             {thanks === "checkInbox" ? ta("checkInbox") : t("thanks")}
           </span>
         )}

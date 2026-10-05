@@ -10,12 +10,14 @@ Endpoints:
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from ..models.timeline import (
     DebateDetailResponse,
     SpeakerSummaryResponse,
     TimelineResponse,
+    TopicVote,
     VoteActTextResponse,
     VoteDetailResponse,
     VoteInfo,
@@ -75,6 +77,47 @@ async def get_session_votes(
 ) -> list[VoteInfo]:
     """List every roll-call vote of a sitting (votes are recorded per sitting)."""
     return await timeline_service.get_session_votes(neo4j=neo4j, session_id=session_id)
+
+
+@router.get("/topic-votes")
+async def get_topic_votes(
+    topic: Optional[str] = Query(None, min_length=3, max_length=120),
+    act: list[str] = Query(default_factory=list, max_length=10),
+    legislature: int = 19,
+    limit: int = Query(40, ge=1, le=100),
+    neo4j: Neo4jClient = Depends(get_neo4j_client),
+) -> list[TopicVote]:
+    """Roll calls on the acts of a topic, for the dossier's "detto e votato"."""
+    act_numbers = [a for a in act if a.isdigit()]
+    return await timeline_service.search_topic_votes(
+        neo4j=neo4j,
+        topic=topic,
+        act_numbers=act_numbers,
+        legislature=legislature,
+        limit=limit,
+    )
+
+
+class EvidenceVotesRequest(BaseModel):
+    speech_ids: list[str] = Field(default_factory=list, max_length=300)
+    topic: Optional[str] = Field(None, max_length=120)
+    acts: list[str] = Field(default_factory=list, max_length=10)
+    legislature: int = 19
+
+
+@router.post("/dossier-votes")
+async def get_dossier_votes(
+    body: EvidenceVotesRequest,
+    neo4j: Neo4jClient = Depends(get_neo4j_client),
+) -> list[TopicVote]:
+    """Roll calls on the acts debated where a dossier's speeches were given."""
+    return await timeline_service.search_evidence_votes(
+        neo4j=neo4j,
+        speech_ids=body.speech_ids,
+        topic=body.topic if body.topic and len(body.topic) >= 3 else None,
+        act_numbers=[a for a in body.acts if a.isdigit()],
+        legislature=body.legislature,
+    )
 
 
 @router.get("/votes/{vote_id}")

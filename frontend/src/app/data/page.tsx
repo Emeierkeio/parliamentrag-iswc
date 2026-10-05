@@ -1,24 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
-import { Fraunces } from "next/font/google";
-import { ArrowLeft, ArrowUpRight, Download } from "lucide-react";
+import { ArrowUpRight, Download } from "lucide-react";
+import { CentroBar } from "@/components/shell/CentroBar";
+import { SiteFooter } from "@/components/shell/SiteFooter";
+import { Button } from "@/components/ui/button";
 import { useKgStats } from "@/hooks/use-kg-stats";
 import { useLastUpdate } from "@/hooks/use-last-update";
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  style: ["normal", "italic"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-display",
-  display: "swap",
-});
-
-/* ── Long-term archive of the dumps (published record) ───────────
-   Concept DOI: always resolves to the LATEST version of the dataset.
+/* Concept DOI: always resolves to the LATEST version of the dataset.
    The paper cites the version DOI (…21560332) for reproducibility. */
 const ZENODO_DOI = "10.5281/zenodo.21560331";
 const ZENODO_URL = `https://doi.org/${ZENODO_DOI}`;
@@ -27,7 +18,6 @@ const ZENODO_URL = `https://doi.org/${ZENODO_DOI}`;
 // the archive is a frozen snapshot and lags the live graph on purpose.
 const ZENODO_UPDATED = "2026-07-26";
 
-/* ── Graph numbers — live from /api/data/stats, static fallback ── */
 const STATS = [
   { field: "people", key: "stPeople" },
   { field: "speeches", key: "stSpeeches" },
@@ -53,7 +43,6 @@ function formatBytes(bytes: number, locale: string) {
     : `${nf.format(Math.round(bytes / 1e6))} MB`;
 }
 
-/* ── Real triples from the dump, for the sampled deputy ────────── */
 type TurtleLine = { text: string; hl?: "uri" | "pred" | "lit" | "dim" };
 
 function buildTurtleLines(s: GraphSample): TurtleLine[] {
@@ -79,18 +68,17 @@ function buildTurtleLines(s: GraphSample): TurtleLine[] {
   ];
 }
 
-/* ── Ontology alignment — vocab column is not translated ───────── */
+// The vocab column is not translated.
 const MAPPING_ROWS = [
   { n: "r1", vocab: "foaf:Person + ocd:deputato" },
   { n: "r2", vocab: "org:Organization (W3C)" },
   { n: "r3", vocab: "org:Membership" },
-  { n: "r4", vocab: "skos:Concept — EuroVoc" },
+  { n: "r4", vocab: "skos:Concept (EuroVoc)" },
   { n: "r5", vocab: "≈ Akoma Ntoso" },
   { n: "r6", vocab: "ocd:votazione / ocd:voto" },
   { n: "r7", vocab: "PROV-O" },
 ] as const;
 
-/* ── Random real deputy for the hero figure ────────────────────── */
 type GraphSample = {
   person: { id: string; first_name: string; last_name: string };
   group: string | null;
@@ -145,7 +133,6 @@ function titleCase(name: string) {
     .replace(/(^|[\s'-])\p{L}/gu, (c) => c.toUpperCase());
 }
 
-/* ── Manifest of dumps actually present on this server ─────────── */
 type RdfFile = { filename: string; bytes: number; modified?: string };
 
 function useRdfManifest() {
@@ -205,43 +192,19 @@ export default function DataPage() {
       : undefined;
 
   return (
-    <div
-      className={`${fraunces.variable} min-h-screen bg-primary text-primary-foreground`}
-    >
-      {/* ── Masthead — dark ────────────────────────────────────── */}
-      <header className="border-b border-primary-foreground/20">
-        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between py-5">
-          <Link href="/" className="flex items-center gap-3">
-            <Image src="/logo.svg" alt="" width={46} height={32} />
-            <span className="[font-family:var(--font-display)] text-xl sm:text-2xl font-semibold tracking-tight">
-              ParliamentRAG
-            </span>
-          </Link>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-primary-foreground/60 hover:text-primary-foreground transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {t("backHome")}
-          </Link>
-        </div>
-      </header>
+    <div className="min-h-[100dvh] bg-bg text-fg">
+      <CentroBar />
 
-      {/* ── Hero ───────────────────────────────────────────────── */}
-      <section className="px-6 pt-14 sm:pt-20 pb-14">
-        <div className="max-w-6xl mx-auto grid lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+      <section className="pt-14 pb-14 sm:pt-20">
+        <div className="container-page grid items-center gap-12 lg:grid-cols-12 lg:gap-8">
           <div className="lg:col-span-7">
-            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-chart-3">
-              {t("heroKicker")}
-            </p>
-            <h1 className="mt-5 [font-family:var(--font-display)] text-4xl sm:text-6xl font-medium tracking-tight leading-[1.06] text-balance">
+            <p className="label-mono">{t("heroKicker")}</p>
+            <h1 className="mt-5 serif-display text-4xl leading-[1.06] text-fg sm:text-6xl">
               {t("heroTitle")}
             </h1>
-            <p className="mt-6 text-lg leading-relaxed text-primary-foreground/70 max-w-2xl">
+            <p className="mt-6 max-w-prose text-lg leading-relaxed text-fg-secondary">
               {t.rich("heroSub", {
-                strong: (chunks) => (
-                  <span className="text-primary-foreground">{chunks}</span>
-                ),
+                strong: (chunks) => <span className="font-medium text-fg">{chunks}</span>,
               })}
             </p>
           </div>
@@ -252,68 +215,50 @@ export default function DataPage() {
             aria-hidden={!graphLoaded}
           >
             <GraphFigure sample={graphSample} />
-            <figcaption className="mt-2 text-center font-mono text-[10px] text-primary-foreground/40">
+            <figcaption className="mt-2 text-center font-mono text-caption text-fg-muted">
               {t("heroGraphNote", { id: graphSample.person.id })}
             </figcaption>
           </figure>
         </div>
       </section>
 
-      {/* ── 01 · The graph in numbers ──────────────────────────── */}
-      <section className="px-6 py-14 sm:py-16">
-        <div className="max-w-6xl mx-auto">
-          <TermRule index="01" title={t("sec1Title")} />
-          <div className="mt-10 grid grid-cols-2 md:grid-cols-4 border-t border-l border-primary-foreground/15">
+      <section className="py-14 sm:py-16">
+        <div className="container-page">
+          <SectionHeading title={t("sec1Title")} />
+          <dl className="mt-8 grid grid-cols-2 gap-x-6 md:grid-cols-4">
             {STATS.map((s) => (
-              <div
-                key={s.key}
-                className="border-b border-r border-primary-foreground/15 p-5 sm:p-6"
-              >
-                <p className="font-mono text-2xl sm:text-3xl font-medium tracking-tight tabular-nums">
+              <div key={s.key} className="border-t border-line py-5">
+                <dd className="tabular text-2xl font-semibold tracking-[var(--tracking-heading)] text-fg sm:text-3xl">
                   {formatStat(stats[s.field] ?? 0, locale, "compact" in s && s.compact)}
-                </p>
-                <p className="mt-2 text-[13px] text-primary-foreground/55 leading-snug">
-                  {t(s.key)}
-                </p>
+                </dd>
+                <dt className="mt-1.5 text-sm leading-snug text-fg-muted">{t(s.key)}</dt>
               </div>
             ))}
-          </div>
-          <p className="mt-6 font-mono text-xs text-primary-foreground/45 max-w-2xl leading-relaxed">
+          </dl>
+          <p className="mt-4 max-w-prose text-sm leading-relaxed text-fg-muted">
             {t("sec1Note")}
           </p>
         </div>
       </section>
 
-      {/* ── 02 · The semantic web, in three ideas ──────────────── */}
-      <section className="px-6 py-14 sm:py-16">
-        <div className="max-w-6xl mx-auto">
-          <TermRule index="02" title={t("sec2Title")} />
-          <div className="mt-10 grid md:grid-cols-3 border-t border-l border-primary-foreground/15">
-            {(["idea1", "idea2", "idea3"] as const).map((idea, i) => (
-              <div
-                key={idea}
-                className="border-b border-r border-primary-foreground/15 p-6 sm:p-7"
-              >
-                <p className="font-mono text-xs text-chart-3">
-                  [{String.fromCharCode(97 + i)}]
-                </p>
-                <h3 className="mt-3 [font-family:var(--font-display)] text-xl font-medium">
-                  {t(`${idea}Title`)}
-                </h3>
-                <p className="mt-2.5 text-sm leading-relaxed text-primary-foreground/65">
-                  {t(`${idea}Body`)}
-                </p>
+      <section className="py-14 sm:py-16">
+        <div className="container-page">
+          <SectionHeading title={t("sec2Title")} />
+          <div className="mt-8 grid gap-8 md:grid-cols-3 md:gap-6">
+            {(["idea1", "idea2", "idea3"] as const).map((idea) => (
+              <div key={idea}>
+                <h3 className="text-lg font-semibold text-fg">{t(`${idea}Title`)}</h3>
+                <p className="mt-2 leading-relaxed text-fg-secondary">{t(`${idea}Body`)}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── 03 · A deputy, in triples ──────────────────────────── */}
-      <section className="px-6 py-14 sm:py-16">
-        <div className="max-w-6xl mx-auto">
-          <TermRule index="03" title={t("sec3Title")} />
-          <p className="mt-6 text-primary-foreground/65 max-w-2xl">
+      <section className="py-14 sm:py-16">
+        <div className="container-page">
+          <SectionHeading title={t("sec3Title")} />
+          <p className="mt-6 max-w-prose leading-relaxed text-fg-secondary">
             {t("sec3Intro", {
               name: titleCase(
                 `${graphSample.person.first_name} ${graphSample.person.last_name}`
@@ -321,32 +266,31 @@ export default function DataPage() {
             })}
           </p>
 
-          <div className="mt-10 grid lg:grid-cols-12 gap-10 lg:gap-8 items-start">
+          <div className="mt-10 grid items-start gap-10 lg:grid-cols-12 lg:gap-8">
             <figure
-              className={`lg:col-span-7 min-w-0 transition-opacity duration-500 motion-reduce:transition-none ${
+              className={`min-w-0 transition-opacity duration-500 motion-reduce:transition-none lg:col-span-7 ${
                 graphLoaded ? "opacity-100" : "opacity-0"
               }`}
               aria-hidden={!graphLoaded}
             >
-              <div className="border border-primary-foreground/20 bg-black/25">
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-primary-foreground/15 font-mono text-[11px] text-primary-foreground/45">
-                  <span className="inline-block h-2 w-2 rounded-full bg-chart-4/70" />
+              <div className="overflow-hidden rounded-md bg-surface-muted">
+                <div className="border-b border-line px-4 py-2.5 font-mono text-caption text-fg-muted">
                   parliamentrag_kg.ttl
                 </div>
-                <pre className="overflow-x-auto px-5 py-4 text-[12.5px] leading-[1.75] font-mono">
+                <pre className="overflow-x-auto px-5 py-4 font-mono text-[12.5px] leading-[1.75]">
                   {buildTurtleLines(graphSample).map((line, i) => (
                     <code
                       key={i}
                       className={`block whitespace-pre ${
                         line.hl === "uri"
-                          ? "text-chart-3"
+                          ? "text-brand-fg"
                           : line.hl === "lit"
-                            ? "text-chart-4"
+                            ? "text-notice-fg"
                             : line.hl === "pred"
-                              ? "text-primary-foreground/90"
+                              ? "text-fg"
                               : line.hl === "dim"
-                                ? "text-primary-foreground/35"
-                                : "text-primary-foreground/70"
+                                ? "text-fg-muted"
+                                : "text-fg-secondary"
                       }`}
                     >
                       {line.text || " "}
@@ -354,67 +298,45 @@ export default function DataPage() {
                   ))}
                 </pre>
               </div>
-              <figcaption className="mt-3 font-mono text-[11px] text-primary-foreground/45">
+              <figcaption className="mt-3 font-mono text-caption text-fg-muted">
                 {t("exCaption")}
               </figcaption>
             </figure>
 
-            <div className="lg:col-span-5 lg:pl-8 lg:border-l border-primary-foreground/15 space-y-6">
-              {(["ex1", "ex2", "ex3"] as const).map((ex, i) => (
-                <div key={ex} className="flex gap-4">
-                  <span className="font-mono text-sm text-chart-3 leading-6 select-none">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <p className="text-sm leading-relaxed">
-                    <span className="font-medium">{t(`${ex}Title`)}</span>
-                    <span className="text-primary-foreground/60">
-                      {" "}
-                      — {t(`${ex}Body`)}
-                    </span>
-                  </p>
-                </div>
+            <ul className="space-y-6 lg:col-span-5 lg:border-l lg:border-line lg:pl-8">
+              {(["ex1", "ex2", "ex3"] as const).map((ex) => (
+                <li key={ex} className="text-sm leading-relaxed">
+                  <p className="font-medium text-fg">{t(`${ex}Title`)}</p>
+                  <p className="mt-1 text-fg-secondary">{t(`${ex}Body`)}</p>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </div>
       </section>
 
-      {/* ── 04 · Speaking the language of official data ────────── */}
-      <section className="px-6 py-14 sm:py-16">
-        <div className="max-w-6xl mx-auto">
-          <TermRule index="04" title={t("sec4Title")} />
-          <p className="mt-6 text-primary-foreground/65 max-w-2xl">
-            {t("sec4Intro")}
-          </p>
+      <section className="py-14 sm:py-16">
+        <div className="container-page">
+          <SectionHeading title={t("sec4Title")} />
+          <p className="mt-6 max-w-prose leading-relaxed text-fg-secondary">{t("sec4Intro")}</p>
 
           <div className="mt-10 overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
-                <tr className="border-b border-primary-foreground/40 text-left">
-                  <th className="py-3 pr-6 font-mono font-normal text-[11px] uppercase tracking-[0.2em] text-primary-foreground/50">
-                    {t("mapCol1")}
-                  </th>
-                  <th className="py-3 pr-6 font-mono font-normal text-[11px] uppercase tracking-[0.2em] text-primary-foreground/50">
-                    {t("mapCol2")}
-                  </th>
-                  <th className="py-3 font-mono font-normal text-[11px] uppercase tracking-[0.2em] text-primary-foreground/50">
-                    {t("mapCol3")}
-                  </th>
+                <tr className="border-b border-line-strong text-left">
+                  <th scope="col" className="py-3 pr-6 font-medium text-fg-muted">{t("mapCol1")}</th>
+                  <th scope="col" className="py-3 pr-6 font-medium text-fg-muted">{t("mapCol2")}</th>
+                  <th scope="col" className="py-3 font-medium text-fg-muted">{t("mapCol3")}</th>
                 </tr>
               </thead>
               <tbody>
                 {MAPPING_ROWS.map((row) => (
-                  <tr
-                    key={row.n}
-                    className="border-b border-primary-foreground/15 align-top"
-                  >
-                    <td className="py-3.5 pr-6 font-medium">{t(`${row.n}c`)}</td>
-                    <td className="py-3.5 pr-6 font-mono text-[12.5px] text-chart-3 whitespace-nowrap">
+                  <tr key={row.n} className="border-b border-line align-top">
+                    <td className="py-3.5 pr-6 font-medium text-fg">{t(`${row.n}c`)}</td>
+                    <td className="whitespace-nowrap py-3.5 pr-6 font-mono text-[12.5px] text-brand-fg">
                       {row.vocab}
                     </td>
-                    <td className="py-3.5 text-primary-foreground/60 leading-relaxed">
-                      {t(`${row.n}m`)}
-                    </td>
+                    <td className="py-3.5 leading-relaxed text-fg-secondary">{t(`${row.n}m`)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -423,19 +345,13 @@ export default function DataPage() {
         </div>
       </section>
 
-      {/* ── 05 · Download & reuse ──────────────────────────────── */}
-      <section className="px-6 pt-14 pb-24">
-        <div className="max-w-6xl mx-auto">
-          <TermRule index="05" title={t("sec5Title")} />
-          <p className="mt-6 text-primary-foreground/65 max-w-2xl">
-            {t("sec5Intro")}
-          </p>
-          <p className="mt-4 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary-foreground/60">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-chart-4" />
-            {liveEditionLabel}
-          </p>
+      <section className="pt-14 pb-24">
+        <div className="container-page">
+          <SectionHeading title={t("sec5Title")} />
+          <p className="mt-6 max-w-prose leading-relaxed text-fg-secondary">{t("sec5Intro")}</p>
+          <p className="mt-3 font-mono text-caption text-fg-muted">{liveEditionLabel}</p>
 
-          <div className="mt-10 grid md:grid-cols-2 gap-6">
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
             <FileCard
               title={t("fileKgTitle")}
               format="Turtle"
@@ -466,35 +382,35 @@ export default function DataPage() {
             />
           </div>
 
-          <p className="mt-8 text-xs text-primary-foreground/45 max-w-3xl leading-relaxed">
+          <p className="mt-8 max-w-prose text-sm leading-relaxed text-fg-muted">
             {t("licenseNote")}{" "}
             <a
               href="https://github.com/Emeierkeio/ParliamentRAG"
               target="_blank"
               rel="noopener noreferrer"
-              className="group inline-flex items-baseline gap-0.5 text-primary-foreground/70 border-b border-primary-foreground/30 hover:border-primary-foreground hover:text-primary-foreground transition-colors"
+              className="link inline-flex min-h-11 items-center gap-0.5"
             >
               GitHub
-              <ArrowUpRight className="h-3 w-3 self-center" />
+              <ArrowUpRight className="h-3 w-3 self-center" aria-hidden />
             </a>{" "}
             · {t("archiveLabel")}{" "}
             <a
               href={ZENODO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="group inline-flex items-baseline gap-0.5 text-primary-foreground/70 border-b border-primary-foreground/30 hover:border-primary-foreground hover:text-primary-foreground transition-colors"
+              className="link inline-flex min-h-11 items-center gap-0.5"
             >
               Zenodo · DOI {ZENODO_DOI}
-              <ArrowUpRight className="h-3 w-3 self-center" />
+              <ArrowUpRight className="h-3 w-3 self-center" aria-hidden />
             </a>
           </p>
         </div>
       </section>
+      <SiteFooter />
     </div>
   );
 }
 
-/* ── Hero graph — a random real deputy and their neighbours ────── */
 const GRAPH_EDGES = [
   { from: "speech", to: "person", label: "pr:spokenBy", t: 0.5 },
   { from: "person", to: "group", label: "org:member", t: 0.5 },
@@ -543,7 +459,7 @@ function GraphFigure({ sample }: { sample: GraphSample }) {
               y1={a.y}
               x2={b.x}
               y2={b.y}
-              className="stroke-primary-foreground/25"
+              className="stroke-line-control"
               strokeWidth="1"
               strokeDasharray="3 4"
             />
@@ -552,13 +468,13 @@ function GraphFigure({ sample }: { sample: GraphSample }) {
               y={my - 7}
               width={e.label.length * 5.4 + 8}
               height={14}
-              className="fill-primary"
+              className="fill-bg"
             />
             <text
               x={mx}
               y={my + 3}
               textAnchor="middle"
-              className="fill-chart-3/90 font-mono"
+              className="fill-fg-muted font-mono"
               fontSize="9"
             >
               {e.label}
@@ -573,7 +489,7 @@ function GraphFigure({ sample }: { sample: GraphSample }) {
               cx={n.x}
               cy={n.y}
               r={n.r + 7}
-              className="fill-none stroke-chart-3/40 animate-pulse motion-reduce:animate-none"
+              className="fill-none stroke-brand/40"
               strokeWidth="1"
             />
           )}
@@ -583,8 +499,8 @@ function GraphFigure({ sample }: { sample: GraphSample }) {
             r={n.r}
             className={
               "accent" in n && n.accent
-                ? "fill-chart-3/15 stroke-chart-3"
-                : "fill-primary stroke-primary-foreground/55"
+                ? "fill-brand-soft stroke-brand"
+                : "fill-surface stroke-line-control"
             }
             strokeWidth="1.25"
           />
@@ -592,7 +508,7 @@ function GraphFigure({ sample }: { sample: GraphSample }) {
             x={n.x}
             y={n.y - n.r - 8}
             textAnchor="middle"
-            className="fill-primary-foreground font-mono"
+            className="fill-fg font-mono"
             fontSize="11"
             fontWeight="500"
           >
@@ -602,7 +518,7 @@ function GraphFigure({ sample }: { sample: GraphSample }) {
             x={n.x}
             y={n.y + n.r + 14}
             textAnchor="middle"
-            className="fill-primary-foreground/40 font-mono"
+            className="fill-fg-muted font-mono"
             fontSize="8.5"
           >
             {n.sub}
@@ -613,19 +529,14 @@ function GraphFigure({ sample }: { sample: GraphSample }) {
   );
 }
 
-/* ── Terminal section rule — mono index instead of roman numeral ── */
-function TermRule({ index, title }: { index: string; title: string }) {
+function SectionHeading({ title }: { title: string }) {
   return (
-    <div className="flex items-baseline gap-4 border-b border-primary-foreground/30 pb-3">
-      <span className="font-mono text-sm text-chart-3">{index} /</span>
-      <h2 className="[font-family:var(--font-display)] text-2xl sm:text-3xl font-medium tracking-tight">
-        {title}
-      </h2>
-    </div>
+    <h2 className="border-b border-line pb-3 text-2xl font-semibold tracking-[var(--tracking-heading)] text-fg sm:text-3xl">
+      {title}
+    </h2>
   );
 }
 
-/* ── File card — real download when the dump exists on the server ── */
 function FileCard({
   title,
   format,
@@ -655,56 +566,44 @@ function FileCard({
 }) {
   const size = file ? formatBytes(file.bytes, locale) : fallbackSize;
   return (
-    <div className="border border-primary-foreground/20 px-6 py-5 flex flex-col">
-      <div className="flex items-start justify-between gap-4">
-        <h3 className="[font-family:var(--font-display)] text-xl font-medium tracking-tight">
-          {title}
-        </h3>
-        <span className="text-right font-mono text-[11px] uppercase tracking-wide text-primary-foreground/45 shrink-0 mt-2 leading-relaxed">
+    <div className="flex flex-col rounded-lg border border-line bg-surface p-5 sm:p-6">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <h3 className="text-lg font-semibold text-fg">{title}</h3>
+        <span className="mt-1 font-mono sm:shrink-0 sm:text-right text-caption leading-relaxed text-fg-muted">
           {format} · {size}
           {archivedNote ? (
             <>
               <br />
-              <span className="normal-case tracking-normal text-primary-foreground/40">
-                {archivedNote}
-              </span>
+              {archivedNote}
             </>
           ) : null}
         </span>
       </div>
-      <p className="mt-3 text-sm leading-relaxed text-primary-foreground/60 flex-1">
-        {body}
-      </p>
+      <p className="mt-3 flex-1 text-sm leading-relaxed text-fg-secondary">{body}</p>
       {!resolved ? (
-        <div className="mt-5 h-10" aria-hidden />
+        <div className="mt-5 h-11" aria-hidden />
       ) : file ? (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <a
-            href={`/api/data/rdf/${file.filename}`}
-            download={file.filename}
-            className="group inline-flex items-center gap-2.5 bg-primary-foreground text-primary px-5 py-2.5 text-[13px] font-medium tracking-wide hover:bg-chart-3 transition-colors cursor-pointer"
-          >
-            <Download className="h-3.5 w-3.5" />
-            {downloadLabel}
-          </a>
-          <span className="inline-flex items-center gap-2 font-mono text-[11px] text-primary-foreground/45">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-chart-4" />
+          <Button asChild className="h-11">
+            <a href={`/api/data/rdf/${file.filename}`} download={file.filename}>
+              <Download aria-hidden />
+              {downloadLabel}
+            </a>
+          </Button>
+          <span className="font-mono text-caption text-fg-muted">
             {readyNote}
             {updatedNote ? ` · ${updatedNote}` : null}
           </span>
         </div>
       ) : (
         <div className="mt-5">
-          <a
-            href={ZENODO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center gap-2.5 bg-primary-foreground text-primary px-5 py-2.5 text-[13px] font-medium tracking-wide hover:bg-chart-3 transition-colors cursor-pointer"
-          >
-            <Download className="h-3.5 w-3.5" />
-            {zenodoLabel}
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </a>
+          <Button asChild className="h-11">
+            <a href={ZENODO_URL} target="_blank" rel="noopener noreferrer">
+              <Download aria-hidden />
+              {zenodoLabel}
+              <ArrowUpRight aria-hidden />
+            </a>
+          </Button>
         </div>
       )}
     </div>

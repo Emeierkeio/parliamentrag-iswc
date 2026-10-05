@@ -46,7 +46,7 @@ export function LanguageSelector({ isCollapsed = false }: { isCollapsed?: boolea
       variant="ghost"
       title={t('switchTo')}
       className={cn(
-        "transition-all duration-200 text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+        "rounded-md transition-colors text-fg-secondary hover:bg-surface hover:text-fg",
         isCollapsed
           ? "w-9 h-9 justify-center px-0 mx-auto"
           : "w-full justify-start gap-2.5 h-8 mb-0.5 text-[13px]"
@@ -57,7 +57,7 @@ export function LanguageSelector({ isCollapsed = false }: { isCollapsed?: boolea
         <span className="flex-1 truncate text-left">{current.label}</span>
       )}
       {!isCollapsed && (
-        <span className="text-[10px] uppercase tracking-wide text-sidebar-foreground/40">{current.code}</span>
+        <span className="label-mono">{current.code}</span>
       )}
     </Button>
   );
@@ -82,11 +82,11 @@ export function LanguageSelector({ isCollapsed = false }: { isCollapsed?: boolea
             className={cn(
               "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors cursor-pointer",
               l.code === locale
-                ? "bg-accent text-foreground font-medium"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                ? "bg-surface-muted text-fg font-medium"
+                : "text-fg-secondary hover:bg-surface-muted hover:text-fg"
             )}
           >
-            <span className="w-6 text-[10px] uppercase tracking-wide text-muted-foreground/60">{l.code}</span>
+            <span className="w-6 label-mono">{l.code}</span>
             <span className="flex-1 text-left">{l.label}</span>
             {l.code === locale && <Check className="h-3.5 w-3.5" />}
           </button>
