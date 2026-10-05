@@ -104,7 +104,7 @@ export function GroupSelector({ selectedGroups, onSelect }: GroupSelectorProps) 
                 {selectedGroups.length} grupp{selectedGroups.length === 1 ? "o" : "i"} selezionat{selectedGroups.length === 1 ? "o" : "i"}
               </span>
             ) : (
-              <span className="text-muted-foreground">Seleziona gruppi...</span>
+              <span className="text-fg-muted">Seleziona gruppi...</span>
             )}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
@@ -123,15 +123,15 @@ export function GroupSelector({ selectedGroups, onSelect }: GroupSelectorProps) 
                   className="gap-2"
                 >
                   <div className={cn(
-                    "flex h-4 w-4 items-center justify-center rounded border border-primary",
-                    isMaggioranzaFull ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible"
+                    "flex h-4 w-4 items-center justify-center rounded-xs border border-line-control",
+                    isMaggioranzaFull ? "border-brand bg-brand text-on-brand" : "opacity-50 [&_svg]:invisible"
                   )}>
                     {isMaggioranzaFull && <Check className="h-3 w-3" />}
-                    {isMaggioranzaPartial && <div className="h-2 w-2 bg-primary rounded-sm" />}
+                    {isMaggioranzaPartial && <div className="h-2 w-2 bg-brand rounded-[2px]" />}
                   </div>
-                  <Shield className="h-4 w-4 text-blue-600" />
+                  <Shield className="h-4 w-4 text-fg-muted" aria-hidden />
                   <span className="font-medium">Maggioranza</span>
-                  <span className="ml-auto text-xs text-muted-foreground">4 gruppi</span>
+                  <span className="ml-auto text-xs text-fg-muted">4 gruppi</span>
                 </CommandItem>
                 <CommandItem
                   value="opposizione-coalition"
@@ -139,15 +139,15 @@ export function GroupSelector({ selectedGroups, onSelect }: GroupSelectorProps) 
                   className="gap-2"
                 >
                   <div className={cn(
-                    "flex h-4 w-4 items-center justify-center rounded border border-primary",
-                    isOpposizioneFull ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible"
+                    "flex h-4 w-4 items-center justify-center rounded-xs border border-line-control",
+                    isOpposizioneFull ? "border-brand bg-brand text-on-brand" : "opacity-50 [&_svg]:invisible"
                   )}>
                     {isOpposizioneFull && <Check className="h-3 w-3" />}
-                    {isOpposizionePartial && <div className="h-2 w-2 bg-primary rounded-sm" />}
+                    {isOpposizionePartial && <div className="h-2 w-2 bg-brand rounded-[2px]" />}
                   </div>
-                  <Users className="h-4 w-4 text-orange-600" />
+                  <Users className="h-4 w-4 text-fg-muted" aria-hidden />
                   <span className="font-medium">Opposizione</span>
-                  <span className="ml-auto text-xs text-muted-foreground">5 gruppi</span>
+                  <span className="ml-auto text-xs text-fg-muted">5 gruppi</span>
                 </CommandItem>
               </CommandGroup>
 
@@ -165,8 +165,8 @@ export function GroupSelector({ selectedGroups, onSelect }: GroupSelectorProps) 
                       className="gap-2"
                     >
                       <div className={cn(
-                        "flex h-4 w-4 items-center justify-center rounded border border-primary",
-                        isSelected ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible"
+                        "flex h-4 w-4 items-center justify-center rounded-xs border border-line-control",
+                        isSelected ? "border-brand bg-brand text-on-brand" : "opacity-50 [&_svg]:invisible"
                       )}>
                         <Check className="h-3 w-3" />
                       </div>
@@ -187,17 +187,17 @@ export function GroupSelector({ selectedGroups, onSelect }: GroupSelectorProps) 
             <Badge
               key={value}
               variant="secondary"
-              className="pl-2 pr-1 py-0.5 gap-1 text-xs font-normal cursor-pointer hover:bg-secondary/60 transition-colors"
+              className="rounded-full pl-2.5 pr-1.5 py-0.5 gap-1 text-xs font-normal cursor-pointer hover:bg-surface-sunken transition-colors"
               onClick={() => removeGroup(value)}
             >
               {getLabel(value)}
-              <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+              <X className="h-3 w-3 text-fg-muted hover:text-fg" />
             </Badge>
           ))}
           {selectedGroups.length > 1 && (
             <button
               onClick={clearAll}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1"
+              className="min-h-6 rounded-full px-2 text-xs text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors"
             >
               Rimuovi tutti
             </button>

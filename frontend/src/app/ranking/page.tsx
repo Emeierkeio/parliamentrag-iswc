@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {useTranslations, useLocale } from "next-intl";
 import { graphQuery } from "@/lib/graph";
 import { GroupLogo } from "@/components/entities/GroupLogo";
-import { Sidebar, MobileMenuButton } from "@/components/layout";
-import { useSidebar } from "@/hooks";
+import { AppBar } from "@/components/shell/AppBar";
 import { useLocalHistory } from "@/hooks/use-local-history";
 import { ExpertModal } from "@/components/chat/ExpertCard";
 import { FeedbackPulse } from "@/components/feedback/FeedbackPulse";
@@ -26,6 +25,8 @@ import {
   History,
   Clock,
   Info,
+  Check,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +95,6 @@ function groupAllowedInCoalition(value: string, coalition: CoalitionFilter): boo
 export default function RankingPage() {
   const t = useTranslations("RankingsPage");
   const locale = useLocale();
-  const { isCollapsed, toggle, isMobile, isMobileOpen, closeMobile } = useSidebar();
   const rankingHistory = useLocalHistory<{ deputies: RankingDeputy[]; computationTime: number }>(
     "parliamentrag-ranking-history"
   );
@@ -328,87 +328,79 @@ export default function RankingPage() {
     );
   };
 
+  const historyAction = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="size-10 shrink-0 rounded-full text-fg-secondary hover:text-fg" title={t("historyTitle")} aria-label={t("historyTitle")}>
+          <History className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-2" align="end">
+        <p className="label-mono px-2 py-1 mb-1">{t("historyHeading")}</p>
+        {rankingHistory.entries.length === 0 ? (
+          <p className="text-xs text-center py-4 text-fg-muted">{t("historyEmpty")}</p>
+        ) : (
+          <div className="space-y-0.5">
+            {rankingHistory.entries.map((entry) => (
+              <div key={entry.id} className="flex items-center gap-1 group rounded-md hover:bg-surface-muted">
+                <button
+                  className="flex-1 flex items-center gap-2 px-2 py-1.5 text-left min-w-0"
+                  onClick={() => restoreRankingEntry(entry)}
+                >
+                  <Clock className="h-3 w-3 shrink-0 text-fg-muted" />
+                  <span className="text-xs font-medium text-fg truncate">{entry.topic}</span>
+                </button>
+                <button
+                  className="shrink-0 p-1.5 opacity-0 group-hover:opacity-100 text-fg-muted hover:text-danger-fg transition-opacity"
+                  onClick={() => rankingHistory.removeEntry(entry.id)}
+                  title={t("historyRemove")}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+
   // ── Render ──
   return (
-    <div className="flex h-dvh bg-background overflow-hidden pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">
-      <Sidebar
-        isCollapsed={isCollapsed}
-        onToggle={toggle}
-        isMobile={isMobile}
-        isMobileOpen={isMobileOpen}
-        onCloseMobile={closeMobile}
-      />
+    <div className="flex h-dvh flex-col overflow-hidden bg-bg pb-[env(safe-area-inset-bottom)]">
+      <AppBar actions={historyAction} />
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* ── Header ── */}
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-3 px-4 sm:px-6 h-14">
-            <MobileMenuButton onClick={toggle} />
-            <h1 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight whitespace-nowrap">{t("headerTitle")}</h1>
-
-            <div className="flex items-center gap-2 ml-auto shrink-0">
-              {activeTopic && !loading && (
-                <>
-                  <Badge variant="secondary" className="max-w-[180px] truncate text-xs">
-                    {activeTopic}
-                  </Badge>
-                  <Button variant="ghost" size="icon-xs" onClick={handleReset} className="h-6 w-6">
-                    <RotateCcw className="h-3 w-3" />
-                  </Button>
-                </>
-              )}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title={t("historyTitle")}>
-                    <History className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-72 p-2" align="end">
-                  <p className="text-[11px] uppercase tracking-[0.2em] px-2 py-1 text-muted-foreground mb-1">{t("historyHeading")}</p>
-                  {rankingHistory.entries.length === 0 ? (
-                    <p className="text-xs text-center py-4 text-muted-foreground">{t("historyEmpty")}</p>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {rankingHistory.entries.map((entry) => (
-                        <div key={entry.id} className="flex items-center gap-1 group rounded-md hover:bg-muted/60">
-                          <button
-                            className="flex-1 flex items-center gap-2 px-2 py-1.5 text-left min-w-0"
-                            onClick={() => restoreRankingEntry(entry)}
-                          >
-                            <Clock className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-                            <span className="text-xs font-medium truncate">{entry.topic}</span>
-                          </button>
-                          <button
-                            className="shrink-0 p-1.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                            onClick={() => rankingHistory.removeEntry(entry.id)}
-                            title={t("historyRemove")}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </PopoverContent>
-              </Popover>
-            </div>
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {activeTopic && (
+          <div className="container-page shrink-0 flex items-center gap-3 pt-4 pb-3">
+            <h1 className="label-mono text-fg-muted">{t("headerTitle")}</h1>
+            {!loading && (
+              <div className="flex items-center gap-2 ml-auto shrink-0">
+                <Badge variant="secondary" className="max-w-[180px] truncate text-xs">
+                  {activeTopic}
+                </Badge>
+                <Button variant="ghost" size="icon-sm" onClick={handleReset} aria-label={t("newSearch")}>
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
-        </header>
+        )}
 
-        {/* ── Barra filtri persistente (solo quando ci sono risultati) ── */}
-        {filtersEnabled && <div className="sticky top-14 z-20 border-b border-border bg-background/95 backdrop-blur-sm px-4 sm:px-6 py-3 shrink-0">
-          <div className="flex flex-wrap items-center gap-2 max-w-6xl">
+        {/* Barra filtri persistente (solo quando ci sono risultati) */}
+        {filtersEnabled && <div className="shrink-0 border-y border-line bg-bg py-3">
+          <div className="container-page flex flex-wrap items-center gap-2">
             {/* Coalition toggle */}
-            <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
+            <div className="flex rounded-full border border-line-strong bg-surface p-0.5 text-xs font-medium">
               {(["all", "majority", "opposition"] as CoalitionFilter[]).map((c) => (
                 <button
                   key={c}
                   onClick={() => setCoalitionFilter(c)}
                   className={cn(
-                    "px-3 py-1.5 transition-colors capitalize",
+                    "min-h-7 rounded-full px-3 py-1 transition-colors capitalize",
                     coalitionFilter === c
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background hover:bg-muted text-muted-foreground"
+                      ? "bg-brand text-on-brand"
+                      : "text-fg-secondary hover:text-fg"
                   )}
                 >
                   {c === "all" ? t("coalitionAll") : c === "majority" ? t("coalitionMajority") : t("coalitionOpposition")}
@@ -418,16 +410,16 @@ export default function RankingPage() {
 
             {/* Name search */}
             <div className="relative flex-1 min-w-[160px] max-w-[220px]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-muted" />
               <Input
                 value={nameSearch}
                 onChange={(e) => setNameSearch(e.target.value)}
                 placeholder={t("nameSearchPlaceholder")}
-                className="pl-8 h-8 text-xs rounded-lg"
+                className="pl-8 h-8 text-xs"
               />
               {nameSearch && (
                 <button onClick={() => setNameSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
-                  <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                  <X className="h-3 w-3 text-fg-muted hover:text-fg" />
                 </button>
               )}
             </div>
@@ -435,11 +427,11 @@ export default function RankingPage() {
             {/* Group filter */}
             <Popover open={groupsOpen} onOpenChange={(open) => { setGroupsOpen(open); if (!open) setGroupSearch(""); }}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("h-9 text-xs gap-1.5", selectedGroups.length > 0 && "border-primary bg-primary/10 text-primary hover:bg-primary/15")}>
+                <Button variant="outline" size="sm" className={cn("h-9 text-xs gap-1.5", selectedGroups.length > 0 && "border-brand bg-brand-soft text-brand-fg hover:bg-brand-soft-strong")}>
                   <Users className="h-3.5 w-3.5" />
                   {t("groupFilter")}
                   {selectedGroups.length > 0 && (
-                    <Badge className="ml-1 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-primary text-primary-foreground">
+                    <Badge className="ml-1 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-brand text-on-brand">
                       {selectedGroups.length}
                     </Badge>
                   )}
@@ -450,7 +442,7 @@ export default function RankingPage() {
                 <div className="space-y-1">
                   {/* Search input */}
                   <div className="relative mb-2">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-muted" />
                     <Input
                       value={groupSearch}
                       onChange={(e) => setGroupSearch(e.target.value)}
@@ -460,33 +452,32 @@ export default function RankingPage() {
                     />
                     {groupSearch && (
                       <button onClick={() => setGroupSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
-                        <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                        <X className="h-3 w-3 text-fg-muted hover:text-fg" />
                       </button>
                     )}
                   </div>
                   {GROUPS.filter((g) => g.label.toLowerCase().includes(groupSearch.toLowerCase())).map((g) => {
                     const selected = selectedGroups.includes(g.value);
-                    const groupConfig = config.politicalGroups[g.value as keyof typeof config.politicalGroups];
-                    const color = groupConfig?.color || "#6B7280";
                     return (
                       <button
                         key={g.value}
+                        aria-pressed={selected}
                         onClick={() => toggleGroup(g.value)}
                         className={cn(
                           "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs transition-colors text-left",
-                          selected ? "bg-primary/10 text-foreground" : "hover:bg-muted text-muted-foreground"
+                          selected ? "bg-brand-soft text-fg" : "hover:bg-surface-muted text-fg-muted"
                         )}
                       >
                         <GroupLogo group={g.value} size={18} />
                         <span className="truncate flex-1">{g.label}</span>
-                        {selected && <span className="text-primary text-[10px] font-bold">✓</span>}
+                        {selected && <Check className="h-3.5 w-3.5 text-brand-fg" aria-hidden />}
                       </button>
                     );
                   })}
                   {selectedGroups.length > 0 && (
                     <button
                       onClick={() => setSelectedGroups([])}
-                      className="w-full text-center text-xs text-destructive hover:underline pt-1 border-t border-border mt-1"
+                      className="w-full text-center text-xs text-danger-fg hover:underline pt-1 border-t border-line mt-1"
                     >
                       {t("groupClearFilters")}
                     </button>
@@ -499,11 +490,11 @@ export default function RankingPage() {
             {availableCommittees.length > 0 && (
               <Popover onOpenChange={(open) => { if (!open) setCommitteePopoverSearch(""); }}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className={cn("h-9 text-xs gap-1.5", committeeSearch !== "" && "border-primary bg-primary/10 text-primary hover:bg-primary/15")}>
+                  <Button variant="outline" size="sm" className={cn("h-9 text-xs gap-1.5", committeeSearch !== "" && "border-brand bg-brand-soft text-brand-fg hover:bg-brand-soft-strong")}>
                     <Landmark className="h-3.5 w-3.5" />
                     {t("committeeFilter")}
                     {committeeSearch && (
-                      <Badge className="ml-1 h-4 px-1 text-[10px] bg-primary text-primary-foreground">1</Badge>
+                      <Badge className="ml-1 h-4 px-1 text-[10px] bg-brand text-on-brand">1</Badge>
                     )}
                     <ChevronDown className="h-3 w-3" />
                   </Button>
@@ -512,7 +503,7 @@ export default function RankingPage() {
                   <div className="space-y-1">
                     {/* Search input */}
                     <div className="relative mb-2">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-muted" />
                       <Input
                         value={committeePopoverSearch}
                         onChange={(e) => setCommitteePopoverSearch(e.target.value)}
@@ -522,7 +513,7 @@ export default function RankingPage() {
                       />
                       {committeePopoverSearch && (
                         <button onClick={() => setCommitteePopoverSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
-                          <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                          <X className="h-3 w-3 text-fg-muted hover:text-fg" />
                         </button>
                       )}
                     </div>
@@ -530,9 +521,10 @@ export default function RankingPage() {
                       {committeeSearch && !committeePopoverSearch && (
                         <button
                           onClick={() => setCommitteeSearch("")}
-                          className="w-full text-left px-2.5 py-1.5 rounded-md text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                          className="w-full text-left px-2.5 py-1.5 rounded-md text-xs text-danger-fg hover:bg-danger-soft transition-colors"
                         >
-                          ✕ {t("committeeRemoveFilter")}
+                          <X className="mr-1 inline h-3 w-3 align-[-2px]" aria-hidden />
+                          {t("committeeRemoveFilter")}
                         </button>
                       )}
                       {availableCommittees
@@ -544,8 +536,8 @@ export default function RankingPage() {
                             className={cn(
                               "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors",
                               committeeSearch === c
-                                ? "bg-primary/10 text-foreground font-medium"
-                                : "hover:bg-muted text-muted-foreground"
+                                ? "bg-brand-soft text-fg font-medium"
+                                : "hover:bg-surface-muted text-fg-muted"
                             )}
                           >
                             {c}
@@ -574,8 +566,8 @@ export default function RankingPage() {
                       className={cn(
                         "w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors",
                         sortBy === opt.value
-                          ? "bg-primary/10 text-foreground font-medium"
-                          : "hover:bg-muted text-muted-foreground"
+                          ? "bg-brand-soft text-fg font-medium"
+                          : "hover:bg-surface-muted text-fg-muted"
                       )}
                     >
                       {opt.label}
@@ -591,24 +583,24 @@ export default function RankingPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className={cn("h-8 text-xs gap-1.5", weightsCustom && "border-primary text-primary")}
+                  className={cn("h-8 text-xs gap-1.5", weightsCustom && "border-brand text-brand-fg")}
                 >
                   <SlidersHorizontal className="h-3.5 w-3.5" />
                   {t("weightsButton")}
                   {weightsCustom && (
-                    <Badge className="ml-1 h-4 px-1 text-[10px] bg-primary text-primary-foreground">✎</Badge>
+                    <Pencil className="ml-0.5 h-3 w-3" aria-hidden />
                   )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-3" align="end">
-                <p className="text-xs font-semibold text-foreground mb-1">{t("weightsPanelTitle")}</p>
-                <p className="text-[11px] leading-relaxed text-muted-foreground mb-3">
+                <p className="text-xs font-semibold text-fg mb-1">{t("weightsPanelTitle")}</p>
+                <p className="text-[11px] leading-relaxed text-fg-muted mb-3">
                   {t("weightsPanelDesc")}{" "}
                   <a
                     href="/method"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary underline underline-offset-2 hover:text-primary/80"
+                    className="link"
                   >
                     {t("methodMore")}
                   </a>
@@ -626,8 +618,8 @@ export default function RankingPage() {
                     return (
                       <div key={k}>
                         <div className="flex items-center justify-between text-[11px] mb-0.5">
-                          <span className="text-foreground/80">{t(labelKey)}</span>
-                          <span className="tabular-nums text-muted-foreground">
+                          <span className="text-fg-secondary">{t(labelKey)}</span>
+                          <span className="tabular text-fg-muted">
                             {Math.round(weights[k] * 100)}%
                           </span>
                         </div>
@@ -648,7 +640,7 @@ export default function RankingPage() {
                 {weightsCustom && (
                   <button
                     onClick={() => setWeights(DEFAULT_WEIGHTS)}
-                    className="mt-3 w-full text-center text-xs text-primary hover:underline pt-2 border-t border-border"
+                    className="mt-3 w-full text-center text-xs text-brand-fg hover:underline pt-2 border-t border-line"
                   >
                     {t("weightsReset")}
                   </button>
@@ -665,7 +657,7 @@ export default function RankingPage() {
                   setNameSearch("");
                   setCommitteeSearch("");
                 }}
-                className="text-xs text-destructive hover:underline whitespace-nowrap"
+                className="min-h-8 rounded-full px-2.5 text-xs text-fg-muted hover:bg-surface-muted hover:text-fg whitespace-nowrap"
               >
                 {t("clearAllFilters")}
               </button>
@@ -678,12 +670,12 @@ export default function RankingPage() {
               {selectedGroups.map((gv) => {
                 const g = GROUPS.find((gr) => gr.value === gv);
                 const groupConfig = config.politicalGroups[gv as keyof typeof config.politicalGroups];
-                const color = groupConfig?.color || "#6B7280";
+                const color = groupConfig?.color || "var(--fg-muted)";
                 return (
                   <Badge
                     key={gv}
                     variant="outline"
-                    className="text-xs gap-1 pl-2 pr-1 py-0.5 cursor-pointer hover:bg-destructive/10"
+                    className="text-xs gap-1 pl-2 pr-1 py-0.5 cursor-pointer hover:bg-danger-soft"
                     style={{ borderColor: color, color }}
                     onClick={() => toggleGroup(gv)}
                   >
@@ -696,9 +688,9 @@ export default function RankingPage() {
           )}
         </div>}
 
-        {/* ── Content area ── */}
+        {/* Content area */}
         <div className="flex-1 overflow-y-auto">
-          {/* ── Empty state ── */}
+          {/* Empty state */}
           {!hasResults && !loading && (
             <div className="flex flex-col items-center justify-center h-full px-4 pb-16">
               <div className="text-center space-y-5 max-w-lg">
@@ -706,20 +698,20 @@ export default function RankingPage() {
                     placeholder shows the format, the question says the job) */}
                 {/* Landing-hero register: the tool's distinctive phrase gets
                     the italic primary accent, the shared tail stays plain */}
-                <h2 className="[font-family:var(--font-display)] text-2xl sm:text-3xl font-medium tracking-tight text-foreground leading-tight">
+                <h1 className="serif-display text-2xl sm:text-3xl text-fg leading-tight">
                   {t.rich("emptyStateHeading", {
-                    em: (chunks) => <span className="italic text-primary">{chunks}</span>,
+                    em: (chunks) => <span className="italic text-brand-fg">{chunks}</span>,
                   })}
-                </h2>
+                </h1>
                 {/* Search bar */}
                 <div className="w-full max-w-md mx-auto">
                   <form onSubmit={(e) => { e.preventDefault(); fetchRanking(topic); }} className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-fg-muted" aria-hidden />
                     <Input
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
                       placeholder={t("topicPlaceholder")}
-                      className="h-14 text-lg pl-12 pr-24 rounded-md"
+                      className="h-14 text-lg pl-12 pr-28 rounded-xl"
                     />
                     <Button
                       type="submit"
@@ -733,9 +725,9 @@ export default function RankingPage() {
 
                 {/* Filtri strutturati prima della query, stessa grammatica di
                     /search: la classifica arriva già filtrata */}
-                <div className="w-full max-w-md mx-auto rounded-lg border border-border bg-card p-4 text-left space-y-4">
+                <div className="w-full max-w-md mx-auto rounded-lg border border-line bg-surface p-4 text-left space-y-4">
                   <div>
-                    <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{t("coalitionLabel")}</p>
+                    <p className="mb-2 text-sm font-medium text-fg">{t("coalitionLabel")}</p>
                     <div className="flex gap-1.5">
                       {(["all", "majority", "opposition"] as const).map((c) => (
                         <button
@@ -746,10 +738,10 @@ export default function RankingPage() {
                             setSelectedGroups(selectedGroups.filter((v) => groupAllowedInCoalition(v, c)));
                           }}
                           className={cn(
-                            "flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors cursor-pointer",
+                            "flex-1 min-h-8 rounded-full border px-2 py-1.5 text-xs transition-colors cursor-pointer",
                             coalitionFilter === c
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border text-muted-foreground hover:text-foreground"
+                              ? "border-brand bg-brand text-on-brand"
+                              : "border-line-strong text-fg-secondary hover:text-fg"
                           )}
                         >
                           {c === "all" ? t("coalitionAll") : c === "majority" ? t("coalitionMajority") : t("coalitionOpposition")}
@@ -758,7 +750,7 @@ export default function RankingPage() {
                     </div>
                   </div>
                   <div>
-                    <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{t("groupFilter")}</p>
+                    <p className="mb-2 text-sm font-medium text-fg">{t("groupFilter")}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {GROUPS.map((g) => {
                         const selected = selectedGroups.includes(g.value);
@@ -778,10 +770,10 @@ export default function RankingPage() {
                             className={cn(
                               "rounded-full border px-2.5 py-1 text-xs transition-colors",
                               !allowed
-                                ? "border-border/50 text-muted-foreground/30"
+                                ? "border-line text-fg-faint"
                                 : selected
-                                  ? "border-primary bg-primary/10 text-primary cursor-pointer"
-                                  : "border-border text-muted-foreground hover:text-foreground cursor-pointer"
+                                  ? "border-brand bg-brand-soft text-brand-fg cursor-pointer"
+                                  : "border-line-strong text-fg-secondary hover:text-fg cursor-pointer"
                             )}
                           >
                             {g.shortLabel}
@@ -791,13 +783,13 @@ export default function RankingPage() {
                     </div>
                   </div>
                   <div>
-                    <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{t("committeeFilter")}</p>
+                    <p className="mb-2 text-sm font-medium text-fg">{t("committeeFilter")}</p>
                     {committeeSearch ? (
                       <button
                         type="button"
                         onClick={() => setCommitteeSearch("")}
                         title={t("committeeRemoveFilter")}
-                        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-2.5 py-1 text-xs text-primary cursor-pointer"
+                        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-brand bg-brand-soft px-2.5 py-1 text-xs text-brand-fg cursor-pointer"
                       >
                         <span className="truncate">{toTitleCase(committeeSearch)}</span>
                         <X className="h-3 w-3 shrink-0" />
@@ -811,7 +803,7 @@ export default function RankingPage() {
                           className="h-9 text-sm"
                         />
                         {committeeQuery.trim() && (
-                          <div className="mt-1.5 max-h-44 overflow-y-auto rounded-md border border-border">
+                          <div className="mt-1.5 max-h-44 overflow-y-auto rounded-md border border-line">
                             {availableCommittees
                               .filter((c) => c.toLowerCase().includes(committeeQuery.trim().toLowerCase()))
                               .slice(0, 30)
@@ -820,7 +812,7 @@ export default function RankingPage() {
                                   key={c}
                                   type="button"
                                   onClick={() => { setCommitteeSearch(c); setCommitteeQuery(""); }}
-                                  className="block w-full border-b border-border/60 px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors last:border-b-0 hover:bg-muted hover:text-foreground cursor-pointer"
+                                  className="block w-full border-b border-line px-2.5 py-1.5 text-left text-xs text-fg-muted transition-colors last:border-b-0 hover:bg-surface-muted hover:text-fg cursor-pointer"
                                 >
                                   {toTitleCase(c)}
                                 </button>
@@ -834,25 +826,23 @@ export default function RankingPage() {
 
                 {/* Topic chips */}
                 <div className="pt-3">
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-3">
-                    {t("suggestedTopicsLabel")}
-                  </p>
-                  <div className="flex flex-wrap justify-center gap-x-6 gap-y-3">
+                  <p className="label-mono mb-3">{t("suggestedTopicsLabel")}</p>
+                  <div className="flex flex-wrap justify-center gap-2">
                     {getTopics(locale).slice(0, 8).map((t) => (
                       <button
                         key={t}
-                        className="group inline-flex items-center gap-1.5 border-b border-border pb-1 text-sm text-left text-foreground/80 transition-colors duration-200 hover:border-foreground hover:text-foreground cursor-pointer"
+                        className="group inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3.5 text-sm text-left text-fg-secondary transition-colors duration-200 hover:border-line-control hover:text-fg active:scale-[0.98] cursor-pointer"
                         onClick={() => handleTopicClick(t)}
                       >
                         <span>{t.charAt(0).toUpperCase() + t.slice(1)}</span>
-                        <ArrowRight className="w-3 h-3 text-muted-foreground/40 transition-colors duration-200 group-hover:text-foreground" />
+                        <ArrowRight className="w-3 h-3 text-fg-faint transition-colors duration-200 group-hover:text-fg" aria-hidden />
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {error && (
-                  <div className="mt-4 text-red-500 text-sm bg-red-50 rounded-lg px-4 py-3 border border-red-200">
+                  <div role="alert" className="mt-4 rounded-md bg-danger-soft px-4 py-3 text-sm text-danger-fg">
                     {error}
                   </div>
                 )}
@@ -860,45 +850,45 @@ export default function RankingPage() {
             </div>
           )}
 
-          {/* ── Loading ── */}
+          {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center justify-center h-full px-4 gap-6">
               <div className="text-center space-y-2">
-                <p className="text-sm font-medium text-foreground">{t("loadingTitle")}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-medium text-fg">{t("loadingTitle")}</p>
+                <p className="text-xs text-fg-muted">
                   {t("loadingSubtitle", { topic: activeTopic })}
                 </p>
               </div>
               {/* Skeleton rows */}
               <div className="w-full max-w-2xl mx-auto space-y-2">
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-border animate-pulse">
-                    <div className="h-5 w-6 bg-muted/60 rounded shrink-0" />
-                    <div className="h-9 w-9 bg-muted rounded-full shrink-0" />
+                  <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-line animate-skeleton">
+                    <div className="h-5 w-6 bg-surface-sunken rounded-xs shrink-0" />
+                    <div className="h-9 w-9 bg-surface-sunken rounded-full shrink-0" />
                     <div className="flex-1 space-y-1.5">
-                      <div className="h-4 w-36 bg-muted rounded" />
-                      <div className="h-3 w-24 bg-muted/50 rounded" />
+                      <div className="h-4 w-36 bg-surface-sunken rounded-xs" />
+                      <div className="h-3 w-24 bg-surface-sunken rounded-xs" />
                     </div>
-                    <div className="hidden sm:block h-3 w-20 bg-muted/40 rounded" />
-                    <div className="h-5 w-12 bg-muted/60 rounded" />
+                    <div className="hidden sm:block h-3 w-20 bg-surface-sunken rounded-xs" />
+                    <div className="h-5 w-12 bg-surface-sunken rounded-xs" />
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* ── Results table ── */}
+          {/* Results table */}
           {hasResults && !loading && (
-            <div className="px-4 sm:px-6 py-4 max-w-6xl mx-auto w-full">
+            <div className="container-page py-4">
               {/* Results info */}
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                <p className="tabular text-xs text-fg-muted flex items-center gap-2 flex-wrap">
                   {filteredDeputies.length === deputies.length
                     ? t("resultsAll", { count: deputies.length })
                     : t("resultsFiltered", { filtered: filteredDeputies.length, total: deputies.length })}
                   {computationTime > 0 && ` · ${(computationTime / 1000).toFixed(1)}s`}
                   {weightsCustom && (
-                    <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-primary/40 text-primary">
+                    <Badge className="text-[10px] h-4 px-1.5">
                       {t("weightsCustom")}
                     </Badge>
                   )}
@@ -912,11 +902,11 @@ export default function RankingPage() {
 
               {/* Methodology note (issue #18, from the ISWC demo reviews) */}
               <details className="mb-4">
-                <summary className="cursor-pointer list-none inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  <Info className="h-3.5 w-3.5" />
-                  <span className="border-b border-border pb-0.5">{t("methodTitle")}</span>
+                <summary className="cursor-pointer list-none inline-flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg transition-colors">
+                  <Info className="h-3.5 w-3.5" aria-hidden />
+                  <span className="underline decoration-line-control underline-offset-4">{t("methodTitle")}</span>
                 </summary>
-                <div className="mt-3 max-w-3xl space-y-2 text-[13px] leading-relaxed text-muted-foreground">
+                <div className="mt-3 max-w-prose space-y-2 rounded-md bg-surface-muted p-4 text-sm leading-relaxed text-fg-secondary">
                   <p>{t("methodP1")}</p>
                   <p>{t("methodP2")}</p>
                   <p>
@@ -924,7 +914,7 @@ export default function RankingPage() {
                       href="/method"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                      className="link"
                     >
                       {t("methodMore")}
                     </a>
@@ -933,7 +923,7 @@ export default function RankingPage() {
               </details>
 
               {/* Table header (desktop) */}
-              <div className="hidden sm:grid grid-cols-[3rem_1fr_8rem_6rem_5rem] gap-3 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground border-b border-border">
+              <div className="label-mono hidden sm:grid grid-cols-[3rem_1fr_8rem_6rem_5rem] gap-3 px-4 py-2 border-b border-line">
                 <span>{t("colRank")}</span>
                 <span>{t("colDeputy")}</span>
                 <span>{t("colGroup")}</span>
@@ -943,12 +933,12 @@ export default function RankingPage() {
 
               {/* Rows */}
               {filteredDeputies.length === 0 ? (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Users className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <div className="text-center py-16 text-fg-muted">
+                  <Users className="h-8 w-8 mx-auto mb-3 text-fg-faint" aria-hidden />
                   <p className="text-sm">{t("noResultsFiltered")}</p>
                 </div>
               ) : (
-                <div className="divide-y divide-border">
+                <div className="divide-y divide-line">
                   {filteredDeputies.map((deputy, index) => (
                     <RankingRow
                       key={deputy.id}
@@ -972,7 +962,6 @@ export default function RankingPage() {
   );
 }
 
-// ── Deputy Avatar ──────────────────────────────────────────────
 // Falls back to initials when the photo is missing OR fails to load
 // (camera.it drops part of the requests when the full list loads).
 
@@ -982,8 +971,8 @@ function DeputyAvatar({ deputy, groupColor }: { deputy: RankingDeputy; groupColo
   if (!deputy.photo || failed) {
     return (
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-        style={{ backgroundColor: groupColor }}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+        style={{ backgroundColor: `${groupColor}1f`, color: groupColor }}
       >
         {deputy.first_name[0]}{deputy.last_name[0]}
       </div>
@@ -1000,8 +989,6 @@ function DeputyAvatar({ deputy, groupColor }: { deputy: RankingDeputy; groupColo
     />
   );
 }
-
-// ── Ranking Row ────────────────────────────────────────────────
 
 interface RankingRowProps {
   deputy: RankingDeputy;
@@ -1026,29 +1013,19 @@ function RankingRow({ deputy, index, sortBy, sortLabel, scoreOverride }: Ranking
       ? scoreOverride ?? deputy.authority_score
       : deputy.score_breakdown?.[sortBy] ?? 0;
 
-  const scoreLevel =
-    displayScore >= config.authorityScore.high
-      ? "high"
-      : displayScore >= config.authorityScore.medium
-      ? "medium"
-      : "low";
-
-  const barColorClass =
-    scoreLevel === "high" ? "bg-green-500" : scoreLevel === "medium" ? "bg-amber-500" : "bg-gray-400";
-
   return (
     <>
       {/* Desktop row */}
       <div
-        className="hidden sm:grid grid-cols-[3rem_1fr_8rem_6rem_5rem] gap-3 items-center px-4 py-2.5 hover:bg-muted/40 transition-colors cursor-pointer group"
+        className="hidden sm:grid grid-cols-[3rem_1fr_8rem_6rem_5rem] gap-3 items-center px-4 py-2.5 hover:bg-surface-muted transition-colors cursor-pointer group"
         onClick={() => setIsModalOpen(true)}
       >
         {/* Rank */}
         <div className="flex justify-center">
           <span
             className={cn(
-              "[font-family:var(--font-display)] text-lg tabular-nums leading-none",
-              index < 3 ? "text-primary" : "text-muted-foreground/60"
+              "tabular text-base font-semibold leading-none",
+              index < 3 ? "text-fg" : "text-fg-muted"
             )}
           >
             {index + 1}
@@ -1058,7 +1035,7 @@ function RankingRow({ deputy, index, sortBy, sortLabel, scoreOverride }: Ranking
         {/* Deputy */}
         <div className="flex items-center gap-3 min-w-0">
           <DeputyAvatar deputy={deputy} groupColor={groupColor} />
-          <p className="[font-family:var(--font-display)] text-[15px] font-medium tracking-tight text-foreground truncate group-hover:text-primary transition-colors">
+          <p className="text-sm font-medium text-fg truncate group-hover:text-brand-fg transition-colors">
             {deputy.first_name} {deputy.last_name}
           </p>
         </div>
@@ -1073,19 +1050,19 @@ function RankingRow({ deputy, index, sortBy, sortLabel, scoreOverride }: Ranking
         </Badge>
 
         {/* Coalition */}
-        <span className="text-xs text-muted-foreground capitalize">
+        <span className="text-xs text-fg-muted capitalize">
           {deputy.coalition === "maggioranza" ? t("coalitionMajority") : t("coalitionOpposition")}
         </span>
 
         {/* Score */}
         <div className="flex items-center justify-end gap-2">
-          <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+          <div className="w-12 h-1.5 rounded-full bg-surface-sunken overflow-hidden" aria-hidden>
             <div
-              className={cn("h-full rounded-full transition-all", barColorClass)}
+              className="h-full rounded-full bg-brand"
               style={{ width: `${displayScore * 100}%` }}
             />
           </div>
-          <span className="[font-family:var(--font-display)] text-base font-medium text-foreground min-w-[28px] text-right tabular-nums">
+          <span className="tabular text-sm font-semibold text-fg min-w-[28px] text-right">
             {(displayScore * 100).toFixed(0)}
           </span>
         </div>
@@ -1093,14 +1070,14 @@ function RankingRow({ deputy, index, sortBy, sortLabel, scoreOverride }: Ranking
 
       {/* Mobile row */}
       <div
-        className="sm:hidden flex items-center gap-3 px-3 py-3 active:bg-muted/40 transition-colors cursor-pointer"
+        className="sm:hidden flex items-center gap-3 px-3 py-3 active:bg-surface-muted transition-colors cursor-pointer"
         onClick={() => setIsModalOpen(true)}
       >
         <div className="shrink-0 w-8 flex justify-center">
           <span
             className={cn(
-              "[font-family:var(--font-display)] text-base tabular-nums leading-none",
-              index < 3 ? "text-primary" : "text-muted-foreground/60"
+              "tabular text-sm font-semibold leading-none",
+              index < 3 ? "text-fg" : "text-fg-muted"
             )}
           >
             {index + 1}
@@ -1108,14 +1085,14 @@ function RankingRow({ deputy, index, sortBy, sortLabel, scoreOverride }: Ranking
         </div>
         <DeputyAvatar deputy={deputy} groupColor={groupColor} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">
+          <p className="text-sm font-medium text-fg truncate">
             {deputy.first_name} {deputy.last_name}
           </p>
-          <p className="text-[10px] text-muted-foreground truncate" style={{ color: groupColor }}>
+          <p className="text-[10px] text-fg-muted truncate" style={{ color: groupColor }}>
             {groupLabel.length > 22 ? groupLabel.substring(0, 22) + "…" : groupLabel}
           </p>
         </div>
-        <span className="[font-family:var(--font-display)] text-lg font-medium text-foreground tabular-nums">
+        <span className="tabular text-base font-semibold text-fg">
           {(displayScore * 100).toFixed(0)}
         </span>
       </div>

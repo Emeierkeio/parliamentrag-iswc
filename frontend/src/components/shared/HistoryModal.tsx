@@ -133,21 +133,21 @@ export function HistoryModal({ open, onClose, onLoadChat }: HistoryModalProps) {
     <div
       key={item.id}
       onClick={() => handleSelectChat(item.id)}
-      className="group flex items-start gap-3 p-3 rounded-lg border border-border/50 bg-card/50 hover:bg-primary/5 hover:border-primary/20 cursor-pointer transition-colors"
+      className="group flex items-start gap-3 p-3 rounded-md bg-surface-muted hover:bg-surface-sunken cursor-pointer transition-colors"
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 mt-0.5">
-        <MessageCircle className="h-4 w-4 text-primary" />
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-brand-soft mt-0.5">
+        <MessageCircle className="h-4 w-4 text-brand-fg" />
       </div>
       <div className="flex-1 min-w-0 space-y-1">
-        <span className="font-medium text-sm line-clamp-2 text-foreground">
+        <span className="font-medium text-sm line-clamp-2 text-fg">
           {item.query}
         </span>
         {item.preview && (
-          <p className="text-xs text-muted-foreground line-clamp-1">{item.preview}</p>
+          <p className="text-xs text-fg-muted line-clamp-1">{item.preview}</p>
         )}
         <div className="flex items-center gap-1.5 pt-0.5">
-          <Clock className="h-3 w-3 text-muted-foreground/60" />
-          <span className="text-[11px] text-muted-foreground/70">
+          <Clock className="h-3 w-3 text-fg-muted" />
+          <span className="text-[11px] text-fg-muted">
             {new Date(item.timestamp).toLocaleDateString("it-IT", {
               day: "2-digit",
               month: "short",
@@ -167,7 +167,7 @@ export function HistoryModal({ open, onClose, onLoadChat }: HistoryModalProps) {
             <Button
               variant="secondary"
               size="icon"
-              className="h-9 w-9 min-tap-none bg-muted hover:bg-muted/80"
+              className="h-9 w-9 min-tap-none bg-surface hover:bg-surface-sunken"
               onClick={handleCancelDelete}
             >
               <X className="h-3.5 w-3.5" />
@@ -185,7 +185,7 @@ export function HistoryModal({ open, onClose, onLoadChat }: HistoryModalProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 min-tap-none opacity-0 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            className="h-9 w-9 min-tap-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity text-fg-muted hover:text-danger-fg hover:bg-danger-soft"
             onClick={(e) => handleRequestDelete(e, item.id)}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -198,24 +198,24 @@ export function HistoryModal({ open, onClose, onLoadChat }: HistoryModalProps) {
   // Stato vuoto / loading / errore (condiviso)
   const emptyState = isLoading && history.length === 0 ? (
     <div className="flex flex-col items-center justify-center gap-3 py-10">
-      <Loader2 className="h-6 w-6 text-primary animate-spin" />
-      <span className="text-sm text-muted-foreground">{t("loading")}</span>
+      <Loader2 className="h-6 w-6 text-brand-fg animate-spin" />
+      <span className="text-sm text-fg-muted">{t("loading")}</span>
     </div>
   ) : error ? (
     <div className="flex flex-col items-center justify-center gap-3 px-6 py-10">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-        <AlertCircle className="h-6 w-6 text-destructive" />
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger-soft">
+        <AlertCircle className="h-6 w-6 text-danger-fg" />
       </div>
-      <p className="text-sm text-muted-foreground text-center">{error}</p>
+      <p className="text-sm text-fg-muted text-center">{error}</p>
     </div>
   ) : history.length === 0 ? (
     <div className="flex flex-col items-center justify-center gap-3 px-6 py-10">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Inbox className="h-6 w-6 text-muted-foreground" />
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted">
+        <Inbox className="h-6 w-6 text-fg-muted" />
       </div>
       <div className="text-center space-y-1">
-        <p className="text-sm font-medium text-foreground">{t("noConversations")}</p>
-        <p className="text-xs text-muted-foreground">{t("noConversationsDesc")}</p>
+        <p className="text-sm font-medium text-fg">{t("noConversations")}</p>
+        <p className="text-xs text-fg-muted">{t("noConversationsDesc")}</p>
       </div>
     </div>
   ) : null;
@@ -224,25 +224,25 @@ export function HistoryModal({ open, onClose, onLoadChat }: HistoryModalProps) {
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onClose}>
-        <SheetContent side="bottom" showCloseButton={false} className="rounded-t-2xl max-h-[85vh] flex flex-col p-0">
-          <SheetHeader className="px-6 py-4 border-b border-border/40 shrink-0 bg-card/50 backdrop-blur-sm">
+        <SheetContent side="bottom" showCloseButton={false} className="rounded-t-2xl bg-surface shadow-overlay max-h-[85vh] flex flex-col p-0">
+          <SheetHeader className="px-6 py-4 border-b border-line shrink-0">
             <div className="flex items-center justify-between">
-              <SheetTitle className="flex items-center gap-2 text-lg">
-                <History className="h-5 w-5 text-primary" />
+              <SheetTitle className="serif-display flex items-center gap-2 text-xl text-fg">
+                <History className="h-5 w-5 text-brand-fg" />
                 {t("title")}
               </SheetTitle>
               <SheetClose asChild>
-                <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <button className="inline-flex items-center justify-center h-8 w-8 rounded-full text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors">
                   <X className="h-4 w-4" />
                 </button>
               </SheetClose>
             </div>
-            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-4 mt-2 text-xs text-fg-muted">
               <span className="flex items-center gap-1">
                 <MessageCircle className="h-3 w-3" />
                 {history.length} {history.length === 1 ? t("oneConversation") : t("manyConversations")}
               </span>
-              <span className="text-muted-foreground/50">{t("previousConversations")}</span>
+              <span className="text-fg-faint">{t("previousConversations")}</span>
             </div>
           </SheetHeader>
           {/* Mobile: overflow-y-auto nativo, identico al filter sheet */}
@@ -257,18 +257,18 @@ export function HistoryModal({ open, onClose, onLoadChat }: HistoryModalProps) {
   // ── Desktop: modal centrato con ScrollArea ───────────────────────────────
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] sm:max-w-xl bg-background border-none shadow-2xl p-0 overflow-hidden rounded-xl sm:rounded-2xl h-[85vh] sm:h-[80vh] flex flex-col">
-        <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0 bg-card/50 backdrop-blur-sm">
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <History className="h-5 w-5 text-primary" />
+      <DialogContent className="max-w-[95vw] sm:max-w-xl bg-surface border border-line shadow-overlay p-0 gap-0 overflow-hidden rounded-xl h-[85vh] sm:h-[80vh] flex flex-col">
+        <DialogHeader className="px-6 py-4 border-b border-line shrink-0">
+          <DialogTitle className="serif-display flex items-center gap-2 text-xl text-fg">
+            <History className="h-5 w-5 text-brand-fg" />
             <span>{t("title")}</span>
           </DialogTitle>
-          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-4 mt-2 text-xs text-fg-muted">
             <span className="flex items-center gap-1">
               <MessageCircle className="h-3 w-3" />
               {history.length} {history.length === 1 ? t("oneConversation") : t("manyConversations")}
             </span>
-            <span className="text-muted-foreground/50">{t("previousConversations")}</span>
+            <span className="text-fg-faint">{t("previousConversations")}</span>
           </div>
         </DialogHeader>
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Sidebar, MobileMenuButton } from "@/components/layout/Sidebar";
-import { useSidebar } from "@/hooks/use-sidebar";
+import { AppBar } from "@/components/shell/AppBar";
 import { SurveyModal } from "@/components/survey/SurveyModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,7 +50,6 @@ const DIMENSION_LABELS: Record<string, string> = {
 };
 
 export default function ValutazionePage() {
-  const { isCollapsed, toggle, isMobile, isMobileOpen, closeMobile } = useSidebar();
   const [data, setData] = useState<EvaluationDashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +101,7 @@ export default function ValutazionePage() {
   // Evaluator-only mode: show just the survey modal, no dashboard
   if (evaluatorId) {
     return (
-      <div className="h-dvh bg-gray-100 dark:bg-zinc-900">
+      <div className="h-dvh bg-stage">
         <SurveyModal
           isOpen={true}
           onClose={() => window.location.reload()}
@@ -115,15 +113,13 @@ export default function ValutazionePage() {
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
-      <Sidebar isCollapsed={isCollapsed} onToggle={toggle} isMobile={isMobile} isMobileOpen={isMobileOpen} onCloseMobile={closeMobile} />
+    <div className="flex h-dvh flex-col overflow-hidden bg-background pb-[env(safe-area-inset-bottom)]">
+      <AppBar />
 
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header */}
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-3 px-4 sm:px-6 h-14">
-            <MobileMenuButton onClick={toggle} />
-            <h1 className="text-base font-semibold whitespace-nowrap">Valutazione</h1>
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="container-page shrink-0 pt-6 pb-2">
+          <div className="flex items-center gap-3">
+            <h1 className="serif-display text-2xl sm:text-3xl text-fg whitespace-nowrap">Valutazione</h1>
             <div className="flex gap-1.5 md:gap-2 ml-auto shrink-0">
               <Button
                 variant="outline"
@@ -147,19 +143,19 @@ export default function ValutazionePage() {
               </Button>
             </div>
           </div>
-        </header>
+        </div>
 
         {/* Content */}
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3">
-              <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+              <Loader2 className="w-10 h-10 animate-spin text-brand" />
               <p className="text-muted-foreground">Caricamento dati di valutazione...</p>
             </div>
           </div>
         ) : error ? (
           <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-red-500">
+            <div className="flex flex-col items-center gap-3 text-danger-fg">
               <AlertCircle className="w-10 h-10" />
               <p>{error}</p>
               <Button variant="outline" onClick={loadData}>
@@ -169,7 +165,7 @@ export default function ValutazionePage() {
           </div>
         ) : data && data.total_chats === 0 ? (
           <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-gray-500">
+            <div className="flex flex-col items-center gap-3 text-fg-muted">
               <BarChart3 className="w-12 h-12 opacity-30" />
               <p className="text-lg font-medium">Nessuna conversazione disponibile</p>
               <p className="text-sm">Inizia ad usare il sistema per generare dati di valutazione.</p>
@@ -181,7 +177,8 @@ export default function ValutazionePage() {
             onValueChange={setActiveTab}
             className="flex-1 flex flex-col min-h-0"
           >
-            <TabsList className="mx-4 md:mx-8 mt-4 grid w-auto grid-cols-4 h-10 shrink-0">
+            <div className="container-page shrink-0 mt-4">
+            <TabsList className="grid w-full grid-cols-4 h-10">
               <TabsTrigger value="overview" className="text-xs md:text-sm gap-1 md:gap-1.5">
                 <BarChart3 className="w-4 h-4" />
                 <span className="hidden sm:inline">Panoramica</span>
@@ -199,8 +196,10 @@ export default function ValutazionePage() {
                 <span className="hidden sm:inline">Dettaglio</span>
               </TabsTrigger>
             </TabsList>
+            </div>
 
-            <div className="flex-1 overflow-y-auto px-4 md:px-8 py-4 md:py-6">
+            <div className="flex-1 overflow-y-auto py-4 md:py-6">
+              <div className="container-page">
               <TabsContent value="overview" className="mt-0">
                 <OverviewTab data={data} />
               </TabsContent>
@@ -213,6 +212,7 @@ export default function ValutazionePage() {
               <TabsContent value="details" className="mt-0">
                 <DetailsTab data={data} />
               </TabsContent>
+              </div>
             </div>
           </Tabs>
         ) : null}
@@ -243,7 +243,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            <div className="text-3xl font-semibold tabular text-fg">
               {data.total_chats}
             </div>
             <div className="text-sm text-muted-foreground">Conversazioni totali</div>
@@ -251,7 +251,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-3xl font-bold text-blue-600">
+            <div className="text-3xl font-semibold tabular text-fg">
               {data.total_evaluated}
             </div>
             <div className="text-sm text-muted-foreground">Valutate (A/B blind)</div>
@@ -259,7 +259,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-3xl font-bold text-purple-600">
+            <div className="text-3xl font-semibold tabular text-fg">
               {data.total_simple_rated}
             </div>
             <div className="text-sm text-muted-foreground">Valutate (Likert)</div>
@@ -267,7 +267,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-3xl font-bold text-emerald-600">
+            <div className="text-3xl font-semibold tabular text-fg">
               {ab ? `${(ab.system_win_rate * 100).toFixed(0)}%` : "—"}
             </div>
             <div className="text-sm text-muted-foreground">Win rate sistema</div>
@@ -275,7 +275,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-3xl font-bold text-amber-600">
+            <div className="text-3xl font-semibold tabular text-fg">
               {human ? `${human.recommendation_rate.toFixed(0)}%` : "—"}
             </div>
             <div className="text-sm text-muted-foreground">Tasso raccomandazione</div>
@@ -285,7 +285,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
 
       {/* Automated metrics cards */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        <h2 className="text-lg font-semibold text-fg mb-4">
           Metriche Automatiche
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
@@ -341,8 +341,8 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-500" />
-              Preferenza Complessiva — Valutazione Blind A/B
+              <Trophy className="w-5 h-5 text-fg-muted" />
+              Preferenza Complessiva: Valutazione Blind A/B
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -361,7 +361,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              ParliamentRAG vs Baseline RAG — Punteggi Medi per Dimensione
+              ParliamentRAG vs Baseline RAG: Punteggi Medi per Dimensione
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -382,7 +382,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
           <Card>
             <CardContent className="p-6 text-center">
               <div className="text-sm text-muted-foreground mb-2">Soddisfazione Media Sistema</div>
-              <div className="text-4xl font-bold text-blue-600">
+              <div className="text-4xl font-semibold tabular text-brand-fg">
                 {ab.system_avg_overall.toFixed(2)}
               </div>
               <div className="text-sm text-muted-foreground">/5</div>
@@ -391,7 +391,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
           <Card>
             <CardContent className="p-6 text-center">
               <div className="text-sm text-muted-foreground mb-2">Soddisfazione Media Baseline</div>
-              <div className="text-4xl font-bold text-amber-600">
+              <div className="text-4xl font-semibold tabular text-notice-fg">
                 {ab.baseline_avg_overall.toFixed(2)}
               </div>
               <div className="text-sm text-muted-foreground">/5</div>
@@ -402,7 +402,7 @@ function OverviewTab({ data }: { data: EvaluationDashboardData }) {
 
       {!ab && (
         <Card>
-          <CardContent className="p-8 text-center text-gray-500">
+          <CardContent className="p-8 text-center text-fg-muted">
             <Users className="w-12 h-12 opacity-30 mx-auto mb-3" />
             <p className="text-lg font-medium">Nessuna valutazione A/B disponibile</p>
             <p className="text-sm mt-1">
@@ -487,7 +487,7 @@ function AutomatedTab({ data }: { data: EvaluationDashboardData }) {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <h2 className="text-lg font-semibold text-fg">
           Metriche Automatiche
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -498,7 +498,7 @@ function AutomatedTab({ data }: { data: EvaluationDashboardData }) {
       {/* Sistema-only bar chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm text-muted-foreground font-medium">ParliamentRAG — tutte le metriche</CardTitle>
+          <CardTitle className="text-sm text-muted-foreground font-medium">ParliamentRAG: tutte le metriche</CardTitle>
         </CardHeader>
         <CardContent className="p-6 pt-0">
           <HorizontalBarChart
@@ -518,8 +518,8 @@ function AutomatedTab({ data }: { data: EvaluationDashboardData }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Award className="w-4 h-4 text-amber-500" />
-              ParliamentRAG vs Baseline — Metriche Confrontabili
+              <Award className="w-4 h-4 text-fg-muted" />
+              ParliamentRAG vs Baseline: Metriche Confrontabili
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 pt-0">
@@ -548,7 +548,7 @@ function AutomatedTab({ data }: { data: EvaluationDashboardData }) {
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div className="flex-1">
-                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                  <p className="font-medium text-fg">
                     {m.label}
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -562,14 +562,14 @@ function AutomatedTab({ data }: { data: EvaluationDashboardData }) {
                       : `${(m.value * 100).toFixed(1)}%`}
                   </div>
                   {m.baselineValue != null && (
-                    <div className="text-xs text-amber-600 dark:text-amber-400 font-mono">
+                    <div className="text-xs text-notice-fg font-mono">
                       Baseline: {m.format === "decimal"
                         ? m.baselineValue.toFixed(3)
                         : `${(m.baselineValue * 100).toFixed(1)}%`}
                       <span className={cn(
                         "ml-1 font-semibold",
-                        m.value - m.baselineValue > 0.005 ? "text-emerald-600" :
-                        m.value - m.baselineValue < -0.005 ? "text-red-500" : "text-gray-400"
+                        m.value - m.baselineValue > 0.005 ? "text-brand-fg" :
+                        m.value - m.baselineValue < -0.005 ? "text-fg-secondary" : "text-fg-muted"
                       )}>
                         {m.value - m.baselineValue > 0.005 ? "▲" : m.value - m.baselineValue < -0.005 ? "▼" : "≈"}
                         {m.format === "percent"
@@ -588,20 +588,20 @@ function AutomatedTab({ data }: { data: EvaluationDashboardData }) {
               {m.format === "percent" && (
                 <div className="space-y-1 mt-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-blue-500 w-16 shrink-0">Sistema</span>
-                    <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <span className="text-xs text-brand-fg w-16 shrink-0">Sistema</span>
+                    <div className="flex-1 h-2 bg-surface-muted rounded-full overflow-hidden">
                       <div
-                        className={cn("h-full rounded-full", m.value >= 0.8 ? "bg-emerald-500" : m.value >= 0.6 ? "bg-amber-500" : "bg-red-500")}
+                        className={cn("h-full rounded-full", m.value >= 0.8 ? "bg-brand" : m.value >= 0.6 ? "bg-brand/65" : "bg-brand/35")}
                         style={{ width: `${Math.min(m.value * 100, 100)}%` }}
                       />
                     </div>
                   </div>
                   {m.baselineValue != null && (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-amber-500 w-16 shrink-0">Baseline</span>
-                      <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                      <span className="text-xs text-notice-fg w-16 shrink-0">Baseline</span>
+                      <div className="flex-1 h-2 bg-surface-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-amber-400"
+                          className="h-full rounded-full bg-chart-3"
                           style={{ width: `${Math.min(m.baselineValue * 100, 100)}%` }}
                         />
                       </div>
@@ -626,7 +626,7 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
   if (!ab || ab.total_evaluations === 0) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="flex flex-col items-center justify-center h-60 text-gray-500">
+        <div className="flex flex-col items-center justify-center h-60 text-fg-muted">
           <Users className="w-12 h-12 opacity-30 mb-3" />
           <p className="text-lg font-medium">
             Nessuna valutazione A/B disponibile
@@ -643,11 +643,11 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h2 className="text-lg font-semibold text-fg">
             Confronto A/B Cieco
           </h2>
           <p className="text-sm text-muted-foreground">
-            {ab.total_evaluations} valutazioni blind — risultati de-blindati
+            {ab.total_evaluations} valutazioni blind, risultati de-blindati
           </p>
         </div>
         {human && (
@@ -656,8 +656,8 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
             className={cn(
               "text-sm px-3 py-1",
               human.recommendation_rate >= 70
-                ? "border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400"
-                : "border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400"
+                ? "border-brand/40 text-brand-fg"
+                : "border-line-strong text-fg-secondary"
             )}
           >
             <ThumbsUp className="w-4 h-4 mr-1" />
@@ -670,7 +670,7 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-amber-500" />
+            <Trophy className="w-5 h-5 text-fg-muted" />
             Preferenza Complessiva
           </CardTitle>
         </CardHeader>
@@ -717,29 +717,29 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
             return (
               <div key={dim} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700 dark:text-gray-300 font-medium">
+                  <span className="text-fg-secondary font-medium">
                     {DIMENSION_LABELS[dim] || dim}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {prefs.system || 0}S / {prefs.equal || 0}= / {prefs.baseline || 0}B
                   </span>
                 </div>
-                <div className="flex items-center h-6 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800">
+                <div className="flex items-center h-6 rounded-full overflow-hidden bg-surface-muted">
                   {sysPct > 0 && (
                     <div
-                      className="h-full bg-blue-500"
+                      className="h-full bg-chart-1"
                       style={{ width: `${sysPct}%` }}
                     />
                   )}
                   {tiePct > 0 && (
                     <div
-                      className="h-full bg-gray-300 dark:bg-gray-600"
+                      className="h-full bg-line-strong"
                       style={{ width: `${tiePct}%` }}
                     />
                   )}
                   {basePct > 0 && (
                     <div
-                      className="h-full bg-amber-400"
+                      className="h-full bg-chart-3"
                       style={{ width: `${basePct}%` }}
                     />
                   )}
@@ -780,7 +780,7 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-indigo-500" />
+                <UserCheck className="w-5 h-5 text-fg-muted" />
                 Autorità Esperti per Gruppo Politico
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-0.5">
@@ -796,20 +796,20 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
                 return (
                   <div key={key} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-700 dark:text-gray-300 font-medium">{label}</span>
+                      <span className="text-fg-secondary font-medium">{label}</span>
                       <span className="text-xs text-muted-foreground">
                         {sys}S / {eq}= / {bas}B
                       </span>
                     </div>
-                    <div className="flex items-center h-6 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800">
+                    <div className="flex items-center h-6 rounded-full overflow-hidden bg-surface-muted">
                       {sysPct > 0 && (
-                        <div className="h-full bg-blue-500" style={{ width: `${sysPct}%` }} />
+                        <div className="h-full bg-chart-1" style={{ width: `${sysPct}%` }} />
                       )}
                       {eqPct > 0 && (
-                        <div className="h-full bg-gray-300 dark:bg-gray-600" style={{ width: `${eqPct}%` }} />
+                        <div className="h-full bg-line-strong" style={{ width: `${eqPct}%` }} />
                       )}
                       {basPct > 0 && (
-                        <div className="h-full bg-amber-400" style={{ width: `${basPct}%` }} />
+                        <div className="h-full bg-chart-3" style={{ width: `${basPct}%` }} />
                       )}
                     </div>
                   </div>
@@ -825,7 +825,7 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
         <Card>
           <CardContent className="p-6 text-center">
             <div className="text-sm text-muted-foreground mb-2">Soddisfazione Media Sistema</div>
-            <div className="text-4xl font-bold text-blue-600">
+            <div className="text-4xl font-semibold tabular text-brand-fg">
               {ab.system_avg_overall.toFixed(2)}
             </div>
             <div className="text-sm text-muted-foreground">/5</div>
@@ -834,7 +834,7 @@ function HumanTab({ data }: { data: EvaluationDashboardData }) {
         <Card>
           <CardContent className="p-6 text-center">
             <div className="text-sm text-muted-foreground mb-2">Soddisfazione Media Baseline</div>
-            <div className="text-4xl font-bold text-amber-600">
+            <div className="text-4xl font-semibold tabular text-notice-fg">
               {ab.baseline_avg_overall.toFixed(2)}
             </div>
             <div className="text-sm text-muted-foreground">/5</div>
@@ -855,7 +855,7 @@ function DetailsTab({ data }: { data: EvaluationDashboardData }) {
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <h2 className="text-lg font-semibold text-fg">
           Dettaglio per Conversazione
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -928,14 +928,14 @@ function AuthorityByGroupChart({
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between mb-2">
-        <h5 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+        <h5 className="label-mono">
           Autorevolezza per gruppo ({Object.keys(systemByGroup).length} gruppi)
         </h5>
         {hasBaseline && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-500" />Sistema</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-xs bg-chart-1" />Sistema</span>
             <span className="flex items-center gap-1">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-300 dark:bg-gray-600" />
+              <span className="inline-block w-2.5 h-2.5 rounded-xs bg-line-strong" />
               Baseline{isAggregateBaseline ? " (media)" : ""}
             </span>
           </div>
@@ -949,28 +949,28 @@ function AuthorityByGroupChart({
           const basPct = basVal !== undefined ? (basVal / maxVal) * 100 : undefined;
           return (
             <div key={party} className="flex items-center gap-2 text-xs">
-              <span className="w-20 shrink-0 text-gray-600 dark:text-gray-400 truncate" title={party}>
+              <span className="w-20 shrink-0 text-fg-secondary truncate" title={party}>
                 {shortParty(party)}
               </span>
               <div className="flex-1 space-y-0.5">
                 {/* System bar */}
                 <div className="flex items-center gap-1.5">
-                  <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div className="flex-1 h-2 bg-surface-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-blue-500 rounded-full transition-all"
+                      className="h-full bg-chart-1 rounded-full transition-all"
                       style={{ width: `${sysPct}%` }}
                     />
                   </div>
-                  <span className="font-mono w-9 text-right text-gray-700 dark:text-gray-300">
+                  <span className="font-mono w-9 text-right text-fg-secondary">
                     {Math.round(sysVal * 100)}%
                   </span>
                 </div>
                 {/* Baseline bar */}
                 {basPct !== undefined && basVal !== undefined && (
                   <div className="flex items-center gap-1.5">
-                    <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div className="flex-1 h-2 bg-surface-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gray-300 dark:bg-gray-600 rounded-full transition-all"
+                        className="h-full bg-line-strong rounded-full transition-all"
                         style={{ width: `${basPct}%` }}
                       />
                     </div>
@@ -1009,10 +1009,10 @@ function ChatEvaluationRow({
   const effectiveBaselineByGroup = m.baseline_authority_by_group ?? avgBaselineAuthorityByGroup;
 
   const miniMetrics = [
-    { label: "Copertura", value: m.party_coverage_score, color: "bg-blue-500" },
-    { label: "Fedeltà", value: m.verbatim_match_score, color: "bg-emerald-500" },
-    { label: "Autorevolezza", value: m.authority_utilization, color: "bg-amber-500" },
-    { label: "Completezza", value: m.response_completeness, color: "bg-indigo-500" },
+    { label: "Copertura", value: m.party_coverage_score, color: "bg-chart-1" },
+    { label: "Fedeltà", value: m.verbatim_match_score, color: "bg-chart-2" },
+    { label: "Autorevolezza", value: m.authority_utilization, color: "bg-chart-3" },
+    { label: "Completezza", value: m.response_completeness, color: "bg-chart-4" },
   ];
 
   const formatDate = (ts: string) => {
@@ -1031,12 +1031,12 @@ function ChatEvaluationRow({
   return (
     <Card className="overflow-hidden">
       <div
-        className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
+        className="p-4 cursor-pointer hover:bg-surface-muted transition-colors"
         onClick={onToggle}
       >
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-gray-900 dark:text-gray-100 line-clamp-1">
+            <p className="font-medium text-fg line-clamp-1">
               {item.chat_query}
             </p>
             <div className="flex items-center gap-3 mt-2">
@@ -1047,7 +1047,7 @@ function ChatEvaluationRow({
               {item.human && (
                 <Badge
                   variant="secondary"
-                  className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                  className="text-xs bg-brand-soft text-brand-fg"
                 >
                   Valutata A/B
                 </Badge>
@@ -1055,7 +1055,7 @@ function ChatEvaluationRow({
               {item.human_simple && (
                 <Badge
                   variant="secondary"
-                  className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                  className="text-xs bg-surface-sunken text-fg-secondary"
                 >
                   <BarChart2 className="w-3 h-3 mr-1" />
                   Likert
@@ -1064,19 +1064,19 @@ function ChatEvaluationRow({
             </div>
           </div>
           {isExpanded ? (
-            <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
+            <ChevronUp className="w-5 h-5 text-fg-muted shrink-0" />
           ) : (
-            <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
+            <ChevronDown className="w-5 h-5 text-fg-muted shrink-0" />
           )}
         </div>
       </div>
 
       {isExpanded && (
-        <div className="border-t px-3 md:px-4 py-4 bg-gray-50 dark:bg-gray-900/30">
+        <div className="border-t border-line px-3 md:px-4 py-4 bg-surface-muted">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             {/* Automated metrics */}
             <div>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              <h4 className="text-sm font-semibold text-fg mb-3">
                 Metriche Automatiche
               </h4>
               <div className="space-y-2">
@@ -1095,7 +1095,7 @@ function ChatEvaluationRow({
                   return rows.map((row) => (
                     <div key={row.label}>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">{row.label}</span>
+                        <span className="text-fg-secondary">{row.label}</span>
                         <div className="flex items-center gap-2">
                           {row.detail && (
                             <span className="text-xs text-muted-foreground">{row.detail}</span>
@@ -1113,7 +1113,7 @@ function ChatEvaluationRow({
                           {row.missing.map((p) => (
                             <span
                               key={p}
-                              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800"
+                              className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs bg-danger-soft text-danger-fg border border-danger/30"
                             >
                               {shortParty(p)}
                             </span>
@@ -1126,7 +1126,7 @@ function ChatEvaluationRow({
 
                 {/* Authority row with system vs baseline */}
                 <div className="flex items-start justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400 shrink-0">Autorevolezza</span>
+                  <span className="text-fg-secondary shrink-0">Autorevolezza</span>
                   <div className="flex flex-col items-end gap-0.5">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{m.experts_count} esp</span>
@@ -1145,7 +1145,7 @@ function ChatEvaluationRow({
                       return (
                         <span className={cn(
                           "text-xs font-medium",
-                          isUp ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"
+                          isUp ? "text-brand-fg" : "text-fg-secondary"
                         )}>
                           {isUp ? "+" : ""}{(delta * 100).toFixed(1)}pp vs baseline{isAggregateBaseline ? " (media)" : ""}
                         </span>
@@ -1157,9 +1157,9 @@ function ChatEvaluationRow({
 
               {/* Global authority spread stats */}
               {m.authority_spread_stats && (
-                <div className="mt-3 rounded-lg bg-muted/40 border border-border/50 px-3 py-2.5 text-xs space-y-1.5">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Distribuzione autorità — tutti i {m.authority_spread_stats.n} deputati
+                <div className="mt-3 rounded-md bg-surface px-3 py-2.5 text-xs space-y-1.5">
+                  <p className="label-mono mb-1.5">
+                    Distribuzione autorità: tutti i {m.authority_spread_stats.n} deputati
                   </p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                     <div className="flex justify-between">
@@ -1208,7 +1208,7 @@ function ChatEvaluationRow({
               {/* Party breakdown */}
               {Object.keys(m.party_breakdown).length > 0 && (
                 <div className="mt-4">
-                  <h5 className="text-xs font-semibold text-gray-500 dark:text-gray-500 mb-2 uppercase">
+                  <h5 className="label-mono mb-2">
                     Distribuzione per partito
                   </h5>
                   <div className="flex flex-wrap gap-1">
@@ -1226,12 +1226,12 @@ function ChatEvaluationRow({
 
             {/* Human evaluation metrics */}
             <div>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              <h4 className="text-sm font-semibold text-fg mb-3">
                 Valutazione Umana
               </h4>
               {item.human ? (
                 <div className="space-y-3">
-                  <div className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase mb-1">
+                  <div className="label-mono mb-1">
                     A/B Blind
                   </div>
                   {AB_DIMENSIONS.map((dim) => {
@@ -1240,7 +1240,7 @@ function ChatEvaluationRow({
                     return (
                       <div key={dim} className="text-sm">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-gray-600 dark:text-gray-400">
+                          <span className="text-fg-secondary">
                             {DIMENSION_LABELS[dim] || dim}
                           </span>
                           <span className="text-xs text-muted-foreground">
@@ -1248,7 +1248,7 @@ function ChatEvaluationRow({
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs">
-                          <span className="w-6 text-blue-600">A:</span>
+                          <span className="w-6 text-brand-fg">A:</span>
                           <div className="flex gap-0.5">
                             {Array.from({ length: 5 }, (_, i) => (
                               <div
@@ -1256,15 +1256,15 @@ function ChatEvaluationRow({
                                 className={cn(
                                   "w-2 h-2 rounded-full",
                                   i < rating.rating_a
-                                    ? "bg-blue-400"
-                                    : "bg-gray-200 dark:bg-gray-700"
+                                    ? "bg-chart-1"
+                                    : "bg-surface-sunken"
                                 )}
                               />
                             ))}
                           </div>
                           <span className="font-mono">{rating.rating_a}/5</span>
-                          <span className="mx-1 text-gray-300">|</span>
-                          <span className="w-6 text-amber-600">B:</span>
+                          <span className="mx-1 text-line-strong">|</span>
+                          <span className="w-6 text-notice-fg">B:</span>
                           <div className="flex gap-0.5">
                             {Array.from({ length: 5 }, (_, i) => (
                               <div
@@ -1272,8 +1272,8 @@ function ChatEvaluationRow({
                                 className={cn(
                                   "w-2 h-2 rounded-full",
                                   i < rating.rating_b
-                                    ? "bg-amber-400"
-                                    : "bg-gray-200 dark:bg-gray-700"
+                                    ? "bg-chart-3"
+                                    : "bg-surface-sunken"
                                 )}
                               />
                             ))}
@@ -1286,34 +1286,34 @@ function ChatEvaluationRow({
 
                   <div className="mt-2 pt-2 border-t text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Soddisfazione A</span>
+                      <span className="text-fg-secondary">Soddisfazione A</span>
                       <span className="font-mono">{item.human.overall_satisfaction_a}/5</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Soddisfazione B</span>
+                      <span className="text-fg-secondary">Soddisfazione B</span>
                       <span className="font-mono">{item.human.overall_satisfaction_b}/5</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Preferenza</span>
+                      <span className="text-fg-secondary">Preferenza</span>
                       <span className="font-semibold">{item.human.overall_preference}</span>
                     </div>
                   </div>
 
                   {item.human.would_recommend && (
-                    <div className="mt-2 flex items-center gap-1 text-emerald-600 text-sm">
+                    <div className="mt-2 flex items-center gap-1 text-brand-fg text-sm">
                       <ThumbsUp className="w-3 h-3" />
                       <span>Raccomanderebbe il sistema</span>
                     </div>
                   )}
 
                   {item.human.feedback_positive && (
-                    <div className="mt-3 p-2 bg-emerald-50 dark:bg-emerald-950/30 rounded text-sm text-emerald-800 dark:text-emerald-300">
+                    <div className="mt-3 p-2 bg-brand-soft rounded-sm text-sm text-fg">
                       <span className="font-medium">Positivo: </span>
                       {item.human.feedback_positive}
                     </div>
                   )}
                   {item.human.feedback_improvement && (
-                    <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded text-sm text-amber-800 dark:text-amber-300">
+                    <div className="mt-2 p-2 bg-notice-soft rounded-sm text-sm text-fg">
                       <span className="font-medium">Da migliorare: </span>
                       {item.human.feedback_improvement}
                     </div>
@@ -1321,7 +1321,7 @@ function ChatEvaluationRow({
                 </div>
               ) : item.human_simple ? (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 uppercase mb-1">
+                  <div className="flex items-center gap-1.5 label-mono mb-1">
                     <BarChart2 className="w-3 h-3" />
                     Likert 1-5
                   </div>
@@ -1329,7 +1329,7 @@ function ChatEvaluationRow({
                     const score = item.human_simple![dim] as number;
                     return (
                       <div key={dim} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">
+                        <span className="text-fg-secondary">
                           {SIMPLE_DIMENSION_LABELS[dim]}
                         </span>
                         <div className="flex items-center gap-2">
@@ -1340,8 +1340,8 @@ function ChatEvaluationRow({
                                 className={cn(
                                   "w-2 h-2 rounded-full",
                                   i < score
-                                    ? "bg-purple-400"
-                                    : "bg-gray-200 dark:bg-gray-700"
+                                    ? "bg-brand"
+                                    : "bg-surface-sunken"
                                 )}
                               />
                             ))}
@@ -1352,14 +1352,14 @@ function ChatEvaluationRow({
                     );
                   })}
                   {item.human_simple.feedback && (
-                    <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-950/30 rounded text-sm text-purple-800 dark:text-purple-300">
+                    <div className="mt-2 p-2 bg-surface-sunken rounded-sm text-sm text-fg">
                       <span className="font-medium">Feedback: </span>
                       {item.human_simple.feedback}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+                <div className="flex flex-col items-center justify-center h-32 text-fg-muted">
                   <CheckCircle2 className="w-8 h-8 opacity-30 mb-2" />
                   <p className="text-sm">Non ancora valutata</p>
                 </div>

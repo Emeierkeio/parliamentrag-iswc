@@ -5,12 +5,37 @@ import { useEffect, useState, useRef } from "react";
 import { useTheme } from "next-themes";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Maximize2, Minimize2, ZoomIn, ZoomOut, RefreshCcw } from "lucide-react";
+import { Maximize2, Minimize2, ZoomIn, ZoomOut, RefreshCcw, X } from "lucide-react";
 
 // Dynamically import ForceGraph2D with no SSR as it relies on window/canvas
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
 });
+
+/* Node kinds map to ecosystem roles, read from the CSS custom properties at
+   paint time because the canvas cannot use utility classes. */
+const NODE_COLOR_VAR: Record<string, string> = {
+  Deputy: "--brand",
+  Deputato: "--brand",
+  GovernmentMember: "--brand-700",
+  MembroGoverno: "--brand-700",
+  ParliamentaryGroup: "--accent-violet",
+  GruppoParlamentare: "--accent-violet",
+  Committee: "--notice",
+  Commissione: "--notice",
+  ParliamentaryAct: "--accent-coral",
+  AttoParlamentare: "--accent-coral",
+  Speech: "--brand-300",
+  Intervento: "--brand-300",
+  Session: "--fg-secondary",
+  Seduta: "--fg-secondary",
+  Debate: "--vote-against",
+  Dibattito: "--vote-against",
+  Phase: "--vote-abstain",
+  Fase: "--vote-abstain",
+  Chunk: "--fg-muted",
+};
+const PAINT_VARS = ["--stage", "--line-control", "--fg", "--fg-faint", ...new Set(Object.values(NODE_COLOR_VAR))];
 
 interface GraphVisualizerProps {
   data: any[];
@@ -22,7 +47,12 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
     links: [],
   });
   const fgRef = useRef<any>(null);
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const [paint, setPaint] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const cs = getComputedStyle(document.documentElement);
+    setPaint(Object.fromEntries(PAINT_VARS.map((v) => [v, cs.getPropertyValue(v).trim()])));
+  }, [resolvedTheme]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<any>(null);
 
@@ -58,8 +88,8 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
                         ...item
                      });
                  }
-                if (!nodes.has(item.start)) nodes.set(item.start, { id: item.start, label: "Unknown", caption: "?", color: "#888", properties: {} });
-                if (!nodes.has(item.end)) nodes.set(item.end, { id: item.end, label: "Unknown", caption: "?", color: "#888", properties: {} });
+                if (!nodes.has(item.start)) nodes.set(item.start, { id: item.start, label: "Unknown", caption: "?", color: "--fg-faint", properties: {} });
+                if (!nodes.has(item.end)) nodes.set(item.end, { id: item.end, label: "Unknown", caption: "?", color: "--fg-faint", properties: {} });
                  return;
             }
 
@@ -163,32 +193,7 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
 
   }, [data]);
 
-    const getNodeColor = (label: string) => {
-        const colors: Record<string, string> = {
-            // English labels
-            "Deputy": "#3b82f6", // Blue
-            "GovernmentMember": "#2563eb", // Darker blue
-            "ParliamentaryGroup": "#ef4444", // Red
-            "Committee": "#10b981", // Green
-            "ParliamentaryAct": "#f59e0b", // Amber
-            "Speech": "#8b5cf6", // Purple
-            "Session": "#06b6d4", // Cyan
-            "Debate": "#ec4899", // Pink
-            "Phase": "#f97316", // Orange
-            "Chunk": "#6366f1", // Indigo
-            // Italian fallbacks
-            "Deputato": "#3b82f6",
-            "MembroGoverno": "#2563eb",
-            "GruppoParlamentare": "#ef4444",
-            "Commissione": "#10b981",
-            "AttoParlamentare": "#f59e0b",
-            "Intervento": "#8b5cf6",
-            "Seduta": "#06b6d4",
-            "Dibattito": "#ec4899",
-            "Fase": "#f97316",
-        };
-        return colors[label] || "#94a3b8"; // Default slate
-    };
+    const getNodeColor = (label: string) => NODE_COLOR_VAR[label] ?? "--fg-faint";
 
     const handleZoomIn = () => {
         fgRef.current?.zoom(fgRef.current.zoom() * 1.2, 400);
@@ -215,10 +220,8 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
 
   return (
     <Card className={`relative flex flex-col overflow-hidden ${isFullscreen ? "fixed inset-0 z-50 rounded-none w-screen h-screen" : "w-full h-full"}`}>
-        {/* ... Toolbar ... */}
-        <div className="absolute top-2 right-2 z-10 flex gap-1 bg-background/50 p-1 rounded-md backdrop-blur-sm border border-border/20">
-            {/* ... buttons ... */}
-             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleFitView} title="Fit View">
+                <div className="absolute top-2 right-2 z-10 flex gap-1 rounded-full border border-line bg-surface/90 p-1 backdrop-blur-sm">
+             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleFitView} title="Fit View" aria-label="Fit View">
                 <RefreshCcw className="h-4 w-4" />
             </Button>
             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleZoomIn} title="Zoom In">
@@ -232,14 +235,14 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
             </Button>
         </div>
 
-      <div className="flex-1 w-full h-full bg-slate-950 relative">
+      <div className="flex-1 w-full h-full bg-stage relative">
           <ForceGraph2D
             ref={fgRef}
             width={isFullscreen ? window.innerWidth : undefined}
             graphData={graphData}
             nodeLabel="caption"
             nodeRelSize={6}
-            linkColor={() => "rgba(255,255,255,0.3)"}
+            linkColor={() => paint["--line-control"] || "gray"}
             linkDirectionalArrowLength={3.5}
             linkDirectionalArrowRelPos={1}
             linkLabel="type"
@@ -253,11 +256,11 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
                 // Draw node circle
                 ctx.beginPath();
                 ctx.arc(node.x, node.y, nodeR, 0, 2 * Math.PI);
-                ctx.fillStyle = node.color || '#3b82f6';
+                ctx.fillStyle = paint[node.color] || paint["--fg-faint"] || "gray";
                 ctx.fill();
 
                 // Draw border
-                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.strokeStyle = paint["--stage"] || "white";
                 ctx.lineWidth = 1 / globalScale;
                 ctx.stroke();
 
@@ -266,7 +269,7 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
                     ctx.font = `${fontSize}px Sans-Serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-                    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                    ctx.fillStyle = paint["--fg"] || "black";
                     ctx.fillText(label, node.x, node.y + nodeR + 2);
                 }
             }}
@@ -285,40 +288,40 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
           
           {/* Selected Node Details Panel */}
           {selectedNode && (
-            <div className={`absolute top-0 left-0 h-full w-[300px] bg-background/95 backdrop-blur-sm border-r border-border p-4 overflow-auto transition-transform duration-300 ${selectedNode ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className={`absolute top-0 left-0 h-full w-[300px] bg-bg/95 backdrop-blur-sm border-r border-line p-4 overflow-auto transition-transform duration-300 ${selectedNode ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="flex justify-between items-start mb-4">
-                     <h3 className="font-bold text-lg truncate flex-1" title={selectedNode.caption}>
+                     <h3 className="text-lg font-semibold text-fg truncate flex-1" title={selectedNode.caption}>
                         {selectedNode.caption || "Node Details"}
                      </h3>
-                     <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2" onClick={() => setSelectedNode(null)}>
-                        <Minimize2 className="h-4 w-4 rotate-45" /> {/* Close icon visual hack */}
+                     <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2" onClick={() => setSelectedNode(null)} aria-label="Close">
+                        <X className="h-4 w-4" />
                      </Button>
                 </div>
                 
                 <div className="space-y-4 text-sm">
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                             <span className="bg-primary/20 text-primary px-2 py-0.5 rounded text-xs font-semibold">
+                             <span className="bg-brand-soft text-brand-fg px-2 py-0.5 rounded-sm text-xs font-semibold">
                                 {selectedNode.label}
                             </span>
-                             <span className="text-xs text-muted-foreground">ID</span>
+                             <span className="text-xs text-fg-muted">ID</span>
                         </div>
-                        <div className="font-mono text-xs bg-muted/30 p-1.5 rounded break-all border border-border/30">
+                        <div className="font-mono text-xs bg-surface-muted p-1.5 rounded-sm break-all">
                             {selectedNode.id}
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <h4 className="font-semibold text-xs uppercase text-muted-foreground">Properties</h4>
-                        <div className="bg-muted/50 rounded-md p-2 space-y-3">
+                        <h4 className="label-mono">Properties</h4>
+                        <div className="bg-surface-muted rounded-md p-2 space-y-3">
                             {Object.entries(selectedNode.properties || {}).map(([key, val]) => {
                                 if (key === 'labels' || key === 'id' || key === 'elementId' || key === 'properties') return null;
                                 const displayVal = typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val ?? '');
                                 if (!displayVal) return null;
                                 return (
-                                    <div key={key} className="flex flex-col gap-1 text-xs border-b last:border-0 border-border/50 pb-2 last:pb-0">
-                                        <span className="font-medium text-muted-foreground">{key}</span>
-                                        <div className="font-mono bg-background p-1.5 rounded border border-border/50 break-all whitespace-pre-wrap max-h-[200px] overflow-auto">
+                                    <div key={key} className="flex flex-col gap-1 text-xs border-b last:border-0 border-line pb-2 last:pb-0">
+                                        <span className="font-medium text-fg-muted">{key}</span>
+                                        <div className="font-mono bg-surface p-1.5 rounded-sm text-fg-secondary break-all whitespace-pre-wrap max-h-[200px] overflow-auto">
                                             {displayVal}
                                         </div>
                                     </div>
@@ -333,12 +336,12 @@ export function GraphVisualizer({ data }: GraphVisualizerProps) {
       
       {!graphData.nodes.length && (
            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-               <span className="text-muted-foreground bg-background/80 px-3 py-1 rounded">No graph data to visualize from this query</span>
+               <span className="text-fg-muted bg-bg/80 px-3 py-1 rounded-sm">No graph data to visualize from this query</span>
            </div>
       )}
       
       {graphData.nodes.length > 0 && (
-          <div className="absolute bottom-2 left-2 z-10 text-xs text-slate-400 bg-background/80 px-2 py-1 rounded select-none">
+          <div className="tabular absolute bottom-2 left-2 z-10 font-mono text-caption text-fg-muted bg-bg/80 px-2 py-1 rounded-sm select-none">
               Nodes: {graphData.nodes.length} | Links: {graphData.links.length}
           </div>
       )}

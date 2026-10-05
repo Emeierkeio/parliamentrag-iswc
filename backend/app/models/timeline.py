@@ -64,6 +64,17 @@ class VoteInfo(BaseModel):
     abstained: Optional[int] = None
 
 
+class TopicVote(VoteInfo):
+    """A roll-call vote on an act matched by topic or by act number."""
+
+    date: Optional[str] = None
+    session_number: Optional[int] = None
+    act_title: Optional[str] = None
+    # "act": on an act debated with the dossier's speeches; "title": the act
+    # title matches the topic; "session": only held in the same sitting.
+    relation: str = "act"
+
+
 class VoteParticipant(BaseModel):
     """One deputy's individual vote inside a roll call."""
 
@@ -72,6 +83,9 @@ class VoteParticipant(BaseModel):
     last_name: str
     party: Optional[str] = None
     outcome: str  # "favor" | "against" | "abstain" | "absent"
+    # Seat in today's Camera seating (camera.it/deputati); None for deputies
+    # who left, the Senate, and closed legislatures.
+    seat: Optional[int] = None
 
 
 class VotePartyBreakdown(BaseModel):

@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, ArrowRight } from "lucide-react";
-import { Sidebar, MobileMenuButton } from "@/components/layout";
-import { useSidebar } from "@/hooks";
+import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
+import { AppBar } from "@/components/shell/AppBar";
 import { DeputyAvatar } from "@/components/entities/DeputyAvatar";
-import { GroupLogo } from "@/components/entities/GroupLogo";
+import { PartyLogo } from "@/components/entities/PartyLogo";
+import { SiteFooter } from "@/components/shell/SiteFooter";
+import { groupLabel, groupSlug } from "@/components/entities/groups";
 import { graphQuery, deputyUriFromSlug } from "@/lib/graph";
-import { config } from "@/config";
+import { getGroupAbbrev } from "@/config";
 import { formatDate, toTitleCase } from "@/lib/utils";
 
 interface DeputyProfile {
@@ -69,8 +71,8 @@ function profileCypher(uri: string): string {
 }
 
 export default function DeputyProfilePage() {
-  const { isCollapsed, toggle, isMobile, isMobileOpen, closeMobile } = useSidebar();
   const t = useTranslations("Entities");
+  const td = useTranslations("Dossier");
   const params = useParams();
   const slug = typeof params.id === "string" ? params.id : "";
   const validSlug = SLUG_RE.test(slug);
@@ -186,246 +188,245 @@ export default function DeputyProfilePage() {
     ? `/search?deputy=${slug}&fn=${encodeURIComponent(profile.first_name)}&ln=${encodeURIComponent(profile.last_name)}`
     : "/search";
 
+  const card = "rounded-lg border border-line bg-surface p-5";
+
   return (
-    <div className="flex h-dvh overflow-hidden bg-background pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">
-      <Sidebar
-        isCollapsed={isCollapsed}
-        onToggle={toggle}
-        isMobile={isMobile}
-        isMobileOpen={isMobileOpen}
-        onCloseMobile={closeMobile}
-      />
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-3 px-4 sm:px-6 h-14">
-            <MobileMenuButton onClick={toggle} />
-            <h1 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight whitespace-nowrap">{t("deputiesTitle")}</h1>
-          </div>
-        </header>
-        <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-          {/* Torna all'elenco */}
-          <a
+    <div className="flex min-h-dvh flex-col bg-bg">
+      <AppBar />
+      <main className="container-page flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+        <div className="pt-8 md:pt-10">
+          <Link
             href="/parlamentari"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex items-center gap-1.5 text-sm text-fg-muted transition-colors hover:text-fg"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
             {t("backToList")}
-          </a>
+          </Link>
+        </div>
 
-          {error ? (
-            <div className="mt-10 border-t border-border py-12 text-center">
-              <p className="text-sm text-muted-foreground">{t("errorLoad")}</p>
-              {validSlug && (
-                <button
-                  type="button"
-                  onClick={load}
-                  className="mt-4 inline-flex h-9 items-center rounded-md border border-border px-4 text-sm transition-colors hover:bg-muted"
-                >
-                  {t("retry")}
-                </button>
-              )}
+        {error ? (
+          <div className="mt-8 rounded-lg border border-line bg-surface py-12 text-center">
+            <p className="text-sm text-fg-muted">{t("errorLoad")}</p>
+            {validSlug && (
+              <button
+                type="button"
+                onClick={load}
+                className="mt-4 inline-flex h-9 items-center rounded-full border border-line-strong bg-surface px-4 text-sm text-fg transition-colors hover:bg-surface-muted"
+              >
+                {t("retry")}
+              </button>
+            )}
+          </div>
+        ) : loading || !profile ? (
+          <div aria-hidden>
+            <div className="mt-6 flex items-center gap-6">
+              <div className="h-24 w-24 shrink-0 rounded-full bg-surface-sunken animate-skeleton" />
+              <div className="flex flex-1 flex-col gap-3">
+                <div className="h-3 w-40 rounded-xs bg-surface-sunken animate-skeleton" />
+                <div className="h-10 w-full max-w-md rounded-md bg-surface-sunken animate-skeleton" />
+                <div className="h-4 w-64 rounded-xs bg-surface-sunken animate-skeleton" />
+              </div>
             </div>
-          ) : loading || !profile ? (
-            <div className="mt-10 space-y-3">
-              <div className="h-24 bg-muted motion-safe:animate-pulse rounded-md" />
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-12 bg-muted motion-safe:animate-pulse rounded-md" />
-              ))}
+            <div className="mt-10 grid grid-cols-[minmax(0,1fr)] gap-x-12 gap-y-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+              <div className="flex flex-col gap-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-24 rounded-lg bg-surface-sunken animate-skeleton" />
+                ))}
+              </div>
+              <div className="h-64 rounded-lg bg-surface-sunken animate-skeleton" />
             </div>
-          ) : (
-            <>
-              {/* Intestazione profilo */}
-              <header className="mt-8 flex items-start gap-5 sm:gap-6">
-                <DeputyAvatar
-                  photo={profile.photo}
-                  firstName={profile.first_name}
-                  lastName={profile.last_name}
-                  group={profile.group}
-                  size={96}
-                />
-                <div className="min-w-0 pt-1">
-                  <h1 className="[font-family:var(--font-display)] text-3xl sm:text-4xl font-semibold tracking-tight">
-                    {fullName}
-                  </h1>
-                  {profile.group && (
-                    <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                      <GroupLogo group={profile.group} size={18} />
-                      <span>
-                        {(config.politicalGroups as Record<string, { label?: string }>)[profile.group]?.label ?? toTitleCase(profile.group)}
-                        {profile.component && <> · {profile.component}</>}
-                      </span>
-                    </p>
-                  )}
-                  {profile.institutional_role && (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {profile.institutional_role}
-                    </p>
-                  )}
-                </div>
-              </header>
-
-              {/* Righe di dettaglio */}
-              <div className="mt-10">
-                {profile.profession && (
-                  <div className="flex flex-col gap-1 border-b border-border py-4 sm:flex-row sm:items-baseline sm:gap-6">
-                    <span className="w-32 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {t("profession")}
-                    </span>
-                    <span className="text-sm text-foreground">{profile.profession}</span>
-                  </div>
-                )}
-                {profile.education && (
-                  <div className="flex flex-col gap-1 border-b border-border py-4 sm:flex-row sm:items-baseline sm:gap-6">
-                    <span className="w-32 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {t("education")}
-                    </span>
-                    <span className="text-sm text-foreground">{profile.education}</span>
-                  </div>
-                )}
-                {profile.deputy_card && (
-                  <div className="border-b border-border py-4">
-                    <a
-                      href={profile.deputy_card}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm text-foreground underline-offset-4 transition-colors hover:underline"
+          </div>
+        ) : (
+          <>
+            <header className="mt-6 flex items-center gap-5 sm:gap-7">
+              <DeputyAvatar
+                photo={profile.photo}
+                firstName={profile.first_name}
+                lastName={profile.last_name}
+                size={104}
+              />
+              <div className="flex min-w-0 flex-col gap-2">
+                <p className="label-mono text-fg-muted">{td("scope")}</p>
+                <h1 className="serif-display text-[2.25rem] leading-[1.05] text-fg md:text-display-l">{fullName}</h1>
+                {profile.group && (
+                  <p className="flex flex-wrap items-center gap-x-2 text-[15px] text-fg-secondary">
+                    <PartyLogo group={profile.group} size={18} />
+                    <Link
+                      href={`/gruppi/${groupSlug(profile.group)}`}
+                      className="font-semibold text-fg underline-offset-4 hover:underline"
                     >
-                      <span className="inline-block h-2 w-2 bg-current" />
-                      {t("officialCard")}
-                    </a>
-                  </div>
+                      {getGroupAbbrev(profile.group)}
+                    </Link>
+                    <span className="min-w-0">
+                      {groupLabel(profile.group)}
+                      {profile.component && <> · {profile.component}</>}
+                    </span>
+                  </p>
+                )}
+                {profile.institutional_role && (
+                  <p className="text-sm text-fg-muted">{profile.institutional_role}</p>
                 )}
               </div>
+            </header>
 
-              {/* Attivita in Aula */}
-              <p className="mt-6 font-mono text-sm text-muted-foreground">
-                {t("speechesCount", { count: profile.speeches })}
-                <span className="mx-2 text-muted-foreground/50">·</span>
-                {t("actsCount", { count: profile.acts })}
-              </p>
+            <div className="mt-10 grid grid-cols-[minmax(0,1fr)] gap-x-12 gap-y-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr]">
+              <section aria-labelledby="facts-h" className={`${card} lg:col-start-2 lg:row-start-1`}>
+                <h2 id="facts-h" className="label-mono text-fg-muted">{t("factsTitle")}</h2>
+                <dl className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <dt className="text-[13px] text-fg-muted">{t("statSpeeches")}</dt>
+                    <dd className="tabular text-2xl font-semibold text-fg">{profile.speeches}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <dt className="text-[13px] text-fg-muted">{t("statActs")}</dt>
+                    <dd className="tabular text-2xl font-semibold text-fg">{profile.acts}</dd>
+                  </div>
+                </dl>
+                {(profile.profession || profile.education) && (
+                  <dl className="mt-4 flex flex-col divide-y divide-line border-t border-line">
+                    {profile.profession && (
+                      <div className="flex flex-col gap-0.5 py-3">
+                        <dt className="text-[13px] text-fg-muted">{t("profession")}</dt>
+                        <dd className="text-sm text-fg">{profile.profession}</dd>
+                      </div>
+                    )}
+                    {profile.education && (
+                      <div className="flex flex-col gap-0.5 py-3">
+                        <dt className="text-[13px] text-fg-muted">{t("education")}</dt>
+                        <dd className="text-sm text-fg">{profile.education}</dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+                {profile.deputy_card && (
+                  <a
+                    href={profile.deputy_card}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-full border border-line-strong px-3.5 text-[13px] text-fg-secondary transition-colors hover:bg-surface-muted hover:text-fg"
+                  >
+                    {t("officialCard")}
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </a>
+                )}
+              </section>
 
-              {/* Gruppi parlamentari: appartenenza attuale e storico */}
-              {groupHistory.length > 0 && (
-                <section className="mt-12">
-                  <h2 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {t("groupHistoryTitle")}
-                  </h2>
-                  <ul className="mt-2 border-t border-border">
-                    {groupHistory.map((g, i) => {
-                      const current = !g.end_date;
-                      return (
-                        <li
-                          key={`${g.name}-${i}`}
-                          className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border py-3"
-                        >
-                          <span className="flex items-center gap-2 text-sm">
-                            <GroupLogo group={g.name} size={16} />
-                            <span className={current ? "font-medium text-foreground" : "text-muted-foreground"}>
-                              {(config.politicalGroups as Record<string, { label?: string }>)[g.name]?.label ?? toTitleCase(g.name)}
-                              {g.component && <span className="font-normal text-muted-foreground"> · {g.component}</span>}
-                            </span>
-                          </span>
-                          <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                            {membershipPeriod(g)}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              )}
-
-              {/* Commissioni e giunte, con eventuale carica ricoperta */}
-              {committees.length > 0 && (
-                <section className="mt-12">
-                  <h2 className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {t("committeesTitle")}
-                  </h2>
-                  <ul className="mt-2 border-t border-border">
-                    {committees.map((c, i) => {
-                      const current = !c.end_date;
-                      return (
-                        <li
-                          key={`${c.name}-${i}`}
-                          className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border py-3"
-                        >
-                          <span className="min-w-0 text-sm">
-                            <span className={current ? "text-foreground" : "text-muted-foreground"}>
-                              {toTitleCase(c.name)}
-                            </span>
-                            {c.officer_role && (
-                              <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-                                {toTitleCase(c.officer_role)}
-                              </span>
-                            )}
-                          </span>
-                          <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                            {membershipPeriod(c)}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              )}
-
-              {/* Interventi recenti */}
-              <section className="mt-12">
-                <h2 className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <section aria-labelledby="speeches-h" className="flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+                <h2 id="speeches-h" className="serif-display text-[1.75rem] leading-tight text-fg">
                   {t("recentSpeeches")}
                 </h2>
                 {recent.length > 0 && (
-                  <div className="mt-2 border-t border-border">
+                  <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
                     {recent.map((s) => {
                       const expanded = expandedId === s.id;
                       return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          aria-expanded={expanded}
-                          onClick={() => setExpandedId(expanded ? null : s.id)}
-                          className="block w-full cursor-pointer border-b border-border py-3.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {formatDate(s.date)}
-                            {s.session_number != null && (
-                              <> · {t("sessionTitle", { number: s.session_number })}</>
+                        <li key={s.id}>
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            onClick={() => setExpandedId(expanded ? null : s.id)}
+                            className="block w-full cursor-pointer px-5 py-4 text-left transition-colors hover:bg-surface-muted"
+                          >
+                            <span className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                              <span className="tabular font-mono text-xs text-fg-muted">
+                                {formatDate(s.date)}
+                                {s.session_number != null && (
+                                  <> · {t("sessionTitle", { number: s.session_number })}</>
+                                )}
+                              </span>
+                            </span>
+                            {s.debate_title && (
+                              <span className="mt-1 line-clamp-1 text-[13px] font-medium text-fg-secondary">
+                                {s.debate_title}
+                              </span>
                             )}
-                          </span>
-                          {s.debate_title && (
-                            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                              {s.debate_title}
-                            </p>
-                          )}
-                          {s.text && (
-                            <p
-                              className={`mt-1 text-sm leading-relaxed text-foreground ${
-                                expanded ? "whitespace-pre-line" : "line-clamp-2"
-                              }`}
-                            >
-                              {s.text}
-                            </p>
-                          )}
-                        </button>
+                            {s.text && (
+                              <span
+                                className={`serif-display mt-2 text-[15px] leading-relaxed text-fg ${
+                                  expanded ? "block whitespace-pre-line" : "line-clamp-3"
+                                }`}
+                              >
+                                {s.text}
+                              </span>
+                            )}
+                          </button>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 )}
                 <a
                   href={searchHref}
-                  className="mt-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-flex min-h-10 items-center gap-1.5 self-start text-sm font-medium text-brand-fg transition-colors hover:underline"
                 >
                   {t("viewAllSpeeches")}
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                 </a>
               </section>
 
-            </>
-          )}
-        </div>
-        </div>
+              {(groupHistory.length > 0 || committees.length > 0) && (
+                <div className="flex flex-col gap-6 lg:col-start-2 lg:row-start-2 lg:self-start">
+                  {groupHistory.length > 0 && (
+                    <section aria-labelledby="groups-h" className={card}>
+                      <h2 id="groups-h" className="label-mono text-fg-muted">{t("groupHistoryTitle")}</h2>
+                      <ul className="mt-3 flex flex-col divide-y divide-line">
+                        {groupHistory.map((g, i) => {
+                          const current = !g.end_date;
+                          return (
+                            <li key={`${g.name}-${i}`} className="grid grid-cols-[4.25rem_minmax(0,1fr)] gap-x-3 py-3 first:pt-0 last:pb-0">
+                              <Link
+                                href={`/gruppi/${groupSlug(g.name)}`}
+                                className={`flex items-center gap-1.5 self-start text-sm font-semibold underline-offset-4 hover:underline ${current ? "text-fg" : "text-fg-muted"}`}
+                              >
+                                <PartyLogo group={g.name} size={14} />
+                                {getGroupAbbrev(g.name)}
+                              </Link>
+                              <span className="flex min-w-0 flex-col gap-0.5">
+                                <span className={`text-sm ${current ? "text-fg" : "text-fg-muted"}`}>
+                                  {groupLabel(g.name)}
+                                  {g.component && <span className="text-fg-muted"> · {g.component}</span>}
+                                </span>
+                                <span className="tabular font-mono text-xs text-fg-muted">{membershipPeriod(g)}</span>
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  )}
+
+                  {committees.length > 0 && (
+                    <section aria-labelledby="committees-h" className={card}>
+                      <h2 id="committees-h" className="label-mono text-fg-muted">{t("committeesTitle")}</h2>
+                      <ul className="mt-3 flex flex-col divide-y divide-line">
+                        {committees.map((c, i) => {
+                          const current = !c.end_date;
+                          return (
+                            <li key={`${c.name}-${i}`} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
+                              <span className={`text-sm leading-snug ${current ? "text-fg" : "text-fg-muted"}`}>
+                                {toTitleCase(c.name)}
+                              </span>
+                              <span className="flex flex-wrap items-center gap-2">
+                                {c.officer_role && (
+                                  <span className="rounded-sm border border-line-strong px-1.5 py-px text-[11px] text-fg-secondary">
+                                    {toTitleCase(c.officer_role)}
+                                  </span>
+                                )}
+                                <span className="tabular font-mono text-xs text-fg-muted">{membershipPeriod(c)}</span>
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </main>
+      <SiteFooter />
     </div>
   );
 }

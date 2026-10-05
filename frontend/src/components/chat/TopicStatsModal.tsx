@@ -38,15 +38,6 @@ function getGroupColor(party: string): string {
   return entry?.color || "#9E9E9E";
 }
 
-function getCoalitionColor(coalition: string): string {
-  switch (coalition) {
-    case "maggioranza": return "#3B82F6";
-    case "governo": return "#4B0082";
-    case "opposizione": return "#EF4444";
-    default: return "#9E9E9E";
-  }
-}
-
 function getCoalitionLabel(coalition: string): string {
   switch (coalition) {
     case "maggioranza": return "maggioranza";
@@ -107,14 +98,14 @@ export function TopicStatsModal({
   const t = useTranslations("TopicStatsModal");
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] sm:max-w-2xl bg-background border-none shadow-2xl p-0 overflow-hidden rounded-xl sm:rounded-2xl h-[85vh] sm:h-[80vh] flex flex-col">
-        <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0 bg-card/50 backdrop-blur-sm">
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <Hash className="h-5 w-5 text-primary" />
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl bg-surface border border-line shadow-overlay p-0 gap-0 overflow-hidden rounded-xl h-[85vh] sm:h-[80vh] flex flex-col">
+        <DialogHeader className="px-6 py-4 border-b border-line shrink-0">
+          <DialogTitle className="serif-display flex items-center gap-2 text-xl text-fg">
+            <Hash className="h-5 w-5 text-brand-fg" aria-hidden="true" />
             <span>{t("title")}</span>
           </DialogTitle>
           {/* Summary bar */}
-          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-4 mt-2 text-xs text-fg-muted">
             <span className="flex items-center gap-1">
               <MessageSquareQuote className="h-3 w-3" />
               {stats.intervention_count} {t("interventions")}
@@ -128,8 +119,8 @@ export function TopicStatsModal({
               {stats.sessions_detail.length} {t("sessions")}
             </span>
             {stats.first_date && stats.last_date && (
-              <span className="hidden sm:inline text-muted-foreground/60">
-                {formatDateShort(stats.first_date)} — {formatDateShort(stats.last_date)}
+              <span className="hidden sm:inline text-fg-muted">
+                {formatDateShort(stats.first_date)} → {formatDateShort(stats.last_date)}
               </span>
             )}
           </div>
@@ -174,8 +165,8 @@ export function TopicStatsModal({
                   return (
                     <Wrapper
                       key={`${intervention.speech_id}-${i}`}
-                      className={`group flex items-start gap-3 p-3 rounded-lg border border-border/50 bg-card/50 overflow-hidden transition-colors w-full max-w-full ${
-                        speechUrl ? "hover:bg-primary/5 hover:border-primary/20" : "hover:bg-muted/30"
+                      className={`group flex items-start gap-3 p-3 rounded-md bg-surface-muted overflow-hidden transition-colors w-full max-w-full ${
+                        speechUrl ? "hover:bg-surface-sunken" : ""
                       }`}
                       {...wrapperProps}
                     >
@@ -200,27 +191,23 @@ export function TopicStatsModal({
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                          <span className="text-sm font-semibold text-fg truncate group-hover:text-brand-fg transition-colors">
                             {intervention.speaker_name}
                           </span>
                           <Badge
                             variant="outline"
-                            className="shrink-0 text-[9px] px-1.5 py-0 h-4"
-                            style={{
-                              borderColor: `${getCoalitionColor(intervention.coalition)}40`,
-                              color: getCoalitionColor(intervention.coalition),
-                            }}
+                            className="shrink-0 text-[10px] px-1.5 py-0 h-4"
                           >
                             {getCoalitionLabel(intervention.coalition)}
                           </Badge>
                           {speechUrl && (
-                            <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                            <ExternalLink className="h-3 w-3 text-fg-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                           )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground truncate" title={intervention.party}>
+                        <p className="text-[11px] text-fg-muted truncate" title={intervention.party}>
                           {intervention.party}
                         </p>
-                        <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
+                        <div className="flex items-center gap-3 mt-1 text-[10px] text-fg-muted">
                           <span className="flex items-center gap-1">
                             <Calendar className="h-2.5 w-2.5" />
                             {formatDate(intervention.date)}
@@ -233,7 +220,7 @@ export function TopicStatsModal({
                           )}
                         </div>
                         {intervention.debate_title && (
-                          <p className="text-[10px] text-muted-foreground/70 mt-1 truncate" title={intervention.debate_title}>
+                          <p className="text-[10px] text-fg-muted mt-1 truncate" title={intervention.debate_title}>
                             {intervention.debate_title}
                           </p>
                         )}
@@ -242,7 +229,7 @@ export function TopicStatsModal({
                   );
                 })}
                 {stats.interventions_detail.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-8">
+                  <p className="text-sm text-fg-muted text-center py-8">
                     {t("noInterventions")}
                   </p>
                 )}
@@ -261,8 +248,8 @@ export function TopicStatsModal({
                   return (
                     <div
                       key={`${speaker.speaker_id}-${i}`}
-                      className={`group p-3 rounded-lg border border-border/50 bg-card/50 overflow-hidden transition-colors ${
-                        hasProfileUrl ? "hover:bg-primary/5 hover:border-primary/20" : "hover:bg-muted/30"
+                      className={`group p-3 rounded-md bg-surface-muted overflow-hidden transition-colors ${
+                        hasProfileUrl ? "hover:bg-surface-sunken" : ""
                       }`}
                     >
                       {/* Main row */}
@@ -293,29 +280,25 @@ export function TopicStatsModal({
                                 href={speaker.camera_profile_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm font-semibold text-foreground truncate hover:text-primary hover:underline transition-colors inline-flex items-center gap-1"
+                                className="text-sm font-semibold text-fg truncate hover:text-brand-fg hover:underline transition-colors inline-flex items-center gap-1"
                                 title={t("openDeputy")}
                               >
                                 {speaker.speaker_name}
                                 <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                               </a>
                             ) : (
-                              <span className="text-sm font-semibold text-foreground truncate">
+                              <span className="text-sm font-semibold text-fg truncate">
                                 {speaker.speaker_name}
                               </span>
                             )}
                             <Badge
                               variant="outline"
-                              className="shrink-0 text-[9px] px-1.5 py-0 h-4"
-                              style={{
-                                borderColor: `${getCoalitionColor(speaker.coalition)}40`,
-                                color: getCoalitionColor(speaker.coalition),
-                              }}
+                              className="shrink-0 text-[10px] px-1.5 py-0 h-4"
                             >
                               {getCoalitionLabel(speaker.coalition)}
                             </Badge>
                           </div>
-                          <p className="text-[11px] text-muted-foreground truncate" title={speaker.party}>
+                          <p className="text-[11px] text-fg-muted truncate" title={speaker.party}>
                             {speaker.party}
                           </p>
                         </div>
@@ -328,28 +311,28 @@ export function TopicStatsModal({
 
                       {/* Extra info row */}
                       {hasExtraInfo && (
-                        <div className="mt-2 ml-[52px] flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+                        <div className="mt-2 ml-[52px] flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-fg-muted">
                           {speaker.institutional_role && (
                             <span className="flex items-center gap-1" title="Ruolo istituzionale">
-                              <Crown className="h-2.5 w-2.5 text-amber-500" />
+                              <Crown className="h-2.5 w-2.5 text-fg-faint" />
                               <span className="truncate max-w-[200px]">{speaker.institutional_role}</span>
                             </span>
                           )}
                           {speaker.committee && (
                             <span className="flex items-center gap-1" title="Commissione">
-                              <Building2 className="h-2.5 w-2.5 text-blue-500" />
+                              <Building2 className="h-2.5 w-2.5 text-fg-faint" />
                               <span className="truncate max-w-[200px]">{speaker.committee}</span>
                             </span>
                           )}
                           {speaker.profession && (
                             <span className="flex items-center gap-1" title="Professione">
-                              <Briefcase className="h-2.5 w-2.5 text-emerald-500" />
+                              <Briefcase className="h-2.5 w-2.5 text-fg-faint" />
                               <span className="truncate max-w-[150px]">{speaker.profession}</span>
                             </span>
                           )}
                           {speaker.education && (
                             <span className="flex items-center gap-1" title="Titolo di studio">
-                              <GraduationCap className="h-2.5 w-2.5 text-purple-500" />
+                              <GraduationCap className="h-2.5 w-2.5 text-fg-faint" />
                               <span className="truncate max-w-[150px]">{speaker.education}</span>
                             </span>
                           )}
@@ -359,7 +342,7 @@ export function TopicStatsModal({
                   );
                 })}
                 {stats.speakers_detail.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-8">
+                  <p className="text-sm text-fg-muted text-center py-8">
                     {t("noDeputies")}
                   </p>
                 )}
@@ -379,27 +362,27 @@ export function TopicStatsModal({
                       href={sessionUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-card/50 hover:bg-primary/5 hover:border-primary/20 transition-colors overflow-hidden w-full max-w-full"
+                      className="group flex items-center gap-3 p-3 rounded-md bg-surface-muted hover:bg-surface-sunken transition-colors overflow-hidden w-full max-w-full"
                       title={t("openSession")}
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-sm">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-brand-soft text-brand-fg font-mono font-medium text-sm tabular">
                         {session.session_number}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                          <span className="text-sm font-semibold text-fg group-hover:text-brand-fg transition-colors">
                             {t("sessionNumber")} {session.session_number}
                           </span>
-                          <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                          <ExternalLink className="h-3 w-3 text-fg-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                         </div>
-                        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-3 text-[11px] text-fg-muted">
                           <span className="flex items-center gap-1">
                             <Calendar className="h-2.5 w-2.5" />
                             {formatDate(session.date)}
                           </span>
                         </div>
                         {session.debate_title && (
-                          <p className="text-[10px] text-muted-foreground/70 mt-1 truncate" title={session.debate_title}>
+                          <p className="text-[10px] text-fg-muted mt-1 truncate" title={session.debate_title}>
                             {session.debate_title}
                           </p>
                         )}
@@ -408,7 +391,7 @@ export function TopicStatsModal({
                   );
                 })}
                 {stats.sessions_detail.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-8">
+                  <p className="text-sm text-fg-muted text-center py-8">
                     {t("noSessions")}
                   </p>
                 )}

@@ -127,7 +127,7 @@ function SpeakersTooltip({ speakers, iconSize, sectionTitle }: { speakers: Speak
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>
           <span className="inline-flex cursor-help">
-            <Info className={cn(iconSize, "text-muted-foreground/60 hover:text-primary transition-colors")} />
+            <Info className={cn(iconSize, "text-fg-faint hover:text-brand-fg transition-colors")} />
           </span>
         </TooltipTrigger>
         <TooltipContent side="right" className="max-w-[350px]">
@@ -135,8 +135,8 @@ function SpeakersTooltip({ speakers, iconSize, sectionTitle }: { speakers: Speak
           <div className="space-y-1.5">
             {speakers.map((s) => (
               <div key={s.name}>
-                <p className="text-xs font-medium text-foreground">{s.name}</p>
-                {s.role && <p className="text-[11px] text-muted-foreground">{s.role}</p>}
+                <p className="text-xs font-medium text-fg">{s.name}</p>
+                {s.role && <p className="text-[11px] text-fg-muted">{s.role}</p>}
               </div>
             ))}
           </div>
@@ -158,7 +158,7 @@ function SpeakersTooltip({ speakers, iconSize, sectionTitle }: { speakers: Speak
     <Tooltip delayDuration={0}>
       <TooltipTrigger asChild>
         <span className="inline-flex cursor-help">
-          <Info className={cn(iconSize, "text-muted-foreground/60 hover:text-primary transition-colors")} />
+          <Info className={cn(iconSize, "text-fg-faint hover:text-brand-fg transition-colors")} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-[350px]">
@@ -172,8 +172,8 @@ function SpeakersTooltip({ speakers, iconSize, sectionTitle }: { speakers: Speak
                 aria-hidden="true"
               />
               <div className="min-w-0">
-                <p className="text-xs font-medium text-foreground">{names.join(", ")}</p>
-                <p className="text-[11px] text-muted-foreground">{getGroupShortLabel(group)}</p>
+                <p className="text-xs font-medium text-fg">{names.join(", ")}</p>
+                <p className="text-[11px] text-fg-muted">{getGroupShortLabel(group)}</p>
               </div>
             </div>
           ))}
@@ -212,11 +212,11 @@ function ShareButton({ chatId }: { chatId: string }) {
       onClick={handleShare}
       aria-label={copied ? t('linkCopied') : t('share')}
       className={cn(
-        "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all shrink-0",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex min-h-9 items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-medium shrink-0",
+        "transition-[background-color,color,transform] duration-[var(--duration-fast)] active:scale-[0.98]",
         copied
-          ? "text-green-600 bg-green-50 dark:bg-green-950/30"
-          : "text-muted-foreground hover:text-primary hover:bg-muted/50"
+          ? "text-brand-fg bg-brand-soft"
+          : "text-fg-muted hover:text-fg hover:bg-surface-muted"
       )}
     >
       {copied ? (
@@ -273,9 +273,9 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
     };
     const hasScale = !!answerStats && (answerStats.intervention_count ?? 0) > 0;
     return (
-      <div className={cn("py-6 border-b border-border/50", className)}>
+      <div className={cn("py-6 border-b border-line", className)}>
         <div className="flex items-start justify-between gap-2 min-w-0">
-          <h2 className="[font-family:var(--font-display)] text-2xl sm:text-[1.75rem] font-semibold tracking-tight leading-tight text-foreground mb-2.5 break-words min-w-0 [text-wrap:balance]">
+          <h2 className="serif-display text-2xl sm:text-[1.875rem] leading-tight text-fg mb-2.5 break-words min-w-0 [text-wrap:balance]">
             {message.content}
           </h2>
           <div className="flex items-center gap-1 shrink-0">
@@ -283,11 +283,11 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
             {chatId && <ShareButton chatId={chatId} />}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
           <ScopePicker variant="meta" />
           {hasScale ? (
             <>
-              <span className="tabular-nums">
+              <span className="tabular">
                 {t('evidenceScale', {
                   interventions: answerStats!.intervention_count,
                   deputies: answerStats!.speaker_count,
@@ -295,8 +295,8 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
               </span>
               {answerStats!.first_date && answerStats!.last_date && (
                 <>
-                  <span className="text-muted-foreground/40" aria-hidden="true">·</span>
-                  <span className="tabular-nums">
+                  <span className="text-fg-faint" aria-hidden="true">·</span>
+                  <span className="tabular">
                     {formatDay(String(answerStats!.first_date))} → {formatDay(String(answerStats!.last_date))}
                   </span>
                 </>
@@ -304,7 +304,7 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
             </>
           ) : (
             <>
-              <span className="tabular-nums">
+              <span className="tabular">
                 {message.timestamp.toLocaleTimeString("it-IT", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -323,15 +323,15 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
       <div className="flex flex-col gap-4">
         {/* Error State */}
         {isError && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-            <div className="flex items-center gap-2 text-destructive mb-2">
+          <div className="rounded-md bg-danger-soft p-4">
+            <div className="flex items-center gap-2 text-danger-fg mb-2">
               <AlertCircle className="h-4 w-4" />
               <span className="font-medium">
                 {t('errorTitle')}
               </span>
             </div>
             {message.content && (
-              <p className="text-sm text-destructive/90">{message.content}</p>
+              <p className="text-sm text-fg-secondary">{message.content}</p>
             )}
           </div>
         )}
@@ -340,17 +340,17 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
         {message.gate && (
           <div className="py-2">
             <div className="flex items-center gap-2.5 mb-3">
-              <SearchX className="h-5 w-5 text-muted-foreground shrink-0" strokeWidth={1.5} />
-              <h2 className="[font-family:var(--font-display)] text-2xl font-medium tracking-tight text-foreground">
+              <SearchX className="h-5 w-5 text-fg-muted shrink-0" strokeWidth={1.5} />
+              <h2 className="serif-display text-2xl text-fg">
                 {message.gate.title}
               </h2>
             </div>
-            <p className="text-[15px] leading-7 text-muted-foreground max-w-prose">
+            <p className="text-[15px] leading-7 text-fg-secondary max-w-prose">
               {message.gate.body}
             </p>
             {message.gate.suggestions.length > 0 && (
-              <div className="mt-7 pt-5 border-t border-border">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-4">
+              <div className="mt-7 pt-5 border-t border-line">
+                <p className="label-mono mb-4">
                   {message.gate.suggestions_label}
                 </p>
                 <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -358,10 +358,10 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                     <button
                       key={topic}
                       onClick={() => onSuggestionClick?.(topic)}
-                      className="group inline-flex items-center gap-1.5 border-b border-border pb-1 text-sm text-left text-foreground/80 transition-colors duration-200 hover:border-primary hover:text-primary cursor-pointer"
+                      className="group inline-flex items-center gap-1.5 border-b border-line-strong pb-1 text-sm text-left text-fg-secondary transition-colors duration-200 hover:border-brand-fg hover:text-brand-fg cursor-pointer"
                     >
                       <span>{topic}</span>
-                      <ArrowRight className="w-3 h-3 shrink-0 text-muted-foreground/40 transition-all duration-200 group-hover:text-primary group-hover:translate-x-0.5" />
+                      <ArrowRight className="w-3 h-3 shrink-0 text-fg-faint transition-[color,transform] duration-200 group-hover:text-brand-fg group-hover:translate-x-0.5 motion-reduce:group-hover:translate-x-0" />
                     </button>
                   ))}
                 </div>
@@ -372,7 +372,7 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
 
         {/* Replay dall'archivio: spiega perché la risposta è apparsa subito */}
         {message.cached && !isError && message.content && (
-          <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 px-3.5 py-2.5 text-[13px] leading-5 text-muted-foreground max-w-[70ch]">
+          <div className="flex items-start gap-2.5 rounded-md bg-surface-muted px-3.5 py-2.5 text-[13px] leading-5 text-fg-secondary max-w-[70ch]">
             <History className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
             <span>
               {(() => {
@@ -394,7 +394,7 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
 
         {/* Content */}
         {message.content && (
-          <div className="prose prose-sm max-w-[70ch] prose-neutral dark:prose-invert overflow-hidden break-words [overflow-wrap:anywhere]">
+          <div className="max-w-[70ch] text-fg overflow-hidden break-words [overflow-wrap:anywhere]">
             <ReactMarkdown
               components={{
                 p: ({ children }) => (
@@ -432,27 +432,27 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-semibold text-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
+                        className="font-semibold text-fg hover:text-brand-fg hover:underline underline-offset-2 transition-colors"
                       >
                         {children}
                       </a>
                     );
                   }
                   return (
-                    <strong className="font-semibold text-foreground">
+                    <strong className="font-semibold text-fg">
                       {children}
                     </strong>
                   );
                 },
                 h1: ({ children }) => (
-                  <h1 className="[font-family:var(--font-display)] text-2xl font-semibold tracking-tight mb-4 mt-8 first:mt-0">{children}</h1>
+                  <h1 className="serif-display text-2xl text-fg mb-4 mt-8 first:mt-0">{children}</h1>
                 ),
                 h2: ({ children }) => {
                   const title = typeof children === "string" ? children : String(children);
                   const speakersBySection = extractSpeakersBySection(message.content, message.experts, message.citations);
                   const speakers = speakersBySection[title] || [];
                   return (
-                    <h2 className="[font-family:var(--font-display)] text-[1.4rem] font-semibold tracking-tight mb-3 mt-8 first:mt-0 flex items-center gap-2">
+                    <h2 className="serif-display text-[1.5rem] leading-tight text-fg mb-3 mt-10 first:mt-0 flex items-center gap-2">
                       <span>{children}</span>
                       {speakers.length > 0 && (
                         <SpeakersTooltip speakers={speakers} iconSize="h-4 w-4" sectionTitle={title} />
@@ -465,7 +465,7 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                   const speakersBySection = extractSpeakersBySection(message.content, message.experts, message.citations);
                   const speakers = speakersBySection[title] || [];
                   return (
-                    <h3 className="[font-family:var(--font-display)] text-lg font-semibold tracking-tight mb-2 mt-6 flex items-center gap-2">
+                    <h3 className="text-base font-semibold tracking-[var(--tracking-heading)] text-fg mb-2 mt-6 flex items-center gap-2">
                       <span>{children}</span>
                       {speakers.length > 0 && (
                         <SpeakersTooltip speakers={speakers} iconSize="h-3.5 w-3.5" sectionTitle={title} />
@@ -474,12 +474,12 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                   );
                 },
                 code: ({ children }) => (
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">
+                  <code className="rounded-xs bg-surface-sunken px-1.5 py-0.5 font-mono text-sm">
                     {children}
                   </code>
                 ),
                 blockquote: ({ children }) => (
-                  <blockquote className="[font-family:var(--font-display)] border-l-2 border-primary/30 pl-4 py-1 italic text-muted-foreground my-4 overflow-hidden break-words">
+                  <blockquote className="serif-display text-[1.0625rem] leading-7 border-l-2 border-line-strong pl-4 py-1 italic text-fg-secondary my-4 overflow-hidden break-words">
                     {children}
                   </blockquote>
                 ),
@@ -491,10 +491,10 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                     return (
                       <button
                         onClick={() => onSuggestionClick?.(topic)}
-                        className="group inline-flex items-center gap-1.5 mr-5 mb-2 border-b border-border pb-1 text-sm text-left text-foreground/80 transition-colors duration-200 hover:border-primary hover:text-primary cursor-pointer"
+                        className="group inline-flex items-center gap-1.5 mr-5 mb-2 border-b border-line-strong pb-1 text-sm text-left text-fg-secondary transition-colors duration-200 hover:border-brand-fg hover:text-brand-fg cursor-pointer"
                       >
                         <span>{children}</span>
-                        <ArrowRight className="w-3 h-3 shrink-0 text-muted-foreground/40 transition-all duration-200 group-hover:text-primary group-hover:translate-x-0.5" />
+                        <ArrowRight className="w-3 h-3 shrink-0 text-fg-faint transition-[color,transform] duration-200 group-hover:text-brand-fg group-hover:translate-x-0.5 motion-reduce:group-hover:translate-x-0" />
                       </button>
                     );
                   }
@@ -506,7 +506,7 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                       <span
                         role="button"
                         tabIndex={0}
-                        className="inline cursor-pointer rounded-[3px] px-0.5 text-primary font-medium underline decoration-primary/35 decoration-[1.5px] underline-offset-[3px] hover:bg-primary/10 hover:decoration-primary/70 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="link inline cursor-pointer rounded-xs px-0.5 font-medium hover:bg-brand-soft transition-colors duration-150"
                         onClick={() => setStatsModalView(view)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
@@ -547,13 +547,13 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                         role="button"
                         tabIndex={0}
                         className={cn(
-                          "inline cursor-pointer rounded-[3px] px-1 -mx-px",
-                          "[font-family:var(--font-display)] italic",
-                          "bg-primary/[0.06] text-foreground/90 border-b border-primary/30",
-                          "hover:bg-primary/10 hover:border-primary/60",
-                          "transition-colors duration-150",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          highlightedChunkId === href && "bg-yellow-400/30 border-yellow-500 text-yellow-800 dark:text-yellow-300"
+                          "inline cursor-pointer rounded-xs px-1 -mx-px [box-decoration-break:clone]",
+                          "serif-display italic text-[1.0625rem] text-fg",
+                          "border-b border-brand/40",
+                          highlightedChunkId === href
+                            ? "bg-highlight border-notice"
+                            : "bg-brand-soft hover:bg-brand-soft-strong hover:border-brand",
+                          "transition-colors duration-150"
                         )}
                         onClick={() => {
                           setHighlightedChunkId(href);
@@ -568,7 +568,7 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                       >
                         {children}
                         {originalQuote && (
-                          <Languages className="inline h-3 w-3 ml-0.5 align-[-1px] text-muted-foreground/60" aria-hidden="true" />
+                          <Languages className="inline h-3 w-3 ml-0.5 align-[-1px] text-fg-faint" aria-hidden="true" />
                         )}
                       </span>
                     );
@@ -579,10 +579,10 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                       <Tooltip delayDuration={300}>
                         <TooltipTrigger asChild>{citationSpan}</TooltipTrigger>
                         <TooltipContent side="bottom" className="max-w-[400px] p-3">
-                          <p className="text-[10px] font-semibold text-muted-foreground/70 mb-1 uppercase tracking-wider">
+                          <p className="label-mono mb-1">
                             {t('originalLabel')}
                           </p>
-                          <p className="text-xs leading-relaxed italic">
+                          <p className="serif-display text-sm leading-relaxed italic">
                             &ldquo;{originalQuote}&rdquo;
                           </p>
                         </TooltipContent>
@@ -595,7 +595,7 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                       href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-primary underline underline-offset-2"
+                      className="link"
                     >
                       {children}
                     </a>
@@ -612,12 +612,12 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
 
         {isStreaming && message.content && (
           <div className="flex items-center gap-2 mt-2">
-            <span className="inline-block w-2 h-4 bg-primary animate-pulse" />
+            <span className="inline-block w-2 h-4 rounded-xs bg-brand motion-safe:animate-pulse" aria-hidden="true" />
           </div>
         )}
 
         {/* Pollici per risposta (issue #21): a fine prosa, PRIMA delle
-            sezioni di approfondimento — a fondo pagina non li vede nessuno */}
+            sezioni di approfondimento: a fondo pagina non li vede nessuno */}
         {!isUser && message.status === "complete" && !message.gate && message.content && (
           <AnswerFeedback
             fresh={generatedHere}
@@ -628,21 +628,21 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
           />
         )}
         {/* Disclaimer contenuti generati: le quote sono verificate, la
-            selezione e la sintesi no — va detto dove l'utente legge */}
+            selezione e la sintesi no, va detto dove l'utente legge */}
         {!isUser && message.status === "complete" && !message.gate && message.content && (
-          <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+          <p className="text-xs leading-relaxed text-fg-muted">
             {t('aiDisclaimer')}{" "}
             <a
               href="/method"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-primary transition-colors whitespace-nowrap"
+              className="underline underline-offset-2 decoration-fg-faint hover:text-brand-fg transition-colors whitespace-nowrap"
             >
               {t('aiDisclaimerLink')}
             </a>
           </p>
         )}
-        {/* Additional metadata for assistant messages — show progressively once text is visible */}
+        {/* Additional metadata for assistant messages, shown progressively once text is visible */}
         {!isUser && message.content && (message.status === "complete" || message.status === "streaming") && (
           <AssistantMetadata
             message={message}
@@ -754,9 +754,9 @@ function AssistantMetadata({ message, highlightedChunkId }: AssistantMetadataPro
     <div className={cn(
       "flex flex-col gap-2 w-full min-w-0",
       // Add visual separator only when content is visible above
-      message.content && "mt-6 border-t border-border pt-6"
+      message.content && "mt-6 border-t border-line pt-6"
     )}>
-      {/* Experts — shown first to explain the curation logic behind the response */}
+      {/* Experts, shown first to explain the curation logic behind the response */}
       {hasExperts && (
         <CollapsibleSection
           icon={Users}
@@ -766,14 +766,14 @@ function AssistantMetadata({ message, highlightedChunkId }: AssistantMetadataPro
           infoTooltip={t('expertsTooltip')}
         >
             <div className="pt-1 px-1 pb-2">
-              <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-4">
+              <p className="text-xs text-fg-muted leading-relaxed mb-4">
                 {t.rich('expertsSectionDesc', {
                   method: (chunks) => (
                     <a
                       href="/method"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline underline-offset-2 hover:text-primary transition-colors"
+                      className="underline underline-offset-2 decoration-fg-faint hover:text-brand-fg transition-colors"
                     >
                       {chunks}
                     </a>
@@ -783,7 +783,7 @@ function AssistantMetadata({ message, highlightedChunkId }: AssistantMetadataPro
                       href="/ranking"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline underline-offset-2 hover:text-primary transition-colors"
+                      className="underline underline-offset-2 decoration-fg-faint hover:text-brand-fg transition-colors"
                     >
                       {chunks}
                     </a>
@@ -802,8 +802,8 @@ function AssistantMetadata({ message, highlightedChunkId }: AssistantMetadataPro
                     return Object.entries(groupedExperts).map(([group, experts]) => (
                         <div key={group}>
                              <div className="flex items-center gap-3 mb-3 px-1">
-                                <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest whitespace-nowrap">{group}</span>
-                                <div className="h-px flex-1 bg-border/40"></div>
+                                <span className="label-mono whitespace-nowrap">{group}</span>
+                                <div className="h-px flex-1 bg-line"></div>
                              </div>
                              <div className="grid gap-2 w-full">
                                  {experts!.map(expert => (
@@ -829,19 +829,19 @@ function AssistantMetadata({ message, highlightedChunkId }: AssistantMetadataPro
           infoTooltip={t('hqTooltip')}
         >
           <div className="pt-2 px-1">
-            <div className="bg-primary/5 border border-primary/10 rounded-lg p-4 mb-4">
+            <div className="bg-surface-brand rounded-md p-4 mb-4">
               <div className="flex items-center gap-2 mb-2">
-                <Trophy className="h-4 w-4 text-primary" />
+                <Trophy className="h-4 w-4 text-brand-fg" aria-hidden="true" />
                 <span className="text-sm font-semibold">{t('hqJudgeReason')}</span>
               </div>
-              <p className="text-xs text-muted-foreground italic leading-relaxed">
+              <p className="text-xs text-fg-secondary italic leading-relaxed">
                 "{message.hqMetadata!.judge_reason}"
               </p>
             </div>
 
             <Tabs defaultValue="winner" className="w-full">
               <TabsList className="grid w-full grid-cols-3 h-9">
-                <TabsTrigger value="winner" className="text-xs">🏆 {t('winnerTab')}</TabsTrigger>
+                <TabsTrigger value="winner" className="text-xs gap-1.5"><Trophy className="h-3 w-3" aria-hidden="true" />{t('winnerTab')}</TabsTrigger>
                 <TabsTrigger value="var0" className="text-xs">{t('variantA')}</TabsTrigger>
                 <TabsTrigger value="var1" className="text-xs">{t('variantB')}</TabsTrigger>
               </TabsList>
@@ -944,16 +944,16 @@ function CollapsibleSection({
       <CollapsibleTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-between h-auto py-2 px-3 hover:bg-muted/50"
+          className="w-full justify-between h-auto min-h-11 py-2 px-3 rounded-md hover:bg-surface-muted"
         >
           <div className="flex items-center gap-2">
-            <Icon className="h-4 w-4 text-primary" />
-            <span className="[font-family:var(--font-display)] text-base font-semibold tracking-tight">{title}</span>
+            <Icon className="h-4 w-4 text-brand-fg" />
+            <span className="label-mono text-fg-secondary">{title}</span>
             {infoTooltip && (
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex cursor-help">
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-primary transition-colors" />
+                    <Info className="h-3.5 w-3.5 text-fg-faint hover:text-brand-fg transition-colors" />
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-[300px]">
@@ -961,14 +961,14 @@ function CollapsibleSection({
                 </TooltipContent>
               </Tooltip>
             )}
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="font-mono text-[11px] tabular">
               {count}
             </Badge>
           </div>
           {isOpen ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            <ChevronUp className="h-4 w-4 text-fg-muted" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 text-fg-muted" />
           )}
         </Button>
       </CollapsibleTrigger>
@@ -994,15 +994,15 @@ function BalanceSection({ metrics }: BalanceSectionProps) {
       <CollapsibleTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-between h-auto py-2 px-3 hover:bg-muted/50"
+          className="w-full justify-between h-auto min-h-11 py-2 px-3 rounded-md hover:bg-surface-muted"
         >
           <div className="flex items-center gap-2">
-            <PieChart className="h-4 w-4 text-primary" />
-            <span className="[font-family:var(--font-display)] text-base font-semibold tracking-tight">{t('balanceTitle')}</span>
+            <PieChart className="h-4 w-4 text-brand-fg" />
+            <span className="label-mono text-fg-secondary">{t('balanceTitle')}</span>
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <span className="inline-flex cursor-help">
-                  <Info className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-primary transition-colors" />
+                  <Info className="h-3.5 w-3.5 text-fg-faint hover:text-brand-fg transition-colors" />
                 </span>
               </TooltipTrigger>
               <TooltipContent side="right" className="max-w-[300px]">
@@ -1011,35 +1011,32 @@ function BalanceSection({ metrics }: BalanceSectionProps) {
             </Tooltip>
             <Badge
               variant={isBalanced ? "default" : "secondary"}
-              className={cn(
-                "text-xs",
-                isBalanced && "bg-green-500/15 text-green-700 dark:text-green-400",
-              )}
+              className="font-mono text-[11px] tabular"
             >
               {balancePercentage}%
             </Badge>
           </div>
           {isOpen ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            <ChevronUp className="h-4 w-4 text-fg-muted" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 text-fg-muted" />
           )}
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-2 px-3">
-        <div className="rounded-lg border border-border bg-card/50 p-3 space-y-3">
+        <div className="rounded-md bg-surface-muted p-4 space-y-3">
           <div className="space-y-2">
             {/* Maggioranza */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-blue-400">{t('maggioranza')}</span>
-                <span className="text-muted-foreground">
+                <span className="text-fg-secondary">{t('maggioranza')}</span>
+                <span className="text-fg-muted tabular">
                   {Math.round(metrics.maggioranzaPercentage)}%
                 </span>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-muted">
+              <div className="h-1.5 w-full rounded-full bg-surface-sunken">
                 <div
-                  className="h-full rounded-full transition-all bg-blue-500"
+                  className="h-full rounded-full bg-brand"
                   style={{ width: `${metrics.maggioranzaPercentage}%` }}
                 />
               </div>
@@ -1048,14 +1045,14 @@ function BalanceSection({ metrics }: BalanceSectionProps) {
             {/* Opposizione */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-red-400">{t('opposizione')}</span>
-                <span className="text-muted-foreground">
+                <span className="text-fg-secondary">{t('opposizione')}</span>
+                <span className="text-fg-muted tabular">
                   {Math.round(metrics.opposizionePercentage)}%
                 </span>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-muted">
+              <div className="h-1.5 w-full rounded-full bg-surface-sunken">
                 <div
-                  className="h-full rounded-full transition-all bg-red-500"
+                  className="h-full rounded-full bg-fg-muted"
                   style={{ width: `${metrics.opposizionePercentage}%` }}
                 />
               </div>
@@ -1071,14 +1068,14 @@ function VariantCard({ variant }: { variant: any }) {
   return (
     <div className="relative group">
       <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
-        <Badge variant="outline" className="text-[10px] bg-background/80 backdrop-blur-sm border-primary/20">
+        <Badge variant="outline" className="font-mono text-[10px] tabular bg-surface/80 backdrop-blur-sm">
           Score: {variant.score}/10
         </Badge>
-        <Badge variant="outline" className="text-[10px] bg-background/80 backdrop-blur-sm border-border/50">
+        <Badge variant="outline" className="font-mono text-[10px] tabular bg-surface/80 backdrop-blur-sm">
           Temp: {variant.temperature}
         </Badge>
       </div>
-      <div className="text-[11px] text-muted-foreground bg-muted/20 border border-border/40 rounded-lg p-4 pt-10 overflow-y-auto max-h-[350px] whitespace-pre-wrap leading-relaxed custom-scrollbar">
+      <div className="text-[11px] text-fg-secondary bg-surface-muted rounded-md p-4 pt-10 overflow-y-auto max-h-[350px] whitespace-pre-wrap leading-relaxed custom-scrollbar">
         {variant.text}
       </div>
     </div>

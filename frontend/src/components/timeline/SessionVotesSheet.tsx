@@ -70,8 +70,8 @@ export function SessionVotesSheet({
         side="right"
         className="w-full gap-0 p-0 sm:max-w-xl lg:max-w-2xl"
       >
-        <SheetHeader className="border-b px-6 py-4">
-          <SheetDescription className="text-[11px] uppercase tracking-[0.2em]">
+        <SheetHeader className="border-b border-line px-6 py-4">
+          <SheetDescription className="label-mono">
             {sessionNumber !== null
               ? t("sessionRef", { number: sessionNumber, date: formattedDate })
               : formattedDate}
@@ -93,7 +93,7 @@ export function SessionVotesSheet({
             </div>
           )}
           {state.status === "error" && (
-            <p className="py-10 text-sm text-muted-foreground text-center">
+            <p className="py-10 text-sm text-fg-muted text-center">
               {t("voteLoadError")}
             </p>
           )}

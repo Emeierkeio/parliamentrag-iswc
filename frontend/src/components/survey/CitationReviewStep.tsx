@@ -221,11 +221,11 @@ export function CitationReviewStep({
   if (!hasCitations) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-6 py-12">
-        <Quote className="w-12 h-12 text-gray-300 mb-4" />
-        <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <Quote className="w-12 h-12 text-fg-faint mb-4" />
+        <h3 className="text-lg font-medium text-fg-secondary mb-2">
           Nessuna citazione da valutare
         </h3>
-        <p className="text-sm text-gray-500 mb-6 text-center max-w-sm">
+        <p className="text-sm text-fg-muted mb-6 text-center max-w-sm">
           Le risposte selezionate non contengono citazioni parlamentari individuabili.
         </p>
         <div className="flex gap-3">
@@ -245,34 +245,34 @@ export function CitationReviewStep({
   return (
     <div className="flex flex-col h-full">
       {/* Header with progress */}
-      <div className="px-4 py-3 border-b bg-white dark:bg-gray-950">
+      <div className="px-4 py-3 border-b border-line bg-surface">
         <div className="flex items-center justify-between mb-3">
-          <Badge className="h-8 px-3 bg-blue-600 text-white text-sm">
+          <Badge className="h-8 px-3 bg-brand text-on-brand text-sm">
             Risposta A
           </Badge>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-fg-muted">
             Totale: {totalCompleted}/{totalCitations}
           </span>
         </div>
 
         {/* Progress bar */}
-        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-2 bg-surface-sunken rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300"
+            className="h-full rounded-full bg-brand transition-all duration-300"
             style={{ width: totalCitations > 0 ? `${(totalCompleted / totalCitations) * 100}%` : "0%" }}
           />
         </div>
       </div>
 
       {citations.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-gray-500">
+        <div className="flex-1 flex items-center justify-center text-fg-muted">
           <p className="text-sm">Nessuna citazione da valutare</p>
         </div>
       ) : (
         <>
           {/* Citation navigation dots */}
-          <div className="px-4 py-2 border-b bg-gray-50 dark:bg-gray-900/30 flex items-center gap-1.5 overflow-x-auto">
-            <span className="text-xs text-gray-500 mr-2 whitespace-nowrap">
+          <div className="px-4 py-2 border-b border-line bg-surface-muted flex items-center gap-1.5 overflow-x-auto">
+            <span className="text-xs text-fg-muted mr-2 whitespace-nowrap">
               Citazione {currentIndex + 1} di {citations.length}
             </span>
             {citations.map((_, idx) => {
@@ -285,10 +285,10 @@ export function CitationReviewStep({
                   className={cn(
                     "w-7 h-7 rounded-full text-xs font-medium transition-all flex items-center justify-center flex-shrink-0",
                     idx === currentIndex
-                      ? "bg-blue-600 text-white ring-2 ring-blue-300"
+                      ? "bg-brand text-on-brand ring-2 ring-brand/30"
                       : isComplete
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                      : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                      ? "bg-brand-soft-strong text-brand-fg"
+                      : "bg-surface-sunken text-fg-secondary"
                   )}
                 >
                   {isComplete ? <Check className="w-3.5 h-3.5" /> : idx + 1}
@@ -303,25 +303,25 @@ export function CitationReviewStep({
               <div className="space-y-4">
 
                 {/* Section 1: How the citation is used in the generated response */}
-                <Card className="border-l-4 border-l-blue-500">
+                <Card>
                   <CardContent className="p-4 space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+                    <div className="flex items-center gap-2 text-sm font-medium text-brand-fg">
                       <FileText className="w-4 h-4" />
                       Come appare nella risposta generata
                     </div>
 
                     {citationContext ? (
-                      <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 text-sm leading-relaxed">
-                        <p className="text-gray-700 dark:text-gray-300">
+                      <div className="bg-surface-brand rounded-md p-3 text-sm leading-relaxed">
+                        <p className="text-fg-secondary">
                           <span>{citationContext.before}</span>
-                          <span className="bg-yellow-200 dark:bg-yellow-800/50 px-1 py-0.5 rounded font-medium text-gray-900 dark:text-yellow-200">
+                          <span className="bg-highlight px-1 py-0.5 rounded-xs font-medium text-fg">
                             {formatCitationDisplay(citationContext.citation)}
                           </span>
                           <span>{citationContext.after}</span>
                         </p>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-400 italic">
+                      <p className="text-xs text-fg-muted italic">
                         Contesto non trovato nel testo della risposta per questo riferimento.
                       </p>
                     )}
@@ -329,34 +329,30 @@ export function CitationReviewStep({
                 </Card>
 
                 {/* Section 2: Original source / citation metadata */}
-                <Card className="border-l-4 border-l-indigo-500">
+                <Card>
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                    <div className="flex items-center gap-2 text-sm font-medium text-fg-secondary">
                       <BookOpen className="w-4 h-4" />
                       Fonte originale
                     </div>
 
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-indigo-600" />
-                        <span className="font-semibold text-gray-900 dark:text-gray-100">
+                        <User className="w-4 h-4 text-fg-muted" />
+                        <span className="font-semibold text-fg">
                           {currentCitation.deputy_first_name} {currentCitation.deputy_last_name}
                         </span>
                       </div>
+                      {/* One neutral style for both coalitions: colour would read as a political signal. */}
                       <Badge
                         variant="outline"
-                        className={cn(
-                          "text-xs",
-                          currentCitation.coalition === "maggioranza"
-                            ? "border-blue-300 text-blue-700 bg-blue-50"
-                            : "border-orange-300 text-orange-700 bg-orange-50"
-                        )}
+                        className="text-xs border-line-strong text-fg-secondary bg-surface"
                       >
                         {currentCitation.coalition}
                       </Badge>
                     </div>
 
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                    <div className="flex items-center gap-4 text-sm text-fg-muted">
                       <span className="flex items-center gap-1">
                         <Users className="w-3.5 h-3.5" />
                         {currentCitation.group}
@@ -368,17 +364,17 @@ export function CitationReviewStep({
                     </div>
 
                     {currentCitation.debate && (
-                      <p className="text-xs text-gray-400 italic">
+                      <p className="text-xs text-fg-muted italic">
                         {currentCitation.debate}
                       </p>
                     )}
 
                     {/* Original quote text from source */}
                     {(currentCitation.quote_text || currentCitation.text) && (
-                      <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border-l-2 border-gray-300">
+                      <div className="bg-surface-muted rounded-md p-3 border-l-2 border-line-strong">
                         <div className="flex items-start gap-2">
-                          <Quote className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-gray-700 dark:text-gray-300 italic leading-relaxed">
+                          <Quote className="w-4 h-4 text-fg-muted mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-fg-secondary italic leading-relaxed">
                             {currentCitation.quote_text || currentCitation.text}
                           </p>
                         </div>
@@ -393,10 +389,10 @@ export function CitationReviewStep({
                     {/* Relevance */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <label className="text-sm font-medium text-fg">
                           Pertinenza
                         </label>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-fg-muted">
                           La citazione e rilevante nel contesto in cui e usata?
                         </span>
                       </div>
@@ -410,10 +406,10 @@ export function CitationReviewStep({
                     {/* Faithfulness */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <label className="text-sm font-medium text-fg">
                           Fedelta
                         </label>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-fg-muted">
                           Il testo nella risposta e fedele alla fonte originale?
                         </span>
                       </div>
@@ -427,10 +423,10 @@ export function CitationReviewStep({
                     {/* Informativeness */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <label className="text-sm font-medium text-fg">
                           Valore informativo
                         </label>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-fg-muted">
                           La citazione aggiunge informazione utile alla risposta?
                         </span>
                       </div>
@@ -443,10 +439,10 @@ export function CitationReviewStep({
 
                     {/* Attribution */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <label className="text-sm font-medium text-fg">
                         Attribuzione
                       </label>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-fg-muted">
                         Deputato, gruppo e data sono corretti?
                       </p>
                       <div className="flex gap-2">
@@ -457,7 +453,7 @@ export function CitationReviewStep({
                           onClick={() => updateField("attribution", "correct")}
                           className={cn(
                             "h-8 text-xs flex-1",
-                            currentEvaluation.attribution === "correct" && "bg-emerald-600 hover:bg-emerald-700"
+                            currentEvaluation.attribution === "correct" && "bg-brand text-on-brand hover:bg-brand-hover"
                           )}
                         >
                           <Check className="w-3.5 h-3.5 mr-1" />
@@ -470,7 +466,7 @@ export function CitationReviewStep({
                           onClick={() => updateField("attribution", "incorrect")}
                           className={cn(
                             "h-8 text-xs flex-1",
-                            currentEvaluation.attribution === "incorrect" && "bg-red-600 hover:bg-red-700"
+                            currentEvaluation.attribution === "incorrect" && "border border-danger/40 bg-danger-soft text-danger-fg hover:bg-danger-soft"
                           )}
                         >
                           <X className="w-3.5 h-3.5 mr-1" />
@@ -483,7 +479,7 @@ export function CitationReviewStep({
                           onClick={() => updateField("attribution", "unverifiable")}
                           className={cn(
                             "h-8 text-xs flex-1",
-                            currentEvaluation.attribution === "unverifiable" && "bg-gray-600 hover:bg-gray-700"
+                            currentEvaluation.attribution === "unverifiable" && "bg-surface-sunken text-fg hover:bg-surface-sunken"
                           )}
                         >
                           <HelpCircle className="w-3.5 h-3.5 mr-1" />
@@ -494,7 +490,7 @@ export function CitationReviewStep({
 
                     {/* Issue tags */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <label className="text-sm font-medium text-fg">
                         Segnalazione problemi
                       </label>
                       <div className="flex flex-wrap gap-2">
@@ -509,9 +505,9 @@ export function CitationReviewStep({
                                 "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
                                 isSelected
                                   ? issue.id === "none"
-                                    ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700"
-                                    : "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700"
-                                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-700 dark:hover:bg-gray-800"
+                                    ? "bg-brand-soft text-brand-fg border-brand/40"
+                                    : "bg-danger-soft text-danger-fg border-danger/40"
+                                  : "bg-surface text-fg-secondary border-line hover:bg-surface-muted"
                               )}
                             >
                               {ISSUE_ICONS[issue.id]}
@@ -528,7 +524,7 @@ export function CitationReviewStep({
           </ScrollArea>
 
           {/* Navigation footer */}
-          <div className="px-4 py-3 border-t bg-white dark:bg-gray-950">
+          <div className="px-4 py-3 border-t border-line bg-surface">
             <div className="flex items-center justify-between">
               <Button
                 variant="ghost"
@@ -564,7 +560,6 @@ export function CitationReviewStep({
                     size="sm"
                     onClick={onSubmit}
                     disabled={isSubmitting}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                   >
                     <Send className="w-4 h-4 mr-2" />
                     Invia Valutazione

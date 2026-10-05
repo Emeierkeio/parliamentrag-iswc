@@ -68,16 +68,16 @@ export function InterventionRow({ intervention, debateId }: InterventionRowProps
     <Collapsible open={open} onOpenChange={handleOpenChange}>
       <CollapsibleTrigger
         className={cn(
-          "group flex w-full items-start gap-3 py-2.5 px-3 -mx-3 rounded-lg text-left transition-colors",
-          "hover:bg-muted/50",
-          open && "bg-muted/30"
+          "group flex w-full items-start gap-3 py-2.5 px-3 -mx-3 rounded-md text-left transition-colors",
+          "hover:bg-surface-muted",
+          open && "bg-surface-muted"
         )}
         aria-expanded={open}
         aria-controls={contentId}
       >
         <div className="flex-1 min-w-0 space-y-0.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold leading-tight">
+            <span className="text-sm font-semibold leading-tight text-fg">
               {fullName}
             </span>
             {intervention.party && (
@@ -98,14 +98,14 @@ export function InterventionRow({ intervention, debateId }: InterventionRowProps
             )}
           </div>
           {(intervention.speaking_role || intervention.phase_title) && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs text-fg-muted">
               {intervention.speaking_role && (
                 <span className="font-medium shrink-0">
                   {intervention.speaking_role}
                 </span>
               )}
               {intervention.speaking_role && intervention.phase_title && (
-                <span className="text-muted-foreground/40">·</span>
+                <span className="text-fg-faint">·</span>
               )}
               {intervention.phase_title && (
                 <span className="truncate">{intervention.phase_title}</span>
@@ -115,27 +115,27 @@ export function InterventionRow({ intervention, debateId }: InterventionRowProps
         </div>
         <ChevronDown
           className={cn(
-            "h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform duration-200 mt-1",
+            "h-4 w-4 shrink-0 text-fg-faint transition-transform duration-200 mt-1",
             open && "rotate-180"
           )}
         />
       </CollapsibleTrigger>
 
       <CollapsibleContent id={contentId} role="region" aria-label={fullName}>
-        <div className="ml-3 pl-3 border-l-2 border-border/40 pb-2">
+        <div className="ml-3 pl-3 border-l-2 border-line pb-2">
           {text.status === "loading" && (
-            <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <div className="flex items-center gap-2 py-3 text-sm text-fg-muted">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
               <span>{t("speakerSummaryLoading")}</span>
             </div>
           )}
           {text.status === "error" && (
-            <p className="py-2 text-xs text-muted-foreground">
+            <p className="py-2 text-xs text-fg-muted">
               {t("speakerSummaryUnavailable")}
             </p>
           )}
           {text.status === "loaded" && (
-            <p className="[font-family:var(--font-display)] text-[15px] leading-relaxed text-foreground/85 whitespace-pre-line">
+            <p className="serif-display text-[15px] leading-relaxed text-fg-secondary whitespace-pre-line">
               {text.text}
             </p>
           )}

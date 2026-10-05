@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useId } from "react";
 import { useTranslations } from "next-intl";
+import { ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -59,7 +61,7 @@ export function DebateDetail({
   if (detail.status === "error") {
     return (
       <div className="py-4 mt-2">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-fg-muted">
           Unable to load debate details
         </p>
       </div>
@@ -86,20 +88,20 @@ export function DebateDetail({
 
       {/* 2. What was discussed */}
       {data.recap ? (
-        <p className="text-sm leading-relaxed text-foreground/85">{data.recap}</p>
+        <p className="text-sm leading-relaxed text-fg-secondary">{data.recap}</p>
       ) : (
-        <p className="text-xs text-muted-foreground italic">
+        <p className="text-xs text-fg-muted italic">
           {data.phases.reduce((sum, p) => sum + p.speech_count, 0) < 3
             ? t("shortDebateNoSummary")
             : t("summaryNotYetGenerated")}
         </p>
       )}
 
-      {/* 3. Who spoke — chronological: one row per speech slot, so a
+      {/* 3. Who spoke, chronological: one row per speech slot, so a
           deputy who takes the floor twice appears twice, in order */}
       {data.interventions.length > 0 && (
         <section className="mt-6">
-          <h4 className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
+          <h4 className="label-mono mb-2">
             {t("interventionsHeading")} ({data.interventions.length})
           </h4>
           <div>
@@ -114,16 +116,20 @@ export function DebateDetail({
         </section>
       )}
 
-      {/* 4. Order of business — procedural detail, collapsed by default */}
+      {/* 4. Order of business: procedural detail, collapsed by default */}
       {data.phases.length > 0 && (
         <section className="mt-6">
           <Collapsible open={phasesOpen} onOpenChange={setPhasesOpen}>
             <CollapsibleTrigger
-              className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex min-h-8 items-center gap-1 text-sm font-medium text-fg-secondary hover:text-fg transition-colors"
               aria-expanded={phasesOpen}
               aria-controls={phasesId}
             >
-              {phasesOpen ? "▾" : "▸"} {t("phasesHeading")}
+              <ChevronRight
+                className={cn("h-4 w-4 transition-transform duration-200", phasesOpen && "rotate-90")}
+                aria-hidden
+              />
+              {t("phasesHeading")}
             </CollapsibleTrigger>
             <CollapsibleContent id={phasesId} role="region">
               <div className="mt-2 space-y-1">
@@ -132,14 +138,14 @@ export function DebateDetail({
                     key={phase.id}
                     className="flex items-baseline justify-between gap-3 text-xs"
                   >
-                    <span className="text-foreground/75 leading-snug">{phase.title}</span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground/60">
+                    <span className="text-fg-secondary leading-snug">{phase.title}</span>
+                    <span className="tabular shrink-0 text-fg-muted">
                       {t("speechCount", { count: phase.speech_count })}
                     </span>
                   </div>
                 ))}
                 {emptyPhaseCount > 0 && (
-                  <p className="text-xs text-muted-foreground/60">
+                  <p className="text-xs text-fg-muted">
                     {t("phasesNoSpeeches", { count: emptyPhaseCount })}
                   </p>
                 )}

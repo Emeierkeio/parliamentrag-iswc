@@ -2,22 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Search } from "lucide-react";
-import { Sidebar, MobileMenuButton } from "@/components/layout";
-import { useSidebar } from "@/hooks";
+import { Search, X } from "lucide-react";
+import { AppBar } from "@/components/shell/AppBar";
+import { SiteFooter } from "@/components/shell/SiteFooter";
 import { DeputyAvatar } from "@/components/entities/DeputyAvatar";
-import { GroupLogo } from "@/components/entities/GroupLogo";
+import { PartyLogo } from "@/components/entities/PartyLogo";
+import { COALITION_ORDER, coalitionOf, groupLabel } from "@/components/entities/groups";
 import { graphQuery, deputySlug } from "@/lib/graph";
-
-// Nomi gruppo dal grafo in maiuscolo: la label canonica vive in config,
-// il title-case resta solo come ripiego per nomi non mappati
-function groupLabel(name: string): string {
-  return (
-    (config.politicalGroups as Record<string, { label?: string }>)[name]?.label ??
-    toTitleCase(name)
-  );
-}
-import { config, getGroupColor } from "@/config";
+import { getGroupAbbrev } from "@/config";
 import { toTitleCase } from "@/lib/utils";
 
 interface DeputyRow {
@@ -50,8 +42,8 @@ function lastNameInitial(lastName: string): string {
 }
 
 export default function DeputiesDirectoryPage() {
-  const { isCollapsed, toggle, isMobile, isMobileOpen, closeMobile } = useSidebar();
   const t = useTranslations("Entities");
+  const td = useTranslations("Dossier");
 
   const [deputies, setDeputies] = useState<DeputyRow[] | null>(null);
   const [error, setError] = useState(false);
@@ -76,14 +68,20 @@ export default function DeputiesDirectoryPage() {
     load();
   }, [load]);
 
-  const groups = useMemo(() => {
-    if (!deputies) return [];
-    const distinct = new Set<string>();
-    for (const d of deputies) {
-      if (d.group) distinct.add(d.group);
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const d of deputies ?? []) {
+      if (d.group) counts.set(d.group, (counts.get(d.group) ?? 0) + 1);
     }
-    return Array.from(distinct).sort((a, b) => a.localeCompare(b, "it"));
+    return Array.from(counts, ([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
   }, [deputies]);
+
+  const groupOptions = useMemo(
+    () => groupCounts.map((g) => g.name).sort((a, b) => groupLabel(a).localeCompare(groupLabel(b), "it")),
+    [groupCounts]
+  );
+
+  const maxGroup = groupCounts[0]?.n ?? 1;
 
   const presentLetters = useMemo(() => {
     if (!deputies) return new Set<string>();
@@ -105,159 +103,205 @@ export default function DeputiesDirectoryPage() {
     });
   }, [deputies, search, groupFilter, letter]);
 
+  const letterBase = "h-8 shrink-0 rounded-full text-sm tabular-nums transition-colors";
+  const letterIdle = "text-fg-secondary hover:bg-surface-muted hover:text-fg cursor-pointer";
+  const letterActive = "bg-brand font-medium text-on-brand";
+
   return (
-    <div className="flex h-dvh overflow-hidden bg-background pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">
-      <Sidebar
-        isCollapsed={isCollapsed}
-        onToggle={toggle}
-        isMobile={isMobile}
-        isMobileOpen={isMobileOpen}
-        onCloseMobile={closeMobile}
-      />
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-3 px-4 sm:px-6 h-14">
-            <MobileMenuButton onClick={toggle} />
-            <h1 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight whitespace-nowrap">{t("deputiesTitle")}</h1>
-          </div>
+    <div className="flex min-h-dvh flex-col bg-bg">
+      <AppBar />
+      <main className="container-page flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+        <header className="flex flex-col gap-3 pt-10 md:pt-14">
+          <p className="label-mono text-fg-muted">{td("scope")}</p>
+          <h1 className="serif-display text-[2.5rem] leading-[1.05] text-fg md:text-display-l">{t("deputiesTitle")}</h1>
+          <p className="max-w-prose text-[15px] text-fg-secondary">{t("deputiesIntro")}</p>
         </header>
-        <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-          <h2 className="[font-family:var(--font-display)] text-2xl sm:text-3xl font-medium tracking-tight text-foreground leading-tight">{t("deputiesIntro")}</h2>
 
-          {/* Filtri */}
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("searchDeputyPlaceholder")}
-                className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-foreground/40"
-              />
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-12 gap-y-6 pt-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t("searchDeputyPlaceholder")}
+                  aria-label={t("searchDeputyPlaceholder")}
+                  className="h-10 w-full rounded-md border border-line-control bg-surface pl-9 pr-3 text-sm text-fg outline-none transition-colors placeholder:text-fg-muted focus-visible:border-fg"
+                />
+              </div>
+              <select
+                value={groupFilter}
+                onChange={(e) => setGroupFilter(e.target.value)}
+                aria-label={t("allGroups")}
+                className="h-10 w-full rounded-md border border-line-control bg-surface px-3 text-sm text-fg outline-none transition-colors focus-visible:border-fg sm:w-64"
+              >
+                <option value="">{t("allGroups")}</option>
+                {groupOptions.map((g) => (
+                  <option key={g} value={g}>
+                    {getGroupAbbrev(g)} · {groupLabel(g)}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={groupFilter}
-              onChange={(e) => setGroupFilter(e.target.value)}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none transition-colors focus-visible:border-foreground/40 sm:w-64"
-            >
-              <option value="">{t("allGroups")}</option>
-              {groups.map((g) => (
-                <option key={g} value={g}>
-                  {toTitleCase(g)}
-                </option>
-              ))}
-            </select>
-          </div>
 
-          {/* Indice alfabetico per cognome; la ricerca testuale lo scavalca */}
-          <div className="mt-4 flex gap-1 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label={t("letterIndex")}>
-            {LETTERS.map((L) => {
-              const enabled = presentLetters.has(L);
-              const active = letter === L && !search.trim();
-              return (
-                <button
-                  key={L}
-                  type="button"
-                  disabled={!enabled}
-                  onClick={() => setLetter(L)}
-                  aria-pressed={active}
-                  className={`h-8 w-8 shrink-0 rounded-md text-sm tabular-nums transition-colors ${
-                    active
-                      ? "bg-primary font-medium text-primary-foreground"
-                      : enabled
-                        ? "text-foreground/70 hover:bg-muted hover:text-foreground cursor-pointer"
-                        : "text-muted-foreground/30"
-                  }`}
-                >
-                  {L}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setLetter(null)}
-              aria-pressed={letter === null && !search.trim()}
-              className={`h-8 shrink-0 rounded-md px-2.5 text-sm transition-colors ${
-                letter === null && !search.trim()
-                  ? "bg-primary font-medium text-primary-foreground"
-                  : "text-foreground/70 hover:bg-muted hover:text-foreground cursor-pointer"
-              }`}
+            {/* Surname index; a text search overrides it */}
+            <div
+              className="-mx-4 flex gap-0.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="group"
+              aria-label={t("letterIndex")}
             >
-              {t("allLetters")}
-            </button>
-          </div>
+              {LETTERS.map((L) => {
+                const enabled = presentLetters.has(L);
+                const active = letter === L && !search.trim();
+                return (
+                  <button
+                    key={L}
+                    type="button"
+                    disabled={!enabled}
+                    onClick={() => setLetter(L)}
+                    aria-pressed={active}
+                    className={`${letterBase} w-8 sm:w-7 ${active ? letterActive : enabled ? letterIdle : "text-fg-faint"}`}
+                  >
+                    {L}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setLetter(null)}
+                aria-pressed={letter === null && !search.trim()}
+                className={`${letterBase} px-3 ${letter === null && !search.trim() ? letterActive : letterIdle}`}
+              >
+                {t("allLetters")}
+              </button>
+            </div>
 
-          {/* Stati: caricamento / errore / lista */}
-          <div className="mt-6">
             {error ? (
-              <div className="border-t border-border py-12 text-center">
-                <p className="text-sm text-muted-foreground">{t("errorLoad")}</p>
+              <div className="rounded-lg border border-line bg-surface py-12 text-center">
+                <p className="text-sm text-fg-muted">{t("errorLoad")}</p>
                 <button
                   type="button"
                   onClick={load}
-                  className="mt-4 inline-flex h-9 items-center rounded-md border border-border px-4 text-sm transition-colors hover:bg-muted"
+                  className="mt-4 inline-flex h-9 items-center rounded-full border border-line-strong bg-surface px-4 text-sm text-fg transition-colors hover:bg-surface-muted"
                 >
                   {t("retry")}
                 </button>
               </div>
             ) : deputies === null ? (
-              <div className="space-y-3 border-t border-border pt-4">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <div key={i} className="h-12 bg-muted motion-safe:animate-pulse rounded-md" />
+              <div className="grid gap-3 pt-7 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="h-[4.5rem] rounded-lg bg-surface-sunken animate-skeleton" />
                 ))}
               </div>
             ) : (
-              <>
-                <p className="pb-2 text-right font-mono text-xs text-muted-foreground">
-                  {t("membersCount", { count: filtered.length })}
-                </p>
-                {filtered.length === 0 ? (
-                  <p className="border-t border-border py-12 text-center text-sm text-muted-foreground">
-                    {t("noResults")}
+              <div>
+                <div className="flex items-center justify-between gap-3 border-b border-line pb-2">
+                  <p className="tabular font-mono text-caption text-fg-muted">
+                    {t("membersCount", { count: filtered.length })}
                   </p>
+                  {groupFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setGroupFilter("")}
+                      className="inline-flex h-7 items-center gap-1 rounded-full border border-line-strong px-2.5 text-xs text-fg-secondary transition-colors hover:bg-surface hover:text-fg"
+                    >
+                      <span className="font-semibold">{getGroupAbbrev(groupFilter)}</span>
+                      <X className="h-3 w-3" aria-hidden />
+                      <span className="sr-only">{t("allGroups")}</span>
+                    </button>
+                  )}
+                </div>
+                {filtered.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-fg-muted">{t("noResults")}</p>
                 ) : (
-                  <div className="border-t border-border">
+                  <ul className="grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-3">
                     {filtered.map((d) => (
-                      <a
-                        key={d.id}
-                        href={`/parlamentari/${deputySlug(d.id)}`}
-                        className="flex items-center gap-4 border-b border-border px-1 py-3.5 transition-colors hover:bg-muted/40"
-                      >
-                        <DeputyAvatar
-                          photo={d.photo}
-                          firstName={d.first_name}
-                          lastName={d.last_name}
-                          group={d.group}
-                          size={40}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {toTitleCase(`${d.first_name} ${d.last_name}`)}
-                          </p>
-                          {d.group && (
-                            <p className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
-                              <GroupLogo group={d.group} size={16} />
-                              <span className="truncate">{groupLabel(d.group)}</span>
-                            </p>
-                          )}
-                        </div>
-                        {d.profession && (
-                          <span className="hidden max-w-[15rem] truncate text-right text-sm text-muted-foreground sm:block">
-                            {d.profession}
+                      <li key={d.id} className="min-w-0">
+                        <a
+                          href={`/parlamentari/${deputySlug(d.id)}`}
+                          className="flex h-full items-center gap-3 rounded-lg border border-line bg-surface px-3.5 py-3 transition-colors hover:border-line-strong hover:bg-surface-muted"
+                        >
+                          <DeputyAvatar photo={d.photo} firstName={d.first_name} lastName={d.last_name} size={44} />
+                          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span className="truncate text-sm font-medium text-fg">
+                              {toTitleCase(`${d.first_name} ${d.last_name}`)}
+                            </span>
+                            <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-fg-muted">
+                              {d.group && <PartyLogo group={d.group} size={14} />}
+                              {d.group && (
+                                <span className="shrink-0 font-semibold text-fg-secondary" title={groupLabel(d.group)}>
+                                  {getGroupAbbrev(d.group)}
+                                </span>
+                              )}
+                              {d.group && d.profession && <span aria-hidden>·</span>}
+                              {d.profession && <span className="truncate">{d.profession}</span>}
+                            </span>
                           </span>
-                        )}
-                      </a>
+                        </a>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
-              </>
+              </div>
             )}
           </div>
-        </div>
+
+          <aside className="order-first flex flex-col gap-6 lg:order-none lg:sticky lg:top-[calc(var(--header-h)+2rem)] lg:self-start">
+            <section aria-labelledby="composition-h" className="rounded-lg border border-line bg-surface p-5">
+              <h2 id="composition-h" className="label-mono text-fg-muted">{t("compositionTitle")}</h2>
+              {deputies === null ? (
+                <div className="mt-4 h-14 rounded-md bg-surface-sunken animate-skeleton" aria-hidden />
+              ) : (
+                <>
+                  <dl className="mt-4 grid grid-cols-3 gap-3">
+                    {COALITION_ORDER.map((c) => (
+                      <div key={c} className="flex flex-col gap-0.5">
+                        <dt className="text-[13px] text-fg-muted">{td(`bloc_${c}`)}</dt>
+                        <dd className="tabular text-2xl font-semibold text-fg">
+                          {groupCounts.filter((g) => coalitionOf(g.name) === c).reduce((s, g) => s + g.n, 0)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="mt-5 hidden border-t border-line pt-4 lg:block">
+                    <p className="text-[13px] text-fg-muted">{t("filterGroupHint")}</p>
+                    <ul className="mt-2 flex flex-col">
+                      {groupCounts.map((g) => {
+                        const active = groupFilter === g.name;
+                        return (
+                          <li key={g.name}>
+                            <button
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => setGroupFilter(active ? "" : g.name)}
+                              title={groupLabel(g.name)}
+                              className={`-mx-2 grid w-[calc(100%+1rem)] cursor-pointer grid-cols-[3.25rem_minmax(0,1fr)_2.5rem] items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+                                active ? "bg-brand-soft text-fg" : "hover:bg-surface-muted"
+                              }`}
+                            >
+                              <span className="font-semibold text-fg">{getGroupAbbrev(g.name)}</span>
+                              <span className="h-1.5 overflow-hidden rounded-full bg-surface-sunken" aria-hidden>
+                                <span
+                                  className="block h-full rounded-full bg-fg-muted"
+                                  style={{ width: `${(g.n / maxGroup) * 100}%` }}
+                                />
+                              </span>
+                              <span className="tabular text-right text-fg-secondary">{g.n}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </>
+              )}
+            </section>
+          </aside>
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }

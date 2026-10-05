@@ -29,6 +29,8 @@ interface ChatAreaProps {
   onOpenHistory?: () => void;
   className?: string;
   mobileMenuButton?: React.ReactNode;
+  /** Inside the AppBar shell the bar's search field asks follow-ups. */
+  hideTopBar?: boolean;
 }
 
 export function ChatArea({
@@ -41,6 +43,7 @@ export function ChatArea({
   onOpenHistory,
   className,
   mobileMenuButton,
+  hideTopBar = false,
 }: ChatAreaProps) {
   const t = useTranslations("WelcomeScreen");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -62,15 +65,16 @@ export function ChatArea({
   const hasCitations = (lastAssistantMessage?.citations?.length ?? 0) > 0;
 
   return (
-    <div className={cn("flex h-full flex-col bg-background", className)}>
+    <div className={cn("flex h-full flex-col bg-bg", className)}>
       {/* Top bar: compact search while reading an answer. On the welcome
           screen the input lives inside the hero (the page's one action sits
           under the headline, not detached at the top), so here only the
           mobile menu and history remain. */}
+      {!hideTopBar && (
       <div
         className={cn(
           "sticky top-0 z-10",
-          hasMessages && "bg-background/80 backdrop-blur-xl border-b border-border/40"
+          hasMessages && "bg-bg/85 backdrop-blur-xl border-b border-line"
         )}
       >
         <div className="mx-auto max-w-3xl px-3 md:px-4 py-2 md:py-2.5">
@@ -92,7 +96,7 @@ export function ChatArea({
                 variant="ghost"
                 size="icon"
                 onClick={onOpenHistory}
-                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+                className="h-9 w-9 shrink-0 text-fg-muted hover:text-fg"
                 title={t("historyLabel")}
                 aria-label={t("historyLabel")}
               >
@@ -102,6 +106,7 @@ export function ChatArea({
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Content Area */}
       <ScrollArea className="flex-1" ref={scrollRef}>
@@ -192,11 +197,11 @@ function CompletedMethodDisclosure({ progress }: { progress: ProcessingProgress 
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <button
-          className="group inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.15em] text-muted-foreground/60 hover:text-primary transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group label-mono inline-flex min-h-9 items-center gap-1.5 rounded-xs transition-colors hover:text-fg"
           aria-expanded={open}
         >
           <ChevronRight
-            className={cn("h-3 w-3 transition-transform duration-200", open && "rotate-90")}
+            className={cn("h-3 w-3 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-90")}
             aria-hidden="true"
           />
           {tPi("howBuilt")}
@@ -277,14 +282,14 @@ function WelcomeScreen({ onSendMessage, onCancelRequest, isLoading }: WelcomeScr
         {/* Question + search: the page's one action sits where reading
             starts, top-left, directly under the promise it fulfills */}
         <div className={hasRecent ? "lg:col-span-7" : "lg:col-span-12"}>
-          <h1 className="[font-family:var(--font-display)] text-[1.9rem] sm:text-4xl md:text-[2.9rem] font-medium tracking-tight text-foreground leading-[1.08] max-w-xl [text-wrap:balance]">
+          <h1 className="serif-display text-[1.9rem] sm:text-4xl md:text-[2.9rem] text-fg leading-[1.08] max-w-xl [text-wrap:balance]">
             {t.rich("title", {
-              em: (chunks) => <span className="italic text-primary">{chunks}</span>,
+              em: (chunks) => <span className="italic text-brand-fg">{chunks}</span>,
             })}
           </h1>
-          <p className="mt-3 text-muted-foreground text-sm sm:text-base leading-relaxed max-w-md">
+          <p className="mt-3 text-fg-secondary text-sm sm:text-base leading-relaxed max-w-md">
             {t.rich("subtitle", {
-              bold: (chunks) => <span className="text-foreground font-medium">{chunks}</span>,
+              bold: (chunks) => <span className="text-fg font-medium">{chunks}</span>,
             })}
           </p>
 
@@ -295,11 +300,11 @@ function WelcomeScreen({ onSendMessage, onCancelRequest, isLoading }: WelcomeScr
               isLoading={isLoading}
               placeholder={t("searchPlaceholder")}
             />
-            <p className="mt-2 text-[10px] leading-tight text-muted-foreground/60">
+            <p className="mt-2 text-xs leading-tight text-fg-muted">
               {t("researchNote")}{" "}
               <a
                 href="/privacy"
-                className="underline underline-offset-2 hover:text-muted-foreground transition-colors"
+                className="underline underline-offset-2 decoration-fg-faint hover:text-fg transition-colors"
               >
                 Privacy
               </a>
@@ -307,7 +312,7 @@ function WelcomeScreen({ onSendMessage, onCancelRequest, isLoading }: WelcomeScr
           </div>
 
           <div className="mt-10">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-3">
+            <p className="label-mono mb-3">
               {t("trendingTopics")}
             </p>
             <div className="flex flex-wrap gap-2 max-w-xl">
@@ -322,14 +327,14 @@ function WelcomeScreen({ onSendMessage, onCancelRequest, isLoading }: WelcomeScr
             to live inside a tooltip; they are real content and read as the
             newspaper's right-hand column instead. */}
         {hasRecent && (
-          <aside className="lg:col-span-5 lg:border-l lg:border-border lg:pl-8">
-            <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-4">
+          <aside className="lg:col-span-5 lg:border-l lg:border-line lg:pl-8">
+            <p className="label-mono flex items-center gap-2 mb-4">
               {t("lastTopics")}
               {recent !== null && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
-                      className="text-muted-foreground/60 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
+                      className="text-fg-faint hover:text-fg transition-colors rounded-full"
                       aria-label={t("lastTopicsHint", { date: recent.since ?? "" })}
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
@@ -351,8 +356,8 @@ function WelcomeScreen({ onSendMessage, onCancelRequest, isLoading }: WelcomeScr
               <ul className="space-y-5">
                 {[0, 1, 2, 3].map((i) => (
                   <li key={i} className="space-y-1.5">
-                    <span className="block h-4 w-40 rounded-sm bg-muted/60 motion-safe:animate-pulse" />
-                    <span className="block h-3 w-full max-w-[16rem] rounded-sm bg-muted/40 motion-safe:animate-pulse" />
+                    <span className="block h-4 w-40 rounded-xs bg-surface-sunken motion-safe:animate-skeleton" />
+                    <span className="block h-3 w-full max-w-[16rem] rounded-xs bg-surface-sunken motion-safe:animate-skeleton" />
                   </li>
                 ))}
               </ul>
@@ -370,14 +375,14 @@ function WelcomeScreen({ onSendMessage, onCancelRequest, isLoading }: WelcomeScr
                     <li key={topic.label}>
                       <button
                         onClick={() => askTopic(topic.query)}
-                        className="group block w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                        className="group block w-full text-left cursor-pointer rounded-xs"
                       >
-                        <span className="text-[15px] font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
+                        <span className="text-[15px] font-semibold leading-snug tracking-tight text-fg transition-colors group-hover:text-brand-fg">
                           {topic.label.charAt(0).toUpperCase() + topic.label.slice(1)}
                         </span>
                         {act && (
-                          <span className="mt-1 block text-[11px] leading-snug text-muted-foreground line-clamp-1">
-                            <span className="tabular-nums">{formatDate(act.date, locale)}</span>
+                          <span className="mt-1 block text-xs leading-snug text-fg-muted line-clamp-1">
+                            <span className="tabular">{formatDate(act.date, locale)}</span>
                             {" · "}
                             {act.title}
                           </span>
@@ -401,7 +406,7 @@ interface TopicPillProps {
   /** KG-derived topics arrive already localized and have no i18n key */
   raw?: boolean;
   /** Expanded phrase sent as the query (chip shows the short label, the
-   *  query carries the act's context — "digital signatures" alone would
+   *  query carries the act's context: "digital signatures" alone would
    *  lose the electoral meaning) */
   queryText?: string;
   className?: string;
@@ -419,7 +424,7 @@ function TopicPill({ topic, onClick, raw = false, queryText, className }: TopicP
   return (
     <button
       className={cn(
-        "inline-flex items-center rounded-full border border-border px-3.5 py-1.5 text-sm text-left text-foreground/80 transition-colors duration-200 hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer",
+        "inline-flex min-h-9 items-center rounded-full border border-line-strong bg-surface px-3.5 py-1.5 text-sm text-left text-fg-secondary transition-[border-color,color,transform] duration-[var(--duration-fast)] hover:border-fg hover:text-fg active:scale-[0.98] cursor-pointer",
         className
       )}
       onClick={() => onClick(query)}

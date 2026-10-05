@@ -28,25 +28,25 @@ function ScopeRow({
       aria-disabled={!active || undefined}
       className={cn(
         "flex items-center justify-between gap-3 rounded-md px-2.5 py-2",
-        active ? "bg-primary/5" : "opacity-70"
+        active ? "bg-surface-brand" : "opacity-70"
       )}
     >
       <div className="min-w-0">
         <p
           className={cn(
             "text-sm leading-snug",
-            active ? "font-medium text-foreground" : "text-muted-foreground"
+            active ? "font-medium text-fg" : "text-fg-muted"
           )}
         >
           {label}
         </p>
-        {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+        {sub && <p className="text-xs text-fg-muted">{sub}</p>}
       </div>
       {active ? (
-        <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+        <Check className="h-4 w-4 shrink-0 text-brand-fg" aria-hidden="true" />
       ) : (
         soonLabel && (
-          <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+          <span className="shrink-0 rounded-sm border border-line-strong px-2 py-0.5 text-[11px] text-fg-muted">
             {soonLabel}
           </span>
         )
@@ -73,11 +73,11 @@ export function ScopePicker({
         <button
           aria-label={t("scopeAria")}
           className={cn(
-            "group inline-flex items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer",
+            "group inline-flex items-center transition-colors cursor-pointer",
             variant === "hero" &&
-              "gap-2 rounded-full border border-border px-3.5 py-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+              "label-mono gap-2 rounded-full border border-line-strong px-3.5 py-1.5 hover:border-fg-faint hover:text-fg",
             variant === "meta" &&
-              "gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+              "gap-1.5 rounded-full border border-line-strong px-2.5 py-0.5 text-xs font-medium text-fg-muted hover:border-fg-faint hover:text-fg",
             variant === "sidebar" &&
               "w-full gap-2 rounded-md border border-sidebar-border px-2.5 py-1.5 text-[10px] uppercase tracking-[0.12em] text-sidebar-foreground/60 hover:border-sidebar-foreground/30 hover:text-sidebar-foreground"
           )}
@@ -94,7 +94,7 @@ export function ScopePicker({
           ) : (
             <ChevronDown
               className={cn(
-                "h-3 w-3 opacity-60 transition-transform group-data-[state=open]:rotate-180",
+                "h-3 w-3 opacity-60 transition-transform duration-200 motion-reduce:transition-none group-data-[state=open]:rotate-180",
                 variant === "sidebar" && "ml-auto shrink-0"
               )}
               aria-hidden="true"
@@ -109,7 +109,7 @@ export function ScopePicker({
           className="w-80 overflow-hidden p-0 text-left"
         >
           <div className="px-2 pb-1 pt-2.5">
-            <p className="px-2.5 pb-1.5 text-xs font-medium text-muted-foreground">
+            <p className="label-mono px-2.5 pb-1.5">
               {t("scopeBranch")}
             </p>
             <ScopeRow
@@ -120,13 +120,13 @@ export function ScopePicker({
             <ScopeRow label={t("scopeSenate")} soonLabel={t("scopeSoon")} />
           </div>
           <div className="px-2 pb-2.5 pt-1.5">
-            <p className="px-2.5 pb-1.5 text-xs font-medium text-muted-foreground">
+            <p className="label-mono px-2.5 pb-1.5">
               {t("scopeLegislature")}
             </p>
             <ScopeRow active label={t("scopeLeg19")} sub={t("scopeLeg19Sub")} />
             <ScopeRow label={t("scopeLegPast")} soonLabel={t("scopeSoon")} />
           </div>
-          <p className="border-t border-border bg-muted/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+          <p className="border-t border-line bg-surface-muted px-4 py-3 text-xs leading-relaxed text-fg-muted">
             {t("scopeNote")}
           </p>
         </PopoverContent>
@@ -136,10 +136,10 @@ export function ScopePicker({
           sideOffset={8}
           className="w-72 p-4 text-left"
         >
-          <p className="mb-1.5 text-sm font-medium text-foreground">
+          <p className="mb-1.5 text-sm font-medium text-fg">
             {t("scopeMetaTitle")}
           </p>
-          <p className="text-xs leading-relaxed text-muted-foreground">
+          <p className="text-xs leading-relaxed text-fg-muted">
             {t("scopeMetaNote")}
           </p>
         </PopoverContent>

@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2, ArrowUp, CalendarDays } from "lucide-react";
+import { Loader2, ArrowUp, ArrowUpRight, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Sidebar, MobileMenuButton } from "@/components/layout";
+import { AppBar } from "@/components/shell/AppBar";
+import { SiteFooter } from "@/components/shell/SiteFooter";
 import { FeedbackPulse } from "@/components/feedback/FeedbackPulse";
-import { useSidebar } from "@/hooks";
 import { SessionCard } from "@/components/timeline/SessionCard";
 import { TimelineSearch } from "@/components/timeline/TimelineSearch";
 import { TimelineSkeleton } from "@/components/timeline/TimelineSkeleton";
@@ -15,7 +15,7 @@ import { useTimeline } from "@/hooks/use-timeline";
 
 export default function TimelinePage() {
   const t = useTranslations("Timeline");
-  const { isCollapsed, toggle, isMobile, isMobileOpen, closeMobile } = useSidebar();
+  const td = useTranslations("Dossier");
   const mainRef = useRef<HTMLElement | null>(null);
   const {
     sessions,
@@ -30,6 +30,15 @@ export default function TimelinePage() {
     clearFilters,
     hasActiveFilters,
   } = useTimeline({ scrollContainerRef: mainRef });
+
+  const totals = sessions.reduce(
+    (acc, s) => ({
+      debates: acc.debates + s.debate_count,
+      votes: acc.votes + s.vote_count,
+      speeches: acc.speeches + s.speech_count,
+    }),
+    { debates: 0, votes: 0, speeches: 0 },
+  );
 
   // Back to top — tracks scroll on the main container, not window
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -47,132 +56,112 @@ export default function TimelinePage() {
   }, []);
 
   return (
-    <div className="flex h-dvh bg-background overflow-hidden pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0">
-      <Sidebar
-        isCollapsed={isCollapsed}
-        onToggle={toggle}
-        isMobile={isMobile}
-        isMobileOpen={isMobileOpen}
-        onCloseMobile={closeMobile}
-      />
+    <div className="flex h-dvh flex-col overflow-hidden bg-bg pb-[env(safe-area-inset-bottom)]">
+      <AppBar />
 
-      {/* relative: l'aria-live sr-only in fondo alla lista è position:absolute —
+      {/* relative: l'aria-live sr-only in fondo alla lista è position:absolute:
           senza un antenato posizionato scappa dal clip di overflow-y e allunga
           il documento, rendendo scrollabile la pagina intera (banda bianca). */}
-      <main ref={mainRef} className="relative flex-1 flex flex-col min-w-0 overflow-y-auto overscroll-contain">
-        {/* Sticky header */}
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-3 px-4 sm:px-6 h-14">
-            <MobileMenuButton onClick={toggle} />
-            <h1 className="[font-family:var(--font-display)] text-lg font-medium tracking-tight whitespace-nowrap">{t("pageTitle")}</h1>
-            <FeedbackPulse tool="timeline" className="mt-0 pt-0 border-t-0 ml-auto hidden sm:block" />
+      <main ref={mainRef} className="relative flex-1 min-h-0 flex flex-col overflow-y-auto overscroll-contain">
+        <div className="container-page flex flex-1 flex-col pt-8 pb-16 md:pt-12">
+          <div className="max-w-3xl">
+            <p className="label-mono text-fg-muted">{t("pageTitle")}</p>
+            <h1 className="mt-2 serif-display text-3xl leading-tight text-fg sm:text-4xl">{t("actionTitle")}</h1>
+            <p className="mt-3 text-[15px] leading-relaxed text-fg-secondary">{t("lead")}</p>
           </div>
-        </header>
 
-        <div className="px-4 sm:px-6 pt-6 mx-auto w-full max-w-4xl">
-          <h2 className="[font-family:var(--font-display)] text-2xl sm:text-3xl font-medium tracking-tight text-foreground leading-tight">
-            {t("actionTitle")}
-          </h2>
-          <div className="mt-5">
-            <TimelineSearch
-              filters={filters}
-              onFiltersChange={setFilters}
-              onClear={clearFilters}
-              hasActiveFilters={hasActiveFilters}
-            />
-          </div>
-        </div>
+          <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="min-w-0">
+              <TimelineSearch
+                filters={filters}
+                onFiltersChange={setFilters}
+                onClear={clearFilters}
+                hasActiveFilters={hasActiveFilters}
+              />
 
-        {/* Session list — width-capped reading column */}
-        <div className="px-4 sm:px-6 py-4 flex-1 mx-auto w-full max-w-4xl">
-          {isLoading ? (
-            <TimelineSkeleton />
-          ) : error ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t("errorHeading")}</AlertTitle>
-              <AlertDescription>{t("errorBody")}</AlertDescription>
-            </Alert>
-          ) : !isLoading && sessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-              <CalendarDays className="h-10 w-10 text-muted-foreground" />
-              <h2 className="[font-family:var(--font-display)] text-xl font-medium tracking-tight">{t("noSessionsFound")}</h2>
-              <p className="text-sm text-muted-foreground">{t("noSessionsBody")}</p>
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                {t("clearFilters")}
-              </Button>
-            </div>
-          ) : (
-            /* ── Timeline layout ── */
-            <div className="relative">
-              {/* Vertical timeline line — stops at last dot (mt-5 + half dot = ~1.5rem from last item top) */}
-              <div className="absolute left-3 sm:left-5 top-0 bottom-6 w-px bg-border" />
-
-              <div className="space-y-6">
-                {sessions.map((session) => {
-                  const d = new Date(session.date);
-                  const day = d.getDate();
-                  const month = d.toLocaleDateString(undefined, { month: "short" });
-                  const year = d.getFullYear();
-
-                  return (
-                    <div key={session.id} className="relative flex gap-4 sm:gap-6">
-                      {/* ── Date marker ── */}
-                      <div className="relative z-10 flex flex-col items-center shrink-0 w-6 sm:w-10">
-                        {/* Dot on the line */}
-                        <div className="w-3 h-3 rounded-full bg-primary ring-4 ring-background mt-5" />
-                        {/* Date label (desktop) — solid backdrop: the rail
-                            line runs behind this column and would show
-                            through the glyphs */}
-                        <div className="hidden sm:flex flex-col items-center mt-2 rounded-sm bg-background px-1.5 py-1">
-                          <span className="[font-family:var(--font-display)] text-base font-medium text-foreground/80 tabular-nums leading-none">
-                            {day}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground leading-tight mt-0.5">
-                            {month}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground tabular-nums leading-tight">
-                            {year}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* ── Session card ── (date and chamber already live in
-                           the card header, no extra mobile row) */}
-                      <div className="flex-1 min-w-0 pb-2">
+              <div className="mt-6">
+                {isLoading ? (
+                  <TimelineSkeleton />
+                ) : error ? (
+                  <Alert variant="destructive">
+                    <AlertTitle>{t("errorHeading")}</AlertTitle>
+                    <AlertDescription>{t("errorBody")}</AlertDescription>
+                  </Alert>
+                ) : sessions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-line bg-surface py-16 text-center">
+                    <CalendarDays className="h-10 w-10 text-fg-faint" aria-hidden />
+                    <h2 className="text-lg font-semibold text-fg">{t("noSessionsFound")}</h2>
+                    <p className="text-sm text-fg-muted">{t("noSessionsBody")}</p>
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      {t("clearFilters")}
+                    </Button>
+                  </div>
+                ) : (
+                  <ol className="divide-y divide-line border-y border-line">
+                    {sessions.map((session) => (
+                      <li key={session.id}>
                         <SessionCard session={session} searchTerm={filters.search} />
-                      </div>
-                    </div>
-                  );
-                })}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+
+                <div ref={loadMoreRef} className="h-4" />
+
+                {isFetchingMore && (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-fg-muted" aria-hidden />
+                    <span className="text-sm text-fg-muted">{t("loadingMore")}</span>
+                  </div>
+                )}
+
+                <div aria-live="polite" className="sr-only">
+                  {isLoading
+                    ? t("loadingMore")
+                    : sessions.length > 0
+                      ? `${resultCount} sessions`
+                      : t("noSessionsFound")}
+                </div>
               </div>
             </div>
-          )}
 
-          {/* Infinite scroll sentinel */}
-          <div ref={loadMoreRef} className="h-4" />
-
-          {/* Loading more indicator */}
-          {isFetchingMore && (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              <span className="text-sm text-muted-foreground">{t("loadingMore")}</span>
-            </div>
-          )}
-
-          {/* Micro-feedback a fine lista solo su mobile (issue #21) */}
-          {!isLoading && !isFetchingMore && !hasMore && sessions.length > 0 && (
-            <FeedbackPulse tool="timeline" className="max-w-md sm:hidden" />
-          )}
-
-          {/* Accessibility live region */}
-          <div aria-live="polite" className="sr-only">
-            {isLoading
-              ? t("loadingMore")
-              : sessions.length > 0
-                ? `${resultCount} sessions`
-                : t("noSessionsFound")}
+            <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
+              {sessions.length > 0 && (
+                <section className="rounded-lg border border-line bg-surface p-5">
+                  <h2 className="label-mono text-fg-muted">{t("railTitle")}</h2>
+                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
+                    {[
+                      { n: sessions.length, label: t("railSittings", { count: sessions.length }) },
+                      { n: totals.debates, label: t("debateCount", { count: totals.debates }) },
+                      { n: totals.votes, label: t("voteCount", { count: totals.votes }) },
+                      { n: totals.speeches, label: t("speechCount", { count: totals.speeches }) },
+                    ].map((s) => (
+                      <div key={s.label} className="flex flex-col">
+                        <dt className="sr-only">{s.label}</dt>
+                        <dd className="font-mono text-2xl font-medium tabular-nums text-fg">{s.n.toLocaleString()}</dd>
+                        <dd className="text-xs text-fg-muted">{s.label.replace(/^[\d.,]+\s*/, "")}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {hasMore && <p className="mt-4 text-xs leading-snug text-fg-muted">{t("railLoadedNote")}</p>}
+                </section>
+              )}
+              <section className="hidden rounded-lg bg-surface-inverse p-5 text-fg-inverse lg:block">
+                <p className="label-mono opacity-70">{td("ecoTitle")}</p>
+                <p className="mt-2 text-sm leading-relaxed">{td("ecoBody")}</p>
+                <a
+                  href="https://stenografo.it"
+                  className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-full bg-fg-inverse px-3.5 text-sm font-medium text-surface-inverse hover:opacity-90"
+                >
+                  {td("ecoCta")}
+                  <ArrowUpRight className="size-4" aria-hidden />
+                </a>
+              </section>
+              <FeedbackPulse tool="timeline" className="hidden lg:block" />
+            </aside>
           </div>
         </div>
+        <SiteFooter />
 
         {/* Back to top button */}
         <Button

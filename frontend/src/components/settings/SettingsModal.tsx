@@ -121,11 +121,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="max-w-none w-dvw h-dvh rounded-none border-0 sm:max-w-4xl sm:w-auto sm:h-[85vh] sm:rounded-lg sm:border flex flex-col p-4 sm:p-6 gap-3 sm:gap-4">
         <DialogHeader className="shrink-0">
-          <DialogTitle className="[font-family:var(--font-display)] flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <DialogTitle className="serif-display flex items-center gap-2 text-lg font-semibold tracking-tight">
             <Settings className="h-5 w-5 text-primary" />
             {t("title")}
             {hasUnsavedChanges && (
-              <Badge variant="outline" className="text-xs font-normal text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950 ml-1">
+              <Badge variant="outline" className="text-xs font-normal text-notice-fg border-notice/40 bg-notice-soft ml-1">
                 {t("unsavedChanges")}
               </Badge>
             )}
@@ -145,7 +145,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             </Alert>
           )}
           {success && (
-            <Alert className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">
+            <Alert className="bg-brand-soft text-brand-fg border-brand/30">
               <Save className="h-4 w-4" />
               <AlertTitle>{t("saved")}</AlertTitle>
               <AlertDescription>{t("savedMessage")}</AlertDescription>
@@ -154,7 +154,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
           {/* Section tabs — the tab names the section, so the card headers
               inside are hidden and each tab opens straight on its fields */}
-          <div className="flex rounded-lg border p-0.5 bg-card shadow-sm shrink-0">
+          <div className="flex rounded-full border border-line p-0.5 bg-surface-muted shrink-0">
             {(
               [
                 ["retrieval", t("tabRetrieval")],
@@ -169,8 +169,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 aria-pressed={activeTab === key}
                 className={
                   activeTab === key
-                    ? "flex-1 px-2 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground shadow-sm"
-                    : "flex-1 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-all"
+                    ? "flex-1 px-2 py-1.5 rounded-full text-xs font-medium bg-brand text-on-brand"
+                    : "flex-1 px-2 py-1.5 rounded-full text-xs font-medium text-fg-muted hover:text-fg transition-all"
                 }
               >
                 {label}

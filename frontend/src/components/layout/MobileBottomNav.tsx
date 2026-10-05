@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import {
   MessageSquare,
@@ -16,6 +17,8 @@ import {
   Settings,
   CalendarDays,
   Check,
+  Moon,
+  Sun,
   X,
 } from "lucide-react";
 import {
@@ -39,7 +42,7 @@ const NAV_ITEMS = [
   { href: "/timeline", icon: CalendarDays, key: "navTimeline" },
 ] as const;
 
-// App pages only — the landing ("/") keeps its own editorial masthead
+// App pages only: the landing ("/") keeps its own editorial masthead
 const VISIBLE_PREFIXES = [
   "/home",
   "/search",
@@ -83,10 +86,10 @@ export function MobileBottomNav() {
   const tabClass = (isActive: boolean) =>
     cn(
       "flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
-      isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+      isActive ? "text-brand-fg" : "text-fg-muted hover:text-fg"
     );
 
-  // Active tab: primary colour + a light spring on the icon, no pill —
+  // Active tab: accent colour + a light spring on the icon, no pill:
   // quieter than a grey blob on the glass bar
   const iconClass = (isActive: boolean) =>
     cn(
@@ -97,14 +100,14 @@ export function MobileBottomNav() {
   return (
     <>
     <nav
-      className="md:hidden fixed inset-x-3 bottom-[calc(0.625rem+env(safe-area-inset-bottom))] z-40 rounded-[1.75rem] border border-white/50 bg-background/60 backdrop-blur-2xl backdrop-saturate-150 shadow-[0_8px_32px_rgba(27,58,92,0.16)] overflow-hidden"
+      className="md:hidden fixed inset-x-3 bottom-[calc(0.625rem+env(safe-area-inset-bottom))] z-40 rounded-2xl border border-line bg-surface/80 backdrop-blur-2xl backdrop-saturate-150 shadow-float overflow-hidden"
       aria-label={t("tools")}
     >
-      {/* Loading line on the bar itself — the top of the screen is out of
+      {/* Loading line on the bar itself: the top of the screen is out of
           the visual field when tapping tabs, the bar edge is where you look */}
       {navTarget && (
         <div className="absolute top-0 left-0 right-0 h-0.5 z-10" role="progressbar" aria-label={t("tools")}>
-          <div className="h-full w-full bg-primary origin-left motion-safe:animate-[nav-progress_2.5s_cubic-bezier(0.15,0.6,0.3,1)_forwards]" />
+          <div className="h-full w-full bg-brand origin-left motion-safe:animate-[nav-progress_2.5s_cubic-bezier(0.15,0.6,0.3,1)_forwards]" />
         </div>
       )}
       <div className="flex h-14 items-stretch justify-around px-1">
@@ -143,7 +146,7 @@ export function MobileBottomNav() {
             side="bottom"
             // The default absolute X floats mid-air next to the language grid:
             // hidden here, replaced by an inline close in the header row
-            className="rounded-t-2xl border-t border-border pb-[calc(1rem+env(safe-area-inset-bottom))] [&>button]:hidden"
+            className="rounded-t-2xl border-t border-line pb-[calc(1rem+env(safe-area-inset-bottom))] [&>button]:hidden"
           >
             <MoreSheetContent
               onOpenSettings={() => {
@@ -193,10 +196,8 @@ function MoreSheetContent({ onOpenSettings }: { onOpenSettings: () => void }) {
 
       {/* Header row: destinations without a slot in the bar, close right */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          {t("explore")}
-        </p>
-        <SheetClose className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+        <p className="label-mono">{t("explore")}</p>
+        <SheetClose className="flex h-9 w-9 items-center justify-center rounded-full text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors">
           <X className="h-4 w-4" />
           <span className="sr-only">{config.app.name}</span>
         </SheetClose>
@@ -204,16 +205,16 @@ function MoreSheetContent({ onOpenSettings }: { onOpenSettings: () => void }) {
       <div className="grid grid-cols-2 gap-1.5">
         <a
           href="/parlamentari"
-          className="flex items-center gap-2 rounded-lg border border-border px-3 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-muted/50"
+          className="flex items-center gap-2 rounded-md bg-surface-muted px-3 py-3 text-sm text-fg transition-colors hover:bg-surface-sunken"
         >
-          <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <Users className="h-4 w-4 shrink-0 text-fg-muted" />
           <span className="truncate">{t("deputies")}</span>
         </a>
         <a
           href="/gruppi"
-          className="flex items-center gap-2 rounded-lg border border-border px-3 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-muted/50"
+          className="flex items-center gap-2 rounded-md bg-surface-muted px-3 py-3 text-sm text-fg transition-colors hover:bg-surface-sunken"
         >
-          <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <Landmark className="h-4 w-4 shrink-0 text-fg-muted" />
           <span className="truncate">{t("groups")}</span>
         </a>
       </div>
@@ -223,21 +224,17 @@ function MoreSheetContent({ onOpenSettings }: { onOpenSettings: () => void }) {
         <ScopePicker />
       </div>
 
-      <div className="mt-4 mb-3">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          {tLang("switchTo")}
-        </p>
-      </div>
+      <p className="mt-4 mb-2 text-sm font-medium text-fg-secondary">{tLang("switchTo")}</p>
       <div className="grid grid-cols-3 gap-1.5">
         {LOCALES.map((l) => (
           <button
             key={l.code}
             onClick={() => switchTo(l.code)}
             className={cn(
-              "flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[13px] transition-colors",
+              "flex min-h-10 items-center justify-center gap-1.5 rounded-full border px-2 py-2 text-[13px] transition-colors",
               l.code === locale
-                ? "border-primary/40 bg-primary/5 text-primary font-medium"
-                : "border-border text-muted-foreground hover:bg-muted/50"
+                ? "border-transparent bg-brand-soft text-brand-fg font-medium"
+                : "border-line-strong text-fg-secondary hover:bg-surface-muted"
             )}
           >
             {l.code === locale && <Check className="h-3.5 w-3.5 shrink-0" />}
@@ -247,21 +244,22 @@ function MoreSheetContent({ onOpenSettings }: { onOpenSettings: () => void }) {
       </div>
 
       {/* Footer: data date (the info that matters) + small icon actions */}
-      <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between gap-3">
-        <span className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground min-w-0">
+      <div className="mt-4 pt-3 border-t border-line flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 text-xs text-fg-muted min-w-0">
           <CalendarDays className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">
             {t("dataShort")}{" "}
-            <strong className="text-sm tabular-nums font-semibold text-foreground">
+            <strong className="text-sm tabular font-semibold text-fg">
               {lastUpdate || "--/--/----"}
             </strong>
           </span>
         </span>
         <span className="flex items-center gap-1 shrink-0">
+          <MobileThemeButton />
           <button
             onClick={onOpenSettings}
             aria-label={t("settings")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors"
           >
             <Settings className="h-4 w-4" />
           </button>
@@ -270,12 +268,31 @@ function MoreSheetContent({ onOpenSettings }: { onOpenSettings: () => void }) {
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t("documentation")}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors"
           >
             <Github className="h-4 w-4" />
           </a>
         </span>
       </div>
     </div>
+  );
+}
+
+function MobileThemeButton() {
+  const t = useTranslations("Sidebar");
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isDark = mounted && resolvedTheme === "dark";
+  const label = isDark ? t("themeLight") : t("themeDark");
+  const Icon = isDark ? Sun : Moon;
+  return (
+    <button
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      aria-label={label}
+      className="flex h-10 w-10 items-center justify-center rounded-full text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors"
+    >
+      <Icon className="h-4 w-4" />
+    </button>
   );
 }

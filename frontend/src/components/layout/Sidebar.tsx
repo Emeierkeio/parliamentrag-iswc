@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import Image from "next/image";
+import { Logo, Symbol } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import {
   MessageSquare,
   PanelLeftClose,
@@ -20,8 +21,8 @@ import {
   CalendarDays,
   Users,
   Landmark,
+  ArrowUpRight,
 } from "lucide-react";
-import { config } from "@/config";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { ScopePicker } from "@/components/chat/ScopePicker";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
@@ -82,7 +83,7 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
         )}
       >
         {/* Header */}
-        <div className="flex h-20 items-center px-4">
+        <div className="flex h-16 items-center px-4">
           <div
             className={cn(
               "flex items-center gap-3 overflow-hidden transition-all duration-300 w-full",
@@ -94,16 +95,7 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
               className={cn("flex items-center gap-3 transition-opacity duration-300 cursor-pointer", isCollapsed && "w-10 justify-center")}
               onClick={() => window.location.href = "/"}
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center text-sidebar-foreground">
-                <Image src="/logo.svg" alt={config.app.name} width={37} height={26} />
-              </div>
-              {!isCollapsed && (
-                <div className="flex flex-col fade-in">
-                  <span className="[font-family:var(--font-display)] text-base font-semibold tracking-tight text-sidebar-foreground">
-                    {config.app.name}
-                  </span>
-                </div>
-              )}
+              {isCollapsed ? <Symbol size={30} /> : <Logo size={17} />}
             </div>
 
              {/* Toggle Button Inside Header when Expanded */}
@@ -112,7 +104,8 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
                   variant="ghost"
                   size="icon"
                   onClick={onToggle}
-                  className="h-8 w-8 text-sidebar-foreground/50 hover:bg-transparent hover:text-sidebar-foreground ml-auto"
+                  aria-label={t('collapseMenu')}
+                  className="h-8 w-8 rounded-full text-fg-muted hover:bg-surface hover:text-fg ml-auto"
                 >
                   <PanelLeftClose className="h-4 w-4" />
                 </Button>
@@ -140,7 +133,7 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
 
             {/* Esplora: the record itself (acts, people, groups, sittings) */}
             {!isCollapsed && (
-              <p className="text-[11px] uppercase tracking-[0.2em] text-sidebar-foreground/40 mt-6 mb-2 px-3">{t('explore')}</p>
+              <p className="label-mono mt-6 mb-2 px-3">{t('explore')}</p>
             )}
             {isCollapsed && <div className="mt-4 mb-1 mx-auto w-5 border-t border-sidebar-border" />}
 
@@ -170,7 +163,7 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
 
             {/* Analizza: the system's readings over the record */}
             {!isCollapsed && (
-              <p className="text-[11px] uppercase tracking-[0.2em] text-sidebar-foreground/40 mt-6 mb-2 px-3">{t('analyze')}</p>
+              <p className="label-mono mt-6 mb-2 px-3">{t('analyze')}</p>
             )}
             {isCollapsed && <div className="mt-4 mb-1 mx-auto w-5 border-t border-sidebar-border" />}
 
@@ -192,7 +185,12 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
         {/* Bottom Navigation */}
         <div className="p-3 pb-5 border-t border-sidebar-border">
           <nav className="flex flex-col gap-0.5 pt-2">
+            <NavButton
+                item={{ icon: ArrowUpRight, label: t('stenografo'), onClick: () => window.open("https://stenografo.it", "_blank", "noopener") }}
+                isCollapsed={isCollapsed}
+            />
             <LanguageSelector isCollapsed={isCollapsed} />
+            <ThemeToggle isCollapsed={isCollapsed} />
             <NavButton
                 item={{ icon: Settings, label: t('settings'), onClick: () => setSettingsOpen(true) }}
                 isCollapsed={isCollapsed}
@@ -210,7 +208,7 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
                 // Collapsed: icon-only box, tooltip carries the full label
                 <Tooltip delayDuration={0}>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center justify-center w-9 h-9 mx-auto text-sidebar-foreground/35 cursor-default">
+                    <div className="flex items-center justify-center w-9 h-9 mx-auto text-fg-faint cursor-default">
                       <CalendarDays className="h-4 w-4 shrink-0" />
                     </div>
                   </TooltipTrigger>
@@ -220,9 +218,9 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
                 </Tooltip>
               ) : (
                 // Expanded: the date is already readable — no tooltip
-                <div className="flex items-center h-8 gap-2 px-3 text-[10px] uppercase tracking-wide text-sidebar-foreground/35 whitespace-nowrap overflow-hidden cursor-default">
+                <div className="flex items-center h-8 gap-2 px-3 label-mono whitespace-nowrap overflow-hidden cursor-default">
                   <CalendarDays className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{t('dataShort')} <strong className="text-sidebar-foreground/55 tabular-nums font-semibold">{lastUpdate || "--/--/----"}</strong></span>
+                  <span className="truncate">{t('dataShort')} <strong className="text-fg-secondary tabular-nums font-medium">{lastUpdate || "--/--/----"}</strong></span>
                 </div>
               )}
             </div>
@@ -236,7 +234,8 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
                         variant="ghost"
                         size="icon"
                         onClick={onToggle}
-                        className="h-8 w-8 text-sidebar-foreground/50 hover:bg-transparent hover:text-sidebar-foreground transition-colors"
+                        aria-label={t('expandMenu')}
+                        className="h-8 w-8 rounded-full text-fg-muted hover:bg-surface hover:text-fg transition-colors"
                     >
                         <PanelLeft className="h-4 w-4" />
                     </Button>
@@ -279,18 +278,12 @@ function NavButton({ item, isCollapsed, variant = "default", disabled = false }:
       variant="ghost"
       disabled={disabled}
       className={cn(
-        "relative w-full justify-start transition-all duration-200",
-        // Primary: the app's action, boxed apart from the browse tools
-        isPrimary && "gap-3 h-10 mb-1 border border-sidebar-border bg-sidebar-accent/25",
-        // Default (strumenti): compact
-        !isPrimary && "gap-2.5 h-8 mb-0.5 text-[13px]",
-        // Default State
-        "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
-        // Active State
-        item.isActive && !isPrimary && "bg-sidebar-accent/60 text-sidebar-foreground font-medium",
-        // Primary Variant
-        isPrimary && "text-sidebar-foreground font-semibold hover:bg-sidebar-accent/50",
-        isPrimary && item.isActive && "bg-sidebar-accent/40",
+        "relative w-full justify-start transition-colors duration-200",
+        // Primary: the app's one action, a pill in the product accent
+        isPrimary && "gap-2.5 h-10 mb-1 rounded-full bg-brand text-on-brand font-medium hover:bg-brand-hover hover:text-on-brand",
+        // Default (tools): compact rows, rectangles
+        !isPrimary && "gap-2.5 h-8 mb-0.5 text-[13px] rounded-md text-fg-secondary hover:bg-surface hover:text-fg",
+        item.isActive && !isPrimary && "bg-surface text-fg font-medium",
         // Collapsed Logic
         isCollapsed && "justify-center px-0 mx-auto",
         isCollapsed && isPrimary && "w-10 h-10",
@@ -302,15 +295,15 @@ function NavButton({ item, isCollapsed, variant = "default", disabled = false }:
     >
       {/* Active marker: the tinted background alone was too quiet to find
           the current page at a glance */}
-      {item.isActive && !isCollapsed && (
+      {item.isActive && !isCollapsed && !isPrimary && (
         <span
-          className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-sidebar-foreground/80"
+          className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand"
           aria-hidden="true"
         />
       )}
       <item.icon className={cn(
         "shrink-0",
-        isPrimary ? "h-5 w-5 text-sidebar-foreground" : "h-4 w-4 text-current"
+        isPrimary ? "h-4 w-4" : "h-4 w-4 text-current"
       )} />
       {!isCollapsed && (
         <span className="truncate">{item.label}</span>

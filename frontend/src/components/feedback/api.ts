@@ -44,12 +44,24 @@ export async function postDetails(
 
 // Separate request with no chat or feedback reference: the address must
 // never be linkable to what the person asked.
-export async function subscribeNewsletter(email: string): Promise<boolean> {
+export type NewsletterSource =
+  | "home"
+  | "dossier"
+  | "menu"
+  | "landing"
+  | "footer"
+  | "sidebar"
+  | "mobile_menu"
+  | "feedback"
+  | "valutazione"
+  | "survey_done";
+
+export async function subscribeNewsletter(email: string, source?: NewsletterSource): Promise<boolean> {
   try {
     const res = await fetch(`${config.api.baseUrl}/newsletter/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, consent: true }),
+      body: JSON.stringify({ email, consent: true, source }),
     });
     return res.ok;
   } catch {
