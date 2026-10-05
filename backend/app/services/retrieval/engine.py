@@ -22,6 +22,8 @@ from .query_rewriter import QueryRewriter
 from ...models.evidence import UnifiedEvidence
 from ...config import get_config, get_settings
 
+from .scope import Scope, normalize_scope, scope_param, session_clause, vector_indexes
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,7 +71,8 @@ class RetrievalEngine:
         authority_scores: Optional[Dict[str, float]] = None,
         date_start: Optional[str] = None,
         date_end: Optional[str] = None,
-        locale: str = "it"
+        locale: str = "it",
+        scope: Optional[Scope] = None,
     ) -> Dict[str, Any]:
         """
         Perform dual-channel retrieval (synchronous version).
@@ -83,6 +86,7 @@ class RetrievalEngine:
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         start_time = time.time()
+        scope = normalize_scope(scope)
 
         # Rewrite short/ambiguous queries before retrieval.
         # The rewritten query is used for embedding + graph keyword search;
@@ -99,7 +103,8 @@ class RetrievalEngine:
                 query_embedding=query_embedding,
                 top_k=top_k * 2,  # Over-retrieve for merging
                 date_start=date_start,
-                date_end=date_end
+                date_end=date_end,
+                scope=scope,
             )
 
         def run_graph():
@@ -107,7 +112,8 @@ class RetrievalEngine:
                 query=retrieval_query,
                 query_embedding=query_embedding,
                 date_start=date_start,
-                date_end=date_end
+                date_end=date_end,
+                scope=scope,
             )
 
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -155,7 +161,7 @@ class RetrievalEngine:
             )
             fill_results = self._coverage_fill(
                 query_embedding, under_represented, chunks_per_party=min_per_party,
-                date_start=date_start, date_end=date_end
+                date_start=date_start, date_end=date_end, scope=scope,
             )
             if fill_results:
                 existing_ids = {r.get("evidence_id") for r in merged_results}
@@ -210,7 +216,8 @@ class RetrievalEngine:
         authority_scores: Optional[Dict[str, float]] = None,
         date_start: Optional[str] = None,
         date_end: Optional[str] = None,
-        locale: str = "it"
+        locale: str = "it",
+        scope: Optional[Scope] = None,
     ) -> Dict[str, Any]:
         """
         Perform dual-channel retrieval (async).
@@ -231,6 +238,7 @@ class RetrievalEngine:
                 date_start=date_start,
                 date_end=date_end,
                 locale=locale,
+                scope=scope,
             ),
         )
 
@@ -491,7 +499,8 @@ class RetrievalEngine:
         missing_parties: set,
         chunks_per_party: int = 5,
         date_start: Optional[str] = None,
-        date_end: Optional[str] = None
+        date_end: Optional[str] = None,
+        scope: Optional[Scope] = None,
     ) -> List[Dict[str, Any]]:
         """
         Fill coverage gaps by doing targeted vector search for missing parties.
@@ -514,6 +523,10 @@ class RetrievalEngine:
         if date_end:
             date_filter += " AND s.date <= date($date_end)"
             date_params["date_end"] = date_end
+        scope = normalize_scope(scope)
+        date_filter += " AND " + session_clause()
+        date_params["scope"] = scope_param(scope)
+        indexes = vector_indexes(self.client, scope, index_name)
 
         fill_results = []
 
@@ -541,12 +554,14 @@ class RetrievalEngine:
                 MATCH (c)<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(speaker)
                 MATCH (i)<-[:CONTAINS_SPEECH]-(f:Phase)<-[:HAS_PHASE]-(d:Debate)<-[:HAS_DEBATE]-(s:Session)
                 // Only current party members: membership must be active both
-                // at speech date and today.
+                // at speech date and today (for a closed legislature: on its
+                // last day).
                 MATCH (speaker)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
                 WHERE toLower(g.name) = toLower($party_name)
                 AND mg.start_date <= s.date
                 AND (mg.end_date IS NULL OR mg.end_date >= s.date)
-                AND (mg.end_date IS NULL OR mg.end_date >= date()){date_filter}
+                AND (mg.end_date IS NULL OR mg.end_date >= date()
+                     OR (mg.final_in_legislature AND mg.legislature = s.legislature)){date_filter}
                 // Current party (used to compute party_changed in _process_results)
                 OPTIONAL MATCH (speaker)-[mg_now:MEMBER_OF_GROUP]->(g_now:ParliamentaryGroup)
                 WHERE mg_now.end_date IS NULL
@@ -560,7 +575,7 @@ class RetrievalEngine:
                        speaker.id AS speaker_id,
                        speaker.first_name AS speaker_first_name,
                        speaker.last_name AS speaker_last_name,
-                       CASE WHEN 'GovernmentMember' IN labels(speaker) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
+                       CASE WHEN coalesce(i.speaker_in_government, 'GovernmentMember' IN labels(speaker)) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
                        g.name AS party,
                        g_now.name AS current_party,
                        s.id AS session_id,
@@ -576,14 +591,18 @@ class RetrievalEngine:
                 LIMIT $limit
                 """
 
-                results = self.client.query(cypher, {
-                    "index_name": index_name,
-                    "top_k": 500,  # Search wider to find this party's chunks
-                    "query_embedding": query_embedding,
-                    "party_name": normalized_party,
-                    "limit": chunks_per_party,
-                    **date_params
-                })
+                results = []
+                for index in indexes:
+                    results.extend(self.client.query(cypher, {
+                        "index_name": index,
+                        "top_k": 500,  # Search wider to find this party's chunks
+                        "query_embedding": query_embedding,
+                        "party_name": normalized_party,
+                        "limit": chunks_per_party,
+                        **date_params
+                    }))
+                if len(indexes) > 1:
+                    results = sorted(results, key=lambda r: r["similarity"], reverse=True)[:chunks_per_party]
 
                 if results:
                     processed = self.dense_channel._process_results(results)

@@ -17,6 +17,7 @@ import pytest
 # Ensure build/ is on the path for direct imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sparql_ingester import individual_vote_id
 from senate_sparql_ingester import (
     SenateVoteIngester,
     _senato_sparql_get,
@@ -200,24 +201,24 @@ class TestSenateHttpMethod:
 # ---------------------------------------------------------------------------
 
 class TestSenateIndividualVoteId:
-    """Tests for Senate IndividualVote id format (iv_senato_{senator_id}_{seduta}_{vote})."""
+    """Tests for Senate IndividualVote id format (iv_senato_leg{N}_{senator_id}_{seduta}_{vote})."""
 
     def test_id_format_given_standard_inputs(self):
-        """iv_senato_{senator_id}_{seduta}_{vote} — senatore/17542, seduta=167, vote=42."""
+        """iv_senato_leg19_{senator_id}_{seduta}_{vote} — senatore/17542, seduta=167, vote=42."""
         from senate_sparql_ingester import _senator_id_from_uri  # ImportError -> RED
         sen_uri = "http://dati.senato.it/senatore/17542"
         seduta = 167
         vote = 42
         sen_id = _senator_id_from_uri(sen_uri)
         assert sen_id == "17542"
-        iv_id = f"iv_senato_{sen_id}_{seduta}_{vote}"
-        assert iv_id == "iv_senato_17542_167_42"
+        iv_id = individual_vote_id("senato", 19, sen_id, seduta, vote)
+        assert iv_id == "iv_senato_leg19_17542_167_42"
 
     def test_id_has_senato_prefix(self):
         """IndividualVote id must start with iv_senato_ (not iv_camera_)."""
         from senate_sparql_ingester import _senator_id_from_uri
         sen_id = _senator_id_from_uri("http://dati.senato.it/senatore/17542")
-        iv_id = f"iv_senato_{sen_id}_167_42"
+        iv_id = individual_vote_id("senato", 19, sen_id, 167, 42)
         assert iv_id.startswith("iv_senato_")
 
     def test_senator_id_extracted_from_trailing_digits(self):

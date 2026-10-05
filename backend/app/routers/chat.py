@@ -17,6 +17,7 @@ from ..services.compass import IdeologyScorer
 from ..services.retrieval.commission_matcher import get_commission_matcher
 from ..services.task_store import get_task_store
 from ..services.response_cache import (
+    LEGISLATURE,
     build_cache_key,
     config_fingerprint,
     get_data_version,
@@ -27,6 +28,7 @@ from ..services.response_cache import (
 )
 from ..services.deps import get_services
 from ..config import get_config
+from ..services.retrieval.scope import ScopeItem, normalize_scope, scope_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Chat"])
@@ -48,6 +50,7 @@ class ChatRequest(BaseModel):
     mode: str = Field(default="standard")  # "standard" or "high_quality"
     task_id: Optional[str] = Field(default=None)  # Client-provided task ID for reconnection
     locale: str = Field(default="it")  # Language for response/citation translation ("it" | "en")
+    scope: Optional[List[ScopeItem]] = Field(default=None)  # Chambers/legislatures to search; default Camera XIX
 
 
 
@@ -241,7 +244,9 @@ async def process_chat_background(
         retrieval_start = time.time()
 
         def _do_retrieval():
-            return services["retrieval"].retrieve_sync(query=request.query, top_k=100)
+            return services["retrieval"].retrieve_sync(
+                query=request.query, top_k=100, scope=normalize_scope(request.scope),
+            )
 
         retrieval_result = await asyncio.get_running_loop().run_in_executor(None, _do_retrieval)
         retrieval_time = time.time() - retrieval_start
@@ -471,8 +476,7 @@ async def process_chat_background(
                                speaker.id AS speaker_id,
                                speaker.first_name AS speaker_first_name,
                                speaker.last_name AS speaker_last_name,
-                               CASE WHEN 'GovernmentMember' IN labels(speaker)
-                                    THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
+                               CASE WHEN coalesce(i.speaker_in_government, 'GovernmentMember' IN labels(speaker)) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
                                g.name AS party,
                                s.id AS session_id,
                                s.date AS session_date,
@@ -789,30 +793,34 @@ def _batch_fetch_photos(neo4j_client: Neo4jClient, speaker_ids: List[str]) -> Di
     return result_map
 
 
-def _batch_fetch_gov_roles(neo4j_client: Neo4jClient, speaker_ids: List[str]) -> Dict[str, str]:
+def _batch_fetch_gov_roles(neo4j_client: Neo4jClient, speech_ids: List[str]) -> Dict[str, str]:
     """
-    Batch-fetch institutional roles for government members.
-    Also matches Deputies who hold government positions (e.g. PM, ministers who are also MPs)
-    by looking up GovernmentMember nodes with the same first_name + last_name.
-    Returns {speaker_id: role}.
+    Batch-fetch the government office held by each speech's speaker on the
+    sitting date. Returns {speech_id: role}.
+
+    Speeches annotated by the build (speaker_in_government) carry the dated
+    office; older graphs fall back to the speaker's static institutional_role.
     """
-    if not speaker_ids:
+    if not speech_ids:
         return {}
     cypher = """
-    UNWIND $ids AS sid
-    // Direct GovernmentMember match
-    OPTIONAL MATCH (m:GovernmentMember {id: sid})
-    // Also check if a Deputy matches a GovernmentMember by name (indexed lookup, no full scan)
-    OPTIONAL MATCH (d:Deputy {id: sid})
-    OPTIONAL MATCH (gm:GovernmentMember {first_name: d.first_name, last_name: d.last_name})
-    WITH sid,
-         COALESCE(m.institutional_role, gm.institutional_role) AS role
+    UNWIND $ids AS spid
+    MATCH (sp:Speech {id: spid})-[:SPOKEN_BY]->(speaker)
+    OPTIONAL MATCH (gm:GovernmentMember)
+    WHERE sp.speaker_in_government IS NULL
+      AND gm.first_name = speaker.first_name AND gm.last_name = speaker.last_name
+    WITH spid, CASE
+        WHEN sp.speaker_in_government IS NOT NULL THEN sp.government_role
+        ELSE COALESCE(
+            CASE WHEN 'GovernmentMember' IN labels(speaker) THEN speaker.institutional_role END,
+            gm.institutional_role)
+        END AS role
     WHERE role IS NOT NULL
-    RETURN sid, role
+    RETURN spid AS sid, role
     """
     result_map: Dict[str, str] = {}
     with neo4j_client.session() as session:
-        result = session.run(cypher, ids=list(set(speaker_ids)))
+        result = session.run(cypher, ids=list(set(speech_ids)))
         for record in result:
             result_map[record["sid"]] = record["role"]
     return result_map
@@ -1139,16 +1147,18 @@ def _build_citations_for_frontend(
     if neo4j_client:
         speaker_ids = [e.get("speaker_id", "") for e in evidence_dicts[:20] if e.get("speaker_id")]
         deputy_card_map = _batch_fetch_deputy_cards(neo4j_client, speaker_ids)
-        # Look up government roles for every speaker, not just GovernmentMembers:
-        # deputies may also hold government office (e.g. ministers who are MPs).
-        gov_role_map = _batch_fetch_gov_roles(neo4j_client, speaker_ids)
+        # Government office per speech, at the sitting date: deputies may hold
+        # office (ministers who are MPs), former ministers may speak as MPs.
+        gov_role_map = _batch_fetch_gov_roles(
+            neo4j_client, [e.get("speech_id", "") for e in evidence_dicts[:20] if e.get("speech_id")]
+        )
 
     for i, e in enumerate(evidence_dicts[:20]):  # Limit for UI
         evidence_id = e.get("evidence_id", f"cit_{i+1}")
         speaker_name = e.get("speaker_name", "")
         speaker_id = e.get("speaker_id", "")
         party = e.get("party", "MISTO")
-        is_government = e.get("speaker_role") == "GovernmentMember" or speaker_id in gov_role_map
+        is_government = e.get("speaker_role") == "GovernmentMember" or e.get("speech_id", "") in gov_role_map
 
         if is_government:
             group = "Governo"
@@ -1190,7 +1200,7 @@ def _build_citations_for_frontend(
         if e.get("misto_component"):
             cit_data["misto_component"] = e["misto_component"]
         if is_government:
-            role = gov_role_map.get(speaker_id)
+            role = gov_role_map.get(e.get("speech_id", ""))
             if not role and neo4j_client:
                 # Fallback: fetch role directly for GovernmentMember not in batch
                 try:
@@ -1296,8 +1306,11 @@ def _build_verified_citations(
             if sid:
                 speaker_ids.append(sid)
         deputy_card_map = _batch_fetch_deputy_cards(neo4j_client, speaker_ids)
-        # Check ALL speakers for government roles (Deputies who are also ministers)
-        gov_role_map = _batch_fetch_gov_roles(neo4j_client, speaker_ids)
+        # Government office per speech, at the sitting date
+        gov_role_map = _batch_fetch_gov_roles(neo4j_client, [
+            evidence_map.get(cit.get("evidence_id", ""), {}).get("speech_id", "")
+            for cit in generation_citations
+        ])
 
     verified = []
     for cit in generation_citations:
@@ -1306,7 +1319,8 @@ def _build_verified_citations(
         party = cit.get("party", evidence.get("party", "MISTO"))
         speaker_id = cit.get("speaker_id") or evidence.get("speaker_id", "")
         speaker_role = cit.get("speaker_role") or evidence.get("speaker_role", "Deputy")
-        is_government = speaker_role == "GovernmentMember" or speaker_id in gov_role_map
+        speech_id = evidence.get("speech_id", "")
+        is_government = speaker_role == "GovernmentMember" or speech_id in gov_role_map
 
         if is_government:
             group = "Governo"
@@ -1346,7 +1360,7 @@ def _build_verified_citations(
         if evidence.get("misto_component"):
             cit_data["misto_component"] = evidence["misto_component"]
         if is_government:
-            role = gov_role_map.get(speaker_id)
+            role = gov_role_map.get(speech_id)
             if not role and neo4j_client:
                 try:
                     with neo4j_client.session() as sess:
@@ -1418,6 +1432,7 @@ async def chat_endpoint(request: ChatRequest, http_request: Request):
                 mode=request.mode,
                 data_version=data_version,
                 config_fingerprint=config_fingerprint(get_config().load_config()),
+                legislature=scope_key(normalize_scope(request.scope)) or LEGISLATURE,
             )
 
             cached_events = await cache.lookup(cache_key)

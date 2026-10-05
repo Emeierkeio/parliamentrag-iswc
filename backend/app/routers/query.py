@@ -38,6 +38,7 @@ from ..config import get_config
 logger = logging.getLogger(__name__)
 
 from ..log_context import new_query_id  # noqa: E402
+from ..services.retrieval.scope import ScopeItem, normalize_scope
 router = APIRouter(prefix="/api", tags=["Query"])
 
 # Pipeline concurrency limiter, shared across all requests in the same
@@ -251,6 +252,7 @@ class QueryRequest(BaseModel):
     date_end: Optional[str] = Field(default=None, description="End date filter (YYYY-MM-DD)")
     stream: bool = Field(default=True, description="Enable SSE streaming")
     task_id: Optional[str] = Field(default=None, description="Client-provided task ID for cancellation/reconnection")
+    scope: Optional[List[ScopeItem]] = Field(default=None, description="Chambers and legislatures to search (default: Camera XIX)")
 
 
 class CitationInfo(BaseModel):
@@ -333,7 +335,8 @@ async def process_query_streaming(
             top_k=request.top_k,
             date_start=request.date_start,
             date_end=request.date_end,
-            locale=request_locale
+            locale=request_locale,
+            scope=normalize_scope(request.scope),
         )
 
         evidence_list = retrieval_result["evidence"]
@@ -577,8 +580,7 @@ async def process_query_streaming(
                                speaker.id AS speaker_id,
                                speaker.first_name AS speaker_first_name,
                                speaker.last_name AS speaker_last_name,
-                               CASE WHEN 'GovernmentMember' IN labels(speaker)
-                                    THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
+                               CASE WHEN coalesce(i.speaker_in_government, 'GovernmentMember' IN labels(speaker)) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
                                g.name AS party,
                                s.id AS session_id,
                                s.date AS session_date,
@@ -1207,31 +1209,34 @@ def _batch_fetch_speaker_enrichment(neo4j_client: Neo4jClient, speaker_ids: List
     return result_map
 
 
-def _batch_fetch_gov_roles(neo4j_client: Neo4jClient, speaker_ids: List[str]) -> Dict[str, str]:
+def _batch_fetch_gov_roles(neo4j_client: Neo4jClient, speech_ids: List[str]) -> Dict[str, str]:
     """
-    Batch-fetch institutional roles for government members.
-    Also matches Deputies who hold government positions (e.g. PM, ministers who are also MPs)
-    by looking up GovernmentMember nodes with the same first_name + last_name.
-    Returns {speaker_id: role}.
+    Batch-fetch the government office held by each speech's speaker on the
+    sitting date. Returns {speech_id: role}.
+
+    Speeches annotated by the build (speaker_in_government) carry the dated
+    office; older graphs fall back to the speaker's static institutional_role.
     """
-    if not speaker_ids:
+    if not speech_ids:
         return {}
     cypher = """
-    UNWIND $ids AS sid
-    // Direct GovernmentMember match
-    OPTIONAL MATCH (m:GovernmentMember {id: sid})
-    // Also check if a Deputy matches a GovernmentMember by name
-    OPTIONAL MATCH (d:Deputy {id: sid})
+    UNWIND $ids AS spid
+    MATCH (sp:Speech {id: spid})-[:SPOKEN_BY]->(speaker)
     OPTIONAL MATCH (gm:GovernmentMember)
-    WHERE gm.first_name = d.first_name AND gm.last_name = d.last_name
-    WITH sid,
-         COALESCE(m.institutional_role, gm.institutional_role) AS role
+    WHERE sp.speaker_in_government IS NULL
+      AND gm.first_name = speaker.first_name AND gm.last_name = speaker.last_name
+    WITH spid, CASE
+        WHEN sp.speaker_in_government IS NOT NULL THEN sp.government_role
+        ELSE COALESCE(
+            CASE WHEN 'GovernmentMember' IN labels(speaker) THEN speaker.institutional_role END,
+            gm.institutional_role)
+        END AS role
     WHERE role IS NOT NULL
-    RETURN sid, role
+    RETURN spid AS sid, role
     """
     result_map: Dict[str, str] = {}
     with neo4j_client.session() as session:
-        result = session.run(cypher, ids=list(set(speaker_ids)))
+        result = session.run(cypher, ids=list(set(speech_ids)))
         for record in result:
             result_map[record["sid"]] = record["role"]
     return result_map
@@ -1250,14 +1255,16 @@ def _build_citations_for_frontend(
     if neo4j_client:
         speaker_ids = [e.get("speaker_id", "") for e in evidence_dicts[:20] if e.get("speaker_id")]
         deputy_card_map = _batch_fetch_deputy_cards(neo4j_client, speaker_ids)
-        gov_role_map = _batch_fetch_gov_roles(neo4j_client, speaker_ids)
+        gov_role_map = _batch_fetch_gov_roles(
+            neo4j_client, [e.get("speech_id", "") for e in evidence_dicts[:20] if e.get("speech_id")]
+        )
 
     for i, e in enumerate(evidence_dicts[:20]):
         evidence_id = e.get("evidence_id", f"cit_{i+1}")
         speaker_name = e.get("speaker_name", "")
         speaker_id = e.get("speaker_id", "")
         party = e.get("party", "MISTO")
-        is_government = e.get("speaker_role") == "GovernmentMember" or speaker_id in gov_role_map
+        is_government = e.get("speaker_role") == "GovernmentMember" or e.get("speech_id", "") in gov_role_map
 
         if is_government:
             group = "Governo"
@@ -1292,7 +1299,7 @@ def _build_citations_for_frontend(
             "photo": _dep_info.get("photo"),
         }
         if is_government:
-            role = gov_role_map.get(speaker_id)
+            role = gov_role_map.get(e.get("speech_id", ""))
             if not role and neo4j_client:
                 try:
                     with neo4j_client.session() as sess:
@@ -1335,7 +1342,10 @@ def _build_verified_citations(
             if sid:
                 speaker_ids.append(sid)
         deputy_card_map = _batch_fetch_deputy_cards(neo4j_client, speaker_ids)
-        gov_role_map = _batch_fetch_gov_roles(neo4j_client, speaker_ids)
+        gov_role_map = _batch_fetch_gov_roles(neo4j_client, [
+            evidence_map.get(cit.get("evidence_id", ""), {}).get("speech_id", "")
+            for cit in generation_citations
+        ])
 
     verified = []
     for cit in generation_citations:
@@ -1344,7 +1354,8 @@ def _build_verified_citations(
         party = cit.get("party", evidence.get("party", "MISTO"))
         speaker_id = cit.get("speaker_id") or evidence.get("speaker_id", "")
         speaker_role = cit.get("speaker_role") or evidence.get("speaker_role", "Deputy")
-        is_government = speaker_role == "GovernmentMember" or speaker_id in gov_role_map
+        speech_id = evidence.get("speech_id", "")
+        is_government = speaker_role == "GovernmentMember" or speech_id in gov_role_map
 
         if is_government:
             group = "Governo"
@@ -1378,7 +1389,7 @@ def _build_verified_citations(
             "verified": True,
         }
         if is_government:
-            role = gov_role_map.get(speaker_id)
+            role = gov_role_map.get(speech_id)
             if not role and neo4j_client:
                 try:
                     with neo4j_client.session() as sess:
@@ -1423,7 +1434,8 @@ async def query_endpoint(request: QueryRequest, http_request: Request):
                 query=request.query,
                 top_k=request.top_k,
                 date_start=request.date_start,
-                date_end=request.date_end
+                date_end=request.date_end,
+                scope=normalize_scope(request.scope),
             )
 
             evidence_list = retrieval_result["evidence"]

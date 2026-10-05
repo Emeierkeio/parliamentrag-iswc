@@ -16,6 +16,8 @@ from ...models.evidence import (
 )
 from ...config import get_config
 
+from .scope import DEFAULT_SCOPE, Scope, scope_param, session_clause, vector_indexes
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +39,8 @@ class DenseChannel:
         top_k: Optional[int] = None,
         similarity_threshold: Optional[float] = None,
         date_start: Optional[str] = None,
-        date_end: Optional[str] = None
+        date_end: Optional[str] = None,
+        scope: Scope = DEFAULT_SCOPE,
     ) -> List[Dict[str, Any]]:
         """
         Perform vector similarity search.
@@ -49,6 +52,7 @@ class DenseChannel:
                 vector-index scale (cosine mapped to [0,1] as (1+cos)/2)
             date_start: Optional session-date lower bound, "YYYY-MM-DD"
             date_end: Optional session-date upper bound, "YYYY-MM-DD"
+            scope: (chamber, legislature) pairs to search
 
         Returns:
             List of evidence candidates with metadata
@@ -75,6 +79,8 @@ class DenseChannel:
         if date_end:
             date_filter += " AND s.date <= date($date_end)"
             params["date_end"] = date_end
+        date_filter += " AND " + session_clause()
+        params["scope"] = scope_param(scope)
 
         # No MATCH clause may precede db.index.vector.queryNodes: the index
         # procedure must be the first clause or Neo4j falls back to a scan.
@@ -85,11 +91,13 @@ class DenseChannel:
         MATCH (c)<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(speaker)
         MATCH (i)<-[:CONTAINS_SPEECH]-(f:Phase)<-[:HAS_PHASE]-(d:Debate)<-[:HAS_DEBATE]-(s:Session)
         WHERE 1=1{date_filter}
-        // Deputy's party: only if the membership is still active today.
+        // Deputy's party: only if the membership is still active today (for a closed
+        // legislature: still active on its last day, final_in_legislature).
         // If the deputy switched group (mg.end_date < date()), the chunk is
         // attributed to the new group or discarded — never to the previous group.
         OPTIONAL MATCH (speaker)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
-        WHERE mg.start_date <= s.date AND (mg.end_date IS NULL OR mg.end_date >= date())
+        WHERE mg.start_date <= s.date AND (mg.end_date IS NULL OR mg.end_date >= date()
+              OR (mg.final_in_legislature AND mg.legislature = s.legislature))
         // Current party: present group (membership still open).
         OPTIONAL MATCH (speaker)-[mg_now:MEMBER_OF_GROUP]->(g_now:ParliamentaryGroup)
         WHERE mg_now.end_date IS NULL
@@ -107,7 +115,7 @@ class DenseChannel:
                speaker.id AS speaker_id,
                speaker.first_name AS speaker_first_name,
                speaker.last_name AS speaker_last_name,
-               CASE WHEN 'GovernmentMember' IN labels(speaker) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
+               CASE WHEN coalesce(i.speaker_in_government, 'GovernmentMember' IN labels(speaker)) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
                g.name AS party,
                g_now.name AS current_party,
                s.id AS session_id,
@@ -122,7 +130,11 @@ class DenseChannel:
         ORDER BY score DESC
         """
 
-        results = self.client.query(cypher, params)
+        results: List[Dict[str, Any]] = []
+        for index in vector_indexes(self.client, scope, index_name):
+            results.extend(self.client.query(cypher, {**params, "index_name": index}))
+        if len(results) > top_k:
+            results = sorted(results, key=lambda r: r["similarity"], reverse=True)[:top_k]
 
         logger.info(f"Dense channel: retrieved {len(results)} chunks")
         return self._process_results(results)

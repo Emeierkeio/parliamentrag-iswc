@@ -48,6 +48,8 @@ SENATE_LISTING_URL_PAST = (
 )
 
 SENATE_AKN_URL = "https://www.senato.it/leg/{leg}/BGT/Testi/Resaula/{bgt_id:08d}.akn"
+# Full record as a web page, for sittings listed without an AKN file.
+SENATE_HTML_URL = "https://www.senato.it/show-doc?leg={leg}&tipodoc=Resaula&id={bgt_id}&part=doc_dc"
 
 # Calendar-year span of each legislature (end None = still running)
 LEGISLATURE_YEARS: dict[int, tuple[int, int | None]] = {
@@ -275,7 +277,14 @@ def download_senate_xmls(
                 time.sleep(5 * (attempt + 1))
 
         if content is None:
-            logger.warning("Giving up on BGT %d", bgt_id)
+            html_name = _download_html_record(session, xml_dir, legislature, bgt_id)
+            if html_name:
+                bgt_index[str(bgt_id)] = html_name
+                existing_files.add(html_name)
+                downloaded += 1
+                logger.info("Downloaded web record: %s (BGT ID %d, no AKN)", html_name, bgt_id)
+            else:
+                logger.warning("Giving up on BGT %d", bgt_id)
             time.sleep(REQUEST_DELAY_SECONDS)
             continue
 
@@ -318,6 +327,32 @@ def download_senate_xmls(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _download_html_record(session: requests.Session, xml_dir: str, legislature: int, bgt_id: int) -> str | None:
+    """Save the web version of a record whose AKN file is missing.
+
+    Returns the file name, or None when the page is not a sitting record.
+    """
+    from senate_html_parser import parse_title
+
+    url = SENATE_HTML_URL.format(leg=legislature, bgt_id=bgt_id)
+    try:
+        response = session.get(url, timeout=60)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        logger.warning("Web record unavailable for BGT %d: %s", bgt_id, exc)
+        return None
+    if _is_challenge(response) or 'class="bgt"' not in response.text:
+        logger.warning("Web record for BGT %d has no record body", bgt_id)
+        return None
+    title = parse_title(response.text)
+    if title is None:
+        return None
+    filename = f"resaula_leg{legislature}_{title[0]:04d}.html"
+    with open(os.path.join(xml_dir, filename), "w", encoding="utf-8") as f:
+        f.write(response.text)
+    return filename
 
 
 def _extract_session_number(akn_content: str) -> int | None:

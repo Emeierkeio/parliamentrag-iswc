@@ -51,6 +51,10 @@ from senate_parser import SenateStenograficoParser
 from download_senate import download_senate_xmls
 from download_senators_csv import main as download_senators_csv_main
 from download_deputies_csv import main as download_deputies_csv_main
+from senate_html_parser import SenateHtmlParser
+from download_camera_seats import main as download_camera_seats_main
+from download_governments_csv import ROMAN, main as download_governments_csv_main
+from download_person_crosswalk import main as download_person_crosswalk_main
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -67,6 +71,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_NEO4J_URI = "bolt://localhost:7689"
 DEFAULT_NEO4J_USER = "neo4j"
 DEFAULT_NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "")
+
+CURRENT_LEGISLATURE = 19
 
 DATA_DIR = os.path.join(BASE_DIR, "data")
 XML_DIR = os.path.join(DATA_DIR, "xml")
@@ -122,7 +128,10 @@ def _ingest_atti(
 
         with driver.session() as neo_session:
             result = neo_session.run(
-                "MATCH (d:Deputy) RETURN d.id AS uri, d.first_name AS nome, d.last_name AS cognome"
+                "MATCH (d:Deputy) "
+                "WHERE ('camera_' + toString($legislature)) IN coalesce(d.mandates, []) "
+                "RETURN d.id AS uri, d.first_name AS nome, d.last_name AS cognome",
+                legislature=legislature,
             )
             deputati = [dict(r) for r in result]
 
@@ -219,6 +228,52 @@ def _save_atti_batch(driver, atti: list[dict], deputato_uri: str, rel_type: str)
         )
 
 
+def _prepare_people(builder: DatabaseBuilder, legislature: int, skip_download: bool) -> None:
+    """Scope legacy data, then load government offices before any person
+    loader: they give legacy government nodes their camera_id, which the
+    deputy and senator loaders resolve against."""
+    builder.create_indexes()
+    builder.backfill_legacy_scope()
+    if not skip_download:
+        # Both sources are public SPARQL endpoints that fail for minutes at a
+        # time; the files from the previous run are good enough to go on.
+        for name, step, path in (
+            ("governments", lambda: download_governments_csv_main(legislature),
+             os.path.join(DATA_DIR, f"governi_{ROMAN.get(legislature, legislature)}.csv")),
+            ("person crosswalk", download_person_crosswalk_main,
+             os.path.join(DATA_DIR, "persone_camera_senato.csv")),
+        ):
+            try:
+                step()
+            except Exception as exc:
+                if not os.path.exists(path):
+                    raise
+                logger.warning("%s download failed (%s); keeping %s", name, exc, path)
+    builder.sync_governments(DATA_DIR)
+    if builder.merge_duplicate_people():
+        # Offices were written once per duplicate; rewrite them on the survivors.
+        builder.sync_governments(DATA_DIR)
+
+
+def _finish_people(builder: DatabaseBuilder, legislature: int, chamber: str) -> None:
+    builder.create_scope_vector_index(chamber, legislature)
+    builder.merge_duplicate_people()
+    builder.relink_mismatched_speakers()
+    builder.normalize_person_labels()
+    builder.mark_party_affiliations()
+    # In a closed legislature every mandate ends with it, and the last
+    # memberships are flagged final instead (mark_final_memberships).
+    if chamber == "camera" and legislature == CURRENT_LEGISLATURE:
+        builder.close_memberships_at_mandate_end(DATA_DIR, legislature)
+        try:
+            download_camera_seats_main()
+        except Exception as exc:
+            logger.warning("Seat download failed (%s); keeping the previous seating", exc)
+        builder.load_camera_seats(DATA_DIR, legislature)
+    builder.mark_final_memberships()
+    builder.annotate_speech_government_roles(legislature, chamber)
+
+
 # ---------------------------------------------------------------------------
 # BUILD mode
 # ---------------------------------------------------------------------------
@@ -247,20 +302,23 @@ def do_build(
         logger.info("Step 2: Creating constraints and indexes")
         builder.create_constraints()
         builder.create_indexes()
+        _prepare_people(builder, legislature, skip_download)
 
         # 3. Download XMLs
         if skip_download:
             logger.info("Step 3: Skipping XML download (--skip-download)")
         else:
             logger.info("Step 3: Downloading new XMLs")
-            download_new_xmls(XML_DIR)
+            download_new_xmls(XML_DIR, legislature=legislature)
 
         # 4. Load CSVs (deputies, groups, committees, government members)
         logger.info("Step 4: Loading CSV data")
         builder.load_deputies(DATA_DIR, legislature=legislature)
         builder.load_groups(DATA_DIR, legislature=legislature)
         builder.load_committees(DATA_DIR, legislature=legislature)
-        builder.load_government_members_from_path(DATA_DIR, legislature=legislature)
+        if legislature == CURRENT_LEGISLATURE:
+            # GOVERNMENT_GROUPS lists the sitting government only.
+            builder.load_government_members_from_path(DATA_DIR, legislature=legislature)
 
         # 5. Ingest stenografici
         logger.info("Step 5: Ingesting stenografici")
@@ -284,6 +342,7 @@ def do_build(
         # 6. Load roles
         logger.info("Step 6: Loading roles")
         builder.load_roles()
+        _finish_people(builder, legislature, "camera")
 
         # 7. Atti parlamentari
         if skip_atti:
@@ -381,21 +440,25 @@ def do_update(
             logger.info("Step 1: Refreshing deputy CSV data from dati.camera.it")
             download_deputies_csv_main(legislature)
         builder.create_constraints()
+        _prepare_people(builder, legislature, skip_download)
         builder.load_deputies(DATA_DIR, legislature=legislature)
         builder.load_groups(DATA_DIR, legislature=legislature)
         builder.load_committees(DATA_DIR, legislature=legislature)
-        builder.load_government_members_from_path(DATA_DIR, legislature=legislature)
+        if legislature == CURRENT_LEGISLATURE:
+            # GOVERNMENT_GROUPS lists the sitting government only.
+            builder.load_government_members_from_path(DATA_DIR, legislature=legislature)
 
         # 2. Download new XMLs
         if skip_download:
             logger.info("Step 2: Skipping XML download (--skip-download)")
         else:
             logger.info("Step 2: Downloading new XMLs")
-            download_new_xmls(XML_DIR)
+            download_new_xmls(XML_DIR, legislature=legislature)
 
         # 3. Ingest new stenografici only
         logger.info("Step 3: Ingesting new stenografici")
         existing = builder.get_existing_session_numbers(chamber="camera", legislature=legislature)
+        first_ingest = not existing
         xml_files = sorted(glob.glob(os.path.join(XML_DIR, f"stenografico_leg{legislature}_*.xml")))
         new_files = []
         for f in xml_files:
@@ -421,7 +484,7 @@ def do_update(
             logger.info("Step 4: Skipping atti parlamentari (--skip-atti)")
         else:
             since = None
-            if not full_atti:
+            if not full_atti and not first_ingest:
                 with driver.session() as neo_session:
                     rec = neo_session.run(
                         "MATCH (m:SchemaMeta {id: 'singleton'}) RETURN m.updated_at AS u"
@@ -438,6 +501,7 @@ def do_update(
         # 5. Roles
         logger.info("Step 5: Updating roles")
         builder.load_roles()
+        _finish_people(builder, legislature, "camera")
 
         # 5b. Full-text index for BM25 sparse retrieval (idempotent: IF NOT EXISTS)
         logger.info("Step 5b: Ensuring full-text index exists")
@@ -487,11 +551,12 @@ def do_build_senate(
             logger.info("Skipping senator CSV download")
         else:
             logger.info("Downloading senator biographical data from dati.senato.it")
-            download_senators_csv_main()
+            download_senators_csv_main(legislature)
 
         # 2. Load senator CSVs (Deputy nodes with chamber='senato')
         logger.info("Loading senator CSV data")
         builder.create_constraints()
+        _prepare_people(builder, legislature, skip_download)
         builder.load_senators(DATA_DIR, legislature=legislature)
         builder.load_senator_groups(DATA_DIR, legislature=legislature)
         builder.load_senator_committees(DATA_DIR, legislature=legislature)
@@ -502,7 +567,7 @@ def do_build_senate(
         else:
             logger.info("Downloading Senate AKN files")
             os.makedirs(SENATE_XML_DIR, exist_ok=True)
-            count = download_senate_xmls(SENATE_XML_DIR)
+            count = download_senate_xmls(SENATE_XML_DIR, legislature=legislature)
             logger.info("Downloaded %d new Senate files", count)
 
         # 4. Ingest Senate stenografici
@@ -516,7 +581,8 @@ def do_build_senate(
 
         # 4b. Link any orphan Senate speeches to senators/government members
         logger.info("Relinking Senate speeches to speakers")
-        builder.relink_senate_speeches()
+        builder.relink_senate_speeches(legislature)
+        _finish_people(builder, legislature, "senato")
 
         # 5. Embeddings for new Senate chunks
         if skip_embeddings:
@@ -554,8 +620,9 @@ def do_update_senate(
             logger.info("Step 1: Skipping senator CSV download (--skip-download)")
         else:
             logger.info("Step 1: Refreshing senator biographical data")
-            download_senators_csv_main()
+            download_senators_csv_main(legislature)
         builder.create_constraints()
+        _prepare_people(builder, legislature, skip_download)
         builder.load_senators(DATA_DIR, legislature=legislature)
         builder.load_senator_groups(DATA_DIR, legislature=legislature)
         builder.load_senator_committees(DATA_DIR, legislature=legislature)
@@ -566,7 +633,7 @@ def do_update_senate(
         else:
             logger.info("Step 2: Downloading Senate AKN files")
             os.makedirs(SENATE_XML_DIR, exist_ok=True)
-            count = download_senate_xmls(SENATE_XML_DIR)
+            count = download_senate_xmls(SENATE_XML_DIR, legislature=legislature)
             logger.info("Downloaded %d new Senate files", count)
 
         # 3. Ingest only sessions not yet in Neo4j
@@ -578,18 +645,32 @@ def do_update_senate(
             match = re.search(rf'resaula_leg{legislature}_(\d+)\.akn$', f)
             if match and int(match.group(1)) not in existing:
                 new_files.append(f)
+        # Sittings with no AKN file are published as web pages only.
+        akn_numbers = {
+            int(m.group(1)) for f in akn_files
+            if (m := re.search(rf'resaula_leg{legislature}_(\d+)\.akn$', f))
+        }
+        for f in sorted(glob.glob(os.path.join(SENATE_XML_DIR, f"resaula_leg{legislature}_*.html"))):
+            match = re.search(rf'resaula_leg{legislature}_(\d+)\.html$', f)
+            if match and int(match.group(1)) not in existing | akn_numbers:
+                new_files.append(f)
         if new_files:
-            logger.info("  Found %d new AKN files to ingest", len(new_files))
-            for i, akn_path in enumerate(new_files, 1):
-                logger.info("  [%d/%d] %s", i, len(new_files), os.path.basename(akn_path))
-                parsed = parser.parse_xml_file(akn_path)
+            logger.info("  Found %d new Senate records to ingest", len(new_files))
+            html_parser = SenateHtmlParser(config, legislature=legislature)
+            for i, record_path in enumerate(new_files, 1):
+                logger.info("  [%d/%d] %s", i, len(new_files), os.path.basename(record_path))
+                if record_path.endswith(".html"):
+                    parsed = html_parser.parse_html_file(record_path)
+                else:
+                    parsed = parser.parse_xml_file(record_path)
                 builder.ingest_session(parsed)
         else:
             logger.info("  No new Senate stenografici found.")
 
         # 4. Link orphan Senate speeches (covers legacy ingests too)
         logger.info("Step 4: Relinking Senate speeches to speakers")
-        builder.relink_senate_speeches()
+        builder.relink_senate_speeches(legislature)
+        _finish_people(builder, legislature, "senato")
 
         # 5. Embeddings for new chunks
         if skip_embeddings:

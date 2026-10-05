@@ -102,7 +102,7 @@ async def get_evidence(
            speaker.id AS speaker_id,
            speaker.first_name AS first_name,
            speaker.last_name AS last_name,
-           labels(speaker)[0] AS speaker_role,
+           CASE WHEN coalesce(i.speaker_in_government, 'GovernmentMember' IN labels(speaker)) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_role,
            g.name AS party,
            s.id AS doc_id,
            s.date AS date,

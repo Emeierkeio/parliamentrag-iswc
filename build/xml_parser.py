@@ -450,8 +450,10 @@ class StenograficoParser:
         speaker_pattern = r"(?<=^|[\.\!\?]\s)([A-ZÀ-Ú][A-ZÀ-Ú\s'`]{2,})\."
         text = regex.sub(speaker_pattern, '', text)
 
-        # 3. Remove opening address formulas (e.g. "Signor Presidente,")
-        init_pattern = r'^\s*(Signor\s+)?(Presidente|Vicepresidente)[^.]*[\.,]'
+        # 3. Remove the opening vocative only ("Signor Presidente,"). The
+        # previous pattern ran to the first full stop and deleted the whole
+        # first sentence of 12% of Camera XIX speeches (measured 2026-10-02).
+        init_pattern = r'^\s*(Signor[a]?\s+)?(Presidente|Vicepresidente)\b[^,.;:!?]*[,.]'
         text = regex.sub(init_pattern, '', text)
 
         # 4. Normalize whitespace

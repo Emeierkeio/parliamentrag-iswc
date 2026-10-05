@@ -63,7 +63,7 @@ def download_deputies(legislature: int = 19) -> list[dict] | None:
     print("Downloading deputies...")
     query = f"""
     SELECT DISTINCT ?deputato ?nome ?cognome ?gender ?foto
-           ?mandatoCamera ?mandatoStart ?descrizione
+           ?mandatoCamera ?mandatoStart ?mandatoEnd ?descrizione
     WHERE {{
       ?deputato a <http://xmlns.com/foaf/0.1/Person> ;
                <http://xmlns.com/foaf/0.1/firstName> ?nome ;
@@ -75,6 +75,7 @@ def download_deputies(legislature: int = 19) -> list[dict] | None:
       OPTIONAL {{ ?deputato <http://xmlns.com/foaf/0.1/gender> ?gender }}
       OPTIONAL {{ ?deputato <http://xmlns.com/foaf/0.1/depiction> ?foto }}
       OPTIONAL {{ ?mandatoCamera <http://dati.camera.it/ocd/startDate> ?mandatoStart }}
+      OPTIONAL {{ ?mandatoCamera <http://dati.camera.it/ocd/endDate> ?mandatoEnd }}
       OPTIONAL {{ ?deputato <http://purl.org/dc/elements/1.1/description> ?descrizione }}
     }}
     ORDER BY ?cognome ?nome
@@ -205,7 +206,7 @@ def main(legislature: int = 19):
             os.path.join(DATA_DIR, f"{prefix}.csv"),
             deps,
             ["deputato", "nome", "cognome", "gender", "foto",
-             "schedaCamera", "mandatoCamera", "mandatoStart", "descrizione"],
+             "schedaCamera", "mandatoCamera", "mandatoStart", "mandatoEnd", "descrizione"],
         )
     else:
         print(f"FAILED: {prefix}.csv")

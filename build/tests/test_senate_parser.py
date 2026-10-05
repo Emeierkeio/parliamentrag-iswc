@@ -100,3 +100,93 @@ def test_votes_and_acts_empty(parsed):
     """votes must be empty list; act_references must be empty dict."""
     assert parsed["votes"] == []
     assert parsed["act_references"] == {}
+
+
+def _variant(tmp_path, body_edit):
+    with open(FIXTURE_PATH, encoding="utf-8") as f:
+        xml = f.read()
+    path = tmp_path / "variant.akn"
+    path.write_text(body_edit(xml), encoding="utf-8")
+    from senate_parser import SenateStenograficoParser
+    return SenateStenograficoParser().parse_xml_file(str(path))
+
+
+def test_repeated_speaker_in_debate_gets_distinct_ids(tmp_path):
+    """A second speech by the same senator in one debate must not overwrite the first."""
+    second = (
+        '<an:speech by="#p12345" as="#d1e27a9999">'
+        '<an:from refersTo="#p12345">ROSSI</an:from>'
+        "<an:p>Intervengo nuovamente per dichiarazione di voto favorevole sul provvedimento "
+        "in esame, che riteniamo equilibrato.</an:p></an:speech>"
+    )
+    parsed = _variant(tmp_path, lambda x: x.replace(
+        "</an:debateSection>\n    </an:debateBody>",
+        second + "</an:debateSection>\n    </an:debateBody>",
+    ))
+    ids = [s["id"] for s in parsed["speeches"]]
+    assert len(ids) == len(set(ids)) == 3
+
+
+def test_repeated_section_name_gets_distinct_debate_ids(tmp_path):
+    def duplicate_section(xml):
+        start = xml.index('<an:debateSection name="DiscussioneArgomento">')
+        end = xml.index("</an:debateBody>")
+        return xml[:end] + xml[start:end] + xml[end:]
+
+    parsed = _variant(tmp_path, duplicate_section)
+    debate_ids = [d["id"] for d in parsed["debates"]]
+    assert len(debate_ids) == len(set(debate_ids)) == 2
+
+
+def test_group_label_does_not_leave_leading_punctuation(tmp_path):
+    parsed = _variant(tmp_path, lambda x: x.replace(
+        "<an:p>Signor Presidente, desidero",
+        "<an:p><an:i>(Misto-AVS)</an:i>. Signor Presidente, desidero",
+    ))
+    rossi = next(s for s in parsed["speeches"] if s["deputatoId"].endswith("/12345"))
+    assert rossi["text"].startswith("Signor Presidente")
+
+
+def test_prime_minister_is_a_speaker_not_the_chair(tmp_path):
+    """Roles containing "Presidente" (Presidente del Consiglio) must not be dropped as chair."""
+    def add_pm(xml):
+        role = ('<an:TLCRole id="rolePM" href="http://dati.senato.it/osr/Incarico" '
+                'showAs="Presidente del Consiglio dei ministri"/>')
+        speech = ('<an:speech by="#p12345" as="#rolePM"><an:from refersTo="#p12345">ROSSI</an:from>'
+                  "<an:p>Signor Presidente, onorevoli senatori, il Governo riferisce oggi in Aula "
+                  "sulle comunicazioni in vista del Consiglio europeo.</an:p></an:speech>")
+        xml = xml.replace("</an:references>", role + "</an:references>", 1)
+        return xml.replace("</an:debateSection>\n    </an:debateBody>",
+                           speech + "</an:debateSection>\n    </an:debateBody>")
+    parsed = _variant(tmp_path, add_pm)
+    roles = [s["speakingRole"] for s in parsed["speeches"]]
+    assert "Presidente del Consiglio dei ministri" in roles
+    assert all(r != "PRESIDENTE" for r in roles)
+
+
+def _continuation(text):
+    return f'<an:speech by="#p" as=""><an:from refersTo="#p"/><an:p>{text}</an:p></an:speech>'
+
+
+def test_continuation_block_joins_the_previous_speaker(tmp_path):
+    """by="#p" blocks continue the last speaker: no speech without a speaker."""
+    tail = "Concludo ricordando che il gruppo voterà a favore del provvedimento in esame."
+    parsed = _variant(tmp_path, lambda x: x.replace(
+        '<an:speech by="#p32600" as="#d1e27a5678">',
+        _continuation(tail) + '<an:speech by="#p32600" as="#d1e27a5678">',
+        1,
+    ))
+    assert all(s["deputatoId"] for s in parsed["speeches"])
+    rossi = next(s for s in parsed["speeches"] if s["deputatoId"].endswith("/12345"))
+    assert rossi["text"].endswith(tail)
+
+
+def test_continuation_of_the_chair_is_dropped(tmp_path):
+    parsed = _variant(tmp_path, lambda x: x.replace(
+        '<an:speech by="#p12345" as="#d1e27a1234">',
+        _continuation("Passiamo alla votazione finale del disegno di legge nel suo complesso.")
+        + '<an:speech by="#p12345" as="#d1e27a1234">',
+        1,
+    ))
+    assert not any("Passiamo alla votazione" in s["text"] for s in parsed["speeches"])
+    assert all(s["deputatoId"] for s in parsed["speeches"])

@@ -54,6 +54,7 @@ class SenateStenograficoParser:
         self.legislature = legislature
         # Reuse Camera parser's preprocess_text — same text cleaning rules apply
         self._camera_parser = StenograficoParser(config)
+        self._role_lookup: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -106,6 +107,7 @@ class SenateStenograficoParser:
             }
 
         debate_order = 0
+        seen_debate_ids: set[str] = set()
         for section in debate_body.findall(f"{{{AKN_NS}}}debateSection"):
             section_name = section.get("name", "")
 
@@ -129,6 +131,10 @@ class SenateStenograficoParser:
             # Build debate node
             debate_slug = _slug(section_name) if section_name else f"sec{debate_order}"
             debate_id = f"{session_id}_{debate_slug}"
+            # Section names repeat within a sitting (an agenda item resumed later).
+            if debate_id in seen_debate_ids:
+                debate_id = f"{debate_id}_{debate_order}"
+            seen_debate_ids.add(debate_id)
 
             # Heading text may be whitespace-only or live in child elements
             # (e.g. <docTitle>) — join all descendant text, else fall back
@@ -162,6 +168,8 @@ class SenateStenograficoParser:
 
             # Assign debate/phase context to speeches
             for idx, speech in enumerate(section_speeches):
+                # A senator often speaks several times in one debate.
+                speech["id"] = f"{speech['id']}_{idx}"
                 speech["debateId"] = debate_id
                 speech["phaseId"] = phase_id
                 speech["parentType"] = "phase"
@@ -251,11 +259,16 @@ class SenateStenograficoParser:
             if pid:
                 person_lookup[pid] = show_as
 
-        # TLCRole entries — mark roles whose showAs contains "Presidente"
+        # TLCRole entries. The chair is showAs="PRESIDENTE"; offices such as
+        # "Presidente del Consiglio dei ministri" are speakers, not the chair.
+        self._role_lookup = {}
         for tlc_role in references.findall(f"{{{AKN_NS}}}TLCRole"):
             role_id = tlc_role.get("id", "")
-            show_as = tlc_role.get("showAs", "")
-            if "Presidente" in show_as and role_id:
+            show_as = tlc_role.get("showAs", "").strip()
+            if not role_id:
+                continue
+            self._role_lookup[f"#{role_id}"] = show_as
+            if show_as.upper() == "PRESIDENTE":
                 presidente_roles.add(f"#{role_id}")
                 presidente_roles.add(role_id)
 
@@ -269,10 +282,30 @@ class SenateStenograficoParser:
         person_lookup: dict,
         debate_order: int,
     ) -> list[dict]:
-        """Parse all speech elements from a debateSection, excluding PRESIDENTE."""
+        """Parse all speech elements from a debateSection, excluding PRESIDENTE.
+
+        The record splits a speech wherever it notes an interruption: the
+        follow-up block has an empty speaker (by="#p", as=""). It continues
+        whoever spoke last, so it is appended to that speech, or dropped
+        when the last speaker was the chair.
+        """
         result: list[dict] = []
+        last_by = ""
+        last_speech: Optional[dict] = None
 
         for speech_elem in section.findall(f"{{{AKN_NS}}}speech"):
+            by_attr = speech_elem.get("by", "").lstrip("#")
+            if by_attr in ("", "p"):
+                if not last_by:
+                    continue
+                if last_speech is None or last_speech["_by"] != last_by:
+                    continue
+                extra = self._speech_text(speech_elem)
+                if extra:
+                    last_speech["text"] = f"{last_speech['text']} {extra}"
+                continue
+
+            last_by = by_attr
             speech = self._parse_speech(
                 speech_elem,
                 session_id,
@@ -281,9 +314,22 @@ class SenateStenograficoParser:
                 debate_order,
             )
             if speech is not None:
+                speech["_by"] = by_attr
                 result.append(speech)
+                last_speech = speech
+            else:
+                last_speech = None
 
+        for speech in result:
+            speech.pop("_by", None)
         return result
+
+    def _speech_text(self, speech_elem) -> str:
+        parts = [
+            t for t in (self._extract_element_text(p) for p in speech_elem.findall(f"{{{AKN_NS}}}p")) if t
+        ]
+        text = self._camera_parser.preprocess_text(" ".join(parts))
+        return re.sub(r"^[\s.,;:\-–]+", "", text)
 
     def _parse_speech(
         self,
@@ -341,17 +387,22 @@ class SenateStenograficoParser:
 
         raw_text = " ".join(text_parts)
         clean_text = self._camera_parser.preprocess_text(raw_text)
+        # The text opens with the group label, "(Misto-AVS). Signor Presidente";
+        # preprocess_text drops the parenthetical and leaves the full stop.
+        clean_text = re.sub(r"^[\s.,;:\-–]+", "", clean_text)
 
         # Filter speeches below minimum length
         if len(clean_text) < self.config.min_speech_length:
             return None
 
-        # Build a stable speech ID from session + person + debate order + sequential index
+        # Completed with the position inside the debate by the caller.
         speech_id = f"{session_id}_{person_id}_deb{debate_order}"
 
-        # Speaking role: not applicable in same way as Camera — use None
-        # (Senate AKN has no <emphasis> role pattern)
-        speaking_role = None
+        # Office held while speaking (TLCRole showAs, e.g. "Ministro della
+        # difesa"); plain senators and deputies have no speaking role.
+        speaking_role = self._role_lookup.get(as_attr)
+        if speaking_role in ("", "senatore", "deputato"):
+            speaking_role = None
 
         return {
             "id": speech_id,

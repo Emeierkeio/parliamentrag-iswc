@@ -67,7 +67,6 @@ _WRITE_RETRIES = 5
 # Regex patterns
 # ---------------------------------------------------------------------------
 
-_DEP_URI_RE = re.compile(r"/d(\d+)_19$")
 _VOTAZIONE_URI_RE = re.compile(r"/vs\d+_(\d+)_(\d+)$")
 _PERSONA_ID_RE = re.compile(r"/p(\d+)$")
 # Legislature-agnostic deputato URI (deputato.rdf/d{person}_{leg})
@@ -85,11 +84,22 @@ def sparql_dep_uri_to_neo4j_id(uri: str) -> Optional[str]:
         "http://dati.camera.it/ocd/deputato.rdf/d308908_19"
         -> "http://dati.camera.it/ocd/persona.rdf/p308908"
     """
-    m = _DEP_URI_RE.search(uri)
+    m = _DEPUTATO_URI_RE.search(uri)
     if not m:
         return None
     person_id = m.group(1)
     return f"http://dati.camera.it/ocd/persona.rdf/p{person_id}"
+
+
+def individual_vote_id(
+    chamber: str, legislature: int, person_id: str, session_num: int, vote_num: int,
+) -> str:
+    """IndividualVote id. Sitting numbers restart every legislature, so the id
+    carries it; Camera XIX keeps the original unscoped form, which the 6.9M
+    nodes already in the graph use."""
+    if chamber == "camera" and legislature == 19:
+        return f"iv_{chamber}_{person_id}_{session_num}_{vote_num}"
+    return f"iv_{chamber}_leg{legislature}_{person_id}_{session_num}_{vote_num}"
 
 
 def clean_sparql_text(value: Optional[str]) -> Optional[str]:
@@ -338,16 +348,10 @@ class SparqlIngester:
         first full build. This is the incremental complement: bounded by
         sitting number, idempotent MERGEs, cheap enough for the daily update.
         """
-        # SPARQL rows carry deputato URIs; map their person_id back to Deputy
-        # nodes, plus the ministri-deputati that only exist as GovernmentMember.
-        person_to_neo4j: dict[str, str] = {}
-        for dep in self._fetch_all_deputies(chamber=chamber):
-            pid = _extract_person_id_from_neo4j_id(dep["id"])
-            if pid:
-                person_to_neo4j[pid] = dep["id"]
-        if chamber == "camera":
-            for gov in self._fetch_government_deputies():
-                person_to_neo4j.setdefault(gov["person_id"], gov["id"])
+        # SPARQL rows carry deputato URIs; their person number resolves through
+        # camera_id, which also covers ministers on legacy gov_* nodes and
+        # senators who sat in the Camera.
+        person_to_neo4j = self._camera_person_index()
 
         sittings = sorted(
             n for n in self._get_camera_sittings_in_db(legislature)
@@ -389,7 +393,9 @@ class SparqlIngester:
                             total_skipped += 1
                             continue
                         batch.append({
-                            "id": f"iv_{chamber}_{pid_match.group(1)}_{session_num}_{vote_num}",
+                            "id": individual_vote_id(
+                                chamber, legislature, pid_match.group(1), session_num, vote_num,
+                            ),
                             "deputyId": neo4j_id,
                             "sessionNumber": session_num,
                             "voteNumber": vote_num,
@@ -547,6 +553,7 @@ class SparqlIngester:
         deputy_neo4j_id: str,
         person_id: str,
         chamber: str = "camera",
+        legislature: int = 19,
     ) -> list[dict]:
         """Convert SPARQL vote bindings to Neo4j batch dicts.
 
@@ -561,7 +568,7 @@ class SparqlIngester:
             if session_num is None or vote_num is None:
                 continue
             outcome = OUTCOME_MAP.get(tipo, "absent")
-            iv_id = f"iv_{chamber}_{person_id}_{session_num}_{vote_num}"
+            iv_id = individual_vote_id(chamber, legislature, person_id, session_num, vote_num)
             batch.append({
                 "id": iv_id,
                 "deputyId": deputy_neo4j_id,
@@ -777,6 +784,20 @@ RETURN count(*) AS written
     # Neo4j write helpers
     # ------------------------------------------------------------------
 
+    def _camera_person_index(self) -> dict[str, str]:
+        """Camera person number -> Person node id, through camera_id."""
+        with self._driver.session() as neo_session:
+            result = neo_session.run(
+                "MATCH (p:Person) WHERE p.camera_id IS NOT NULL "
+                "RETURN p.camera_id AS cam, p.id AS id"
+            )
+            index: dict[str, str] = {}
+            for record in result:
+                pid = _extract_person_id_from_neo4j_id(record["cam"])
+                if pid:
+                    index[pid] = record["id"]
+            return index
+
     def _fetch_all_deputies(self, chamber: str = "camera") -> list[dict]:
         """Return list of {id: ...} dicts for Deputy nodes filtered by chamber."""
         with self._driver.session() as neo_session:
@@ -845,7 +866,9 @@ RETURN count(*) AS written
                     logger.debug("    No vote records found in SPARQL")
                 break
 
-            batch = self._prepare_vote_batch(bindings, neo4j_id, person_id, chamber=chamber)
+            batch = self._prepare_vote_batch(
+                bindings, neo4j_id, person_id, chamber=chamber, legislature=legislature,
+            )
             parse_skipped = len(bindings) - len(batch)
             skipped += parse_skipped
 
@@ -874,15 +897,9 @@ RETURN count(*) AS written
 
         Returns (written, skipped) where skipped = rows with no matching Vote node.
         """
-        # Il votante può essere un Deputy o un ministro-deputato
-        # (GovernmentMember): due OPTIONAL MATCH separati usano gli indici
-        # per label invece di uno scan su Person.id.
         cypher = """
 UNWIND $batch AS row
-OPTIONAL MATCH (dep:Deputy {id: row.deputyId})
-OPTIONAL MATCH (gov:GovernmentMember {id: row.deputyId})
-WITH row, coalesce(dep, gov) AS d
-WHERE d IS NOT NULL
+MATCH (d:Person {id: row.deputyId})
 MATCH (s:Session {number: row.sessionNumber})-[:HAS_VOTE]->(v:Vote {number: row.voteNumber})
 WHERE coalesce(s.chamber, 'camera') = $chamber AND s.legislature = $legislature
 MERGE (iv:IndividualVote {id: row.id})
