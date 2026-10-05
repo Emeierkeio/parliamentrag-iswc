@@ -7,12 +7,14 @@ without authority scoring or text generation.
 import time
 import logging
 import asyncio
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .query import get_services
 from ..services.translation import translate_compass_axes
+from ..services.retrieval.scope import ScopeItem, normalize_scope
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Compass"])
@@ -21,6 +23,7 @@ router = APIRouter(prefix="/api", tags=["Compass"])
 class CompassRequest(BaseModel):
     query: str = Field(..., min_length=3, max_length=1000)
     top_k: int = Field(default=200, ge=10, le=500)
+    scope: Optional[List[ScopeItem]] = Field(default=None)
 
 
 @router.post("/compass")
@@ -36,6 +39,7 @@ async def compass_endpoint(request: CompassRequest, http_request: Request):
             query=request.query,
             top_k=request.top_k,
             locale=locale,
+            scope=normalize_scope(request.scope),
         )
         evidence_list = retrieval_result["evidence"]
 

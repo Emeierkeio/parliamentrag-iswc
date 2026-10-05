@@ -172,6 +172,53 @@ db-senate: db-install ## Build Senate data (additive, Camera data preserved)
 	@printf "\n$(BOLD)$(GREEN)Senate data built!$(RESET)\n"
 
 # ============================================================================
+#  Staging DB for multi-legislature work
+#  A separate local Neo4j seeded from the demo snapshot volume (make db-pull).
+#  Every target sets NEO4J_URI explicitly: .env points at the remote demo DB.
+# ============================================================================
+
+STAGING_NAME   := parliamentrag-staging
+STAGING_VOLUME := parliamentrag_staging_data
+STAGING_BOLT   := 7692
+STAGING_HTTP   := 7478
+STAGING_NEO4J  := bolt://localhost:$(STAGING_BOLT)
+STAGING_ENV    := NEO4J_URI=$(STAGING_NEO4J) NEO4J_PASSWORD=$(NEO4J_PASS)
+
+.PHONY: staging-create staging-up staging-ingest-leg18 staging-ingest-senato19 staging-validate
+
+staging-create: ## Create the staging Neo4j (:7692) as a copy of the demo snapshot volume
+	@if docker volume inspect $(STAGING_VOLUME) >/dev/null 2>&1; then \
+		echo "$(STAGING_VOLUME) already exists — remove it first to recreate staging"; exit 1; fi
+	@docker volume create $(STAGING_VOLUME) >/dev/null
+	@docker run --rm -v demo_neo4j_local_data:/from:ro -v $(STAGING_VOLUME):/to alpine cp -a /from/. /to/
+	@docker run -d --name $(STAGING_NAME) \
+		-p $(STAGING_BOLT):7687 -p $(STAGING_HTTP):7474 \
+		-e NEO4J_AUTH=neo4j/$(NEO4J_PASS) \
+		-e 'NEO4J_PLUGINS=["apoc"]' \
+		-e NEO4J_dbms_security_procedures_unrestricted='apoc.*' \
+		-e NEO4J_dbms_security_procedures_allowlist='apoc.*' \
+		-e NEO4J_server_memory_pagecache_size=2G \
+		-e NEO4J_server_memory_heap_initial__size=2G \
+		-e NEO4J_server_memory_heap_max__size=4G \
+		--memory=8g \
+		-v $(STAGING_VOLUME):/data neo4j:5.15.0 >/dev/null
+	@echo "Staging Neo4j on $(STAGING_NEO4J) (browser http://localhost:$(STAGING_HTTP))"
+
+staging-up: ## Start the staging Neo4j container
+	@docker start $(STAGING_NAME) >/dev/null && echo "Staging Neo4j on $(STAGING_NEO4J)"
+
+staging-ingest-leg18: db-install ## Ingest Camera XVIII into staging (raw data on disk, acts excluded)
+	@$(STAGING_ENV) $(PYTHON) $(BUILD_SCRIPT) update --legislature 18 --skip-download --skip-atti \
+		--neo4j-uri $(STAGING_NEO4J) --neo4j-user $(NEO4J_USER) --neo4j-password $(NEO4J_PASS)
+
+staging-ingest-senato19: db-install ## Ingest Senato XIX into staging (downloads new AKN sittings and senator CSVs)
+	@$(STAGING_ENV) $(PYTHON) $(BUILD_SCRIPT) update-senate --legislature 19 \
+		--neo4j-uri $(STAGING_NEO4J) --neo4j-user $(NEO4J_USER) --neo4j-password $(NEO4J_PASS)
+
+staging-validate: db-install ## Run validate_db.py against staging
+	@$(STAGING_ENV) $(PYTHON) $(BUILD_DIR)/validate_db.py --neo4j-uri $(STAGING_NEO4J)
+
+# ============================================================================
 #  Graph Enrichment (SPARQL)
 # ============================================================================
 

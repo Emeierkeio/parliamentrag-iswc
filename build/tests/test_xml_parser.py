@@ -249,3 +249,20 @@ def test_continuation_merge_no_ellipsis():
     ]
     merged = parser.merge_continuation_interventions(interventions)
     assert len(merged) == 2
+
+
+class TestOpeningVocative:
+    def _clean(self, text):
+        from xml_parser import StenograficoParser
+        return StenograficoParser().preprocess_text(text)
+
+    def test_vocative_removed_rest_of_sentence_kept(self):
+        text = ("Signor Presidente, rappresentanti del Governo, colleghi, oggi siamo in Aula "
+                "per discutere la produzione nucleare di energia. Seconda frase.")
+        assert self._clean(text).startswith("rappresentanti del Governo, colleghi, oggi siamo in Aula")
+
+    def test_bare_presidente(self):
+        assert self._clean("Presidente, non sono numerati.") == "non sono numerati."
+
+    def test_text_without_vocative_untouched(self):
+        assert self._clean("Grazie, Presidente. Il decreto va ritirato.") == "Grazie, Presidente. Il decreto va ritirato."

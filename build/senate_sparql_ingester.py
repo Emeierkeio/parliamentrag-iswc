@@ -32,6 +32,8 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
+from sparql_ingester import individual_vote_id
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -408,7 +410,7 @@ class SenateVoteIngester:
         """
         with self._driver.session() as neo_session:
             result = neo_session.run(
-                "MATCH (d:Deputy {chamber:'senato'})-[:VOTED]->(:IndividualVote)"
+                "MATCH (:Person)-[:VOTED]->(:IndividualVote)"
                 "-[:ON_VOTE]->(:Vote)<-[:HAS_VOTE]-(s:Session {legislature:$legislature, chamber:'senato'}) "
                 "RETURN DISTINCT s.number AS num",
                 legislature=legislature,
@@ -497,7 +499,7 @@ SELECT ?senatore WHERE {{
         """Ingest per-senator IndividualVote nodes for all Senate sittings not yet processed.
 
         Resume is per-sitting: sittings where senators already have VOTED rels are skipped.
-        IndividualVote ids carry the 'iv_senato_' prefix to prevent collision with Camera ids.
+        IndividualVote ids come from sparql_ingester.individual_vote_id (chamber and legislature scoped).
 
         Args:
             legislature: Legislature number (18 or 19).
@@ -575,7 +577,7 @@ SELECT ?senatore WHERE {{
                         if not sen_id:
                             continue
                         batch.append({
-                            "id": f"iv_senato_{sen_id}_{num}_{vote}",
+                            "id": individual_vote_id("senato", legislature, sen_id, num, vote),
                             "senatorUri": sen_uri,
                             "voteId": vote_id,
                             "outcome": outcome,
@@ -642,7 +644,8 @@ RETURN count(*) AS written
     def _write_senate_individual_votes(self, batch: list[dict]) -> int:
         """Write a batch of IndividualVote nodes and their VOTED/ON_VOTE rels to Neo4j.
 
-        Matches Deputy by full senatore URI (Deputy.id == senatore URI, chamber='senato').
+        Matches the senator's Person through senato_id (the node id differs
+        for senators who also sat in the Camera or in the government).
         Matches Vote by stable senate id (no number collision possible due to senato_ prefix).
         MERGEs IndividualVote node and both relationships idempotently.
 
@@ -657,7 +660,7 @@ RETURN count(*) AS written
 
         cypher = """
 UNWIND $batch AS row
-MATCH (d:Deputy {id: row.senatorUri})
+MATCH (d:Person {senato_id: row.senatorUri})
 MATCH (v:Vote {id: row.voteId})
 MERGE (iv:IndividualVote {id: row.id})
 SET iv.outcome = row.outcome

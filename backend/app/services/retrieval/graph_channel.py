@@ -19,6 +19,8 @@ from ...models.evidence import (
 )
 from ...config import get_config
 
+from .scope import DEFAULT_SCOPE, Scope, scope_param, session_clause
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,7 +92,8 @@ class GraphChannel:
         query_embedding: List[float],
         top_k: Optional[int] = None,
         date_start: Optional[str] = None,
-        date_end: Optional[str] = None
+        date_end: Optional[str] = None,
+        scope: Scope = DEFAULT_SCOPE,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve evidence through graph traversal.
@@ -133,7 +136,8 @@ class GraphChannel:
             act_uris,
             query_embedding=query_embedding,
             date_start=date_start,
-            date_end=date_end
+            date_end=date_end,
+            scope=scope,
         )
 
         logger.info(f"Graph channel: retrieved {len(chunks)} chunks from {len(act_uris)} acts")
@@ -227,7 +231,8 @@ class GraphChannel:
         act_uris: List[str],
         query_embedding: List[float],
         date_start: Optional[str] = None,
-        date_end: Optional[str] = None
+        date_end: Optional[str] = None,
+        scope: Scope = DEFAULT_SCOPE,
     ) -> List[Dict[str, Any]]:
         """
         Get chunks from speeches by act signatories, filtered by chunk-level
@@ -249,6 +254,8 @@ class GraphChannel:
         if date_end:
             date_conditions.append("s.date <= date($date_end)")
             params["date_end"] = date_end
+        date_conditions.append(session_clause())
+        params["scope"] = scope_param(scope)
 
         date_clause = " AND ".join(date_conditions) if date_conditions else "1=1"
 
@@ -270,7 +277,8 @@ class GraphChannel:
         MATCH (i)<-[:CONTAINS_SPEECH]-(f:Phase)<-[:HAS_PHASE]-(d:Debate)<-[:HAS_DEBATE]-(s:Session)
         WHERE {date_clause}
         OPTIONAL MATCH (speaker)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
-        WHERE mg.start_date <= s.date AND (mg.end_date IS NULL OR mg.end_date >= date())
+        WHERE mg.start_date <= s.date AND (mg.end_date IS NULL OR mg.end_date >= date()
+              OR (mg.final_in_legislature AND mg.legislature = s.legislature))
         OPTIONAL MATCH (speaker)-[mcp:MEMBER_OF_COMPONENT]->(mcomp:MistoComponent)
         WHERE mcp.start_date <= s.date AND (mcp.end_date IS NULL OR mcp.end_date >= s.date)
         RETURN c.id AS chunk_id,
@@ -281,7 +289,7 @@ class GraphChannel:
                speaker.id AS speaker_id,
                speaker.first_name AS speaker_first_name,
                speaker.last_name AS speaker_last_name,
-               CASE WHEN 'GovernmentMember' IN labels(speaker) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
+               CASE WHEN coalesce(i.speaker_in_government, 'GovernmentMember' IN labels(speaker)) THEN 'GovernmentMember' ELSE 'Deputy' END AS speaker_type,
                g.name AS party,
                s.id AS session_id,
                s.date AS session_date,
