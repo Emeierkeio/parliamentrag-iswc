@@ -1,30 +1,97 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-lockup-cream.svg">
-    <img src="assets/logo-lockup-blue.svg" alt="ParliamentRAG" width="380">
-  </picture>
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://www.parliamentrag.it/"><img alt="Live demo at parliamentrag.it" src="https://img.shields.io/badge/Live_demo-parliamentrag.it-1E3A5F?style=flat-square"></a>
-  <a href="https://iswc2026.semanticweb.org"><img alt="Two papers accepted at ISWC 2026" src="https://img.shields.io/badge/ISWC_2026-In--Use_%2B_Demo_papers-6A4C93?style=flat-square"></a>
-  <a href="https://doi.org/10.5281/zenodo.21560331"><img alt="RDF dataset on Zenodo" src="https://img.shields.io/badge/Dataset-Zenodo_DOI-1682D4?style=flat-square&logo=zenodo&logoColor=white"></a>
-  <a href="https://huggingface.co/datasets/emeierkeio/parliamentrag-camera-leg19"><img alt="Dataset on Hugging Face" src="https://img.shields.io/badge/Dataset-Hugging_Face-FFD21E?style=flat-square&logo=huggingface&logoColor=black"></a>
-  <a href="LICENSE"><img alt="Code license Apache 2.0" src="https://img.shields.io/badge/Code-Apache_2.0-0969DA?style=flat-square"></a>
-  <a href="https://creativecommons.org/licenses/by-sa/4.0/"><img alt="Data license CC BY-SA 4.0" src="https://img.shields.io/badge/Data-CC_BY--SA_4.0-97CA00?style=flat-square&logo=creativecommons&logoColor=white"></a>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+  <img src="assets/banner-light.svg" alt="ParliamentRAG: balanced, verifiable answers on Italian parliamentary debate." width="100%">
+</picture>
+
+<br>
 
 **Balanced, verifiable answers about Italian parliamentary debate, grounded in what was actually said and by whom.**
+
+<br>
+
+<a href="https://www.parliamentrag.it/"><img alt="Live demo at parliamentrag.it" src="https://img.shields.io/badge/Live_demo-parliamentrag.it-1E3A5F?style=flat-square"></a>
+<a href="https://iswc2026.semanticweb.org"><img alt="Two papers accepted at ISWC 2026" src="https://img.shields.io/badge/ISWC_2026-In--Use_%2B_Demo_papers-6A4C93?style=flat-square"></a>
+<a href="https://doi.org/10.5281/zenodo.21560331"><img alt="RDF dataset on Zenodo" src="https://img.shields.io/badge/Dataset-Zenodo_DOI-1682D4?style=flat-square&logo=zenodo&logoColor=white"></a>
+<a href="https://huggingface.co/datasets/emeierkeio/parliamentrag-camera-leg19"><img alt="Dataset on Hugging Face" src="https://img.shields.io/badge/Dataset-Hugging_Face-FFD21E?style=flat-square&logo=huggingface&logoColor=black"></a>
+<a href="LICENSE"><img alt="Code license Apache 2.0" src="https://img.shields.io/badge/Code-Apache_2.0-0969DA?style=flat-square"></a>
+<a href="https://creativecommons.org/licenses/by-sa/4.0/"><img alt="Data license CC BY-SA 4.0" src="https://img.shields.io/badge/Data-CC_BY--SA_4.0-97CA00?style=flat-square&logo=creativecommons&logoColor=white"></a>
+
+<br>
+
+<!-- famiglia:start (keep identical across repos) -->
+<table align="center">
+  <tr>
+    <td align="center" valign="bottom" width="160">
+      <a href="https://www.parliamentrag.it">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/famiglia/parliamentrag-dark.svg">
+          <img src="assets/famiglia/parliamentrag-light.svg" alt="ParliamentRAG" height="60">
+        </picture>
+        <br><b>ParliamentRAG</b>
+      </a>
+      <br><sub>parliamentrag.it</sub>
+    </td>
+    <td align="center" valign="bottom" width="160">
+      <a href="https://www.stenografo.it">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/famiglia/stenografo-dark.svg">
+          <img src="assets/famiglia/stenografo-light.svg" alt="Stenografo" height="48">
+        </picture>
+        <br><b>Stenografo</b>
+      </a>
+      <br><sub>stenografo.it</sub>
+    </td>
+    <td align="center" valign="bottom" width="160">
+      <a href="https://www.fascicoli.it">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/famiglia/fascicoli-dark.svg">
+          <img src="assets/famiglia/fascicoli-light.svg" alt="Fascicoli" height="48">
+        </picture>
+        <br><b>Fascicoli</b>
+      </a>
+      <br><sub>fascicoli.it</sub>
+    </td>
+    <td align="center" valign="bottom" width="160">
+      <a href="https://www.scranno.it">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/famiglia/scranno-dark.svg">
+          <img src="assets/famiglia/scranno-light.svg" alt="Scranno" height="48">
+        </picture>
+        <br><b>Scranno</b>
+      </a>
+      <br><sub>scranno.it</sub>
+    </td>
+  </tr>
+</table>
+<!-- famiglia:end -->
+
+</div>
+
+<br>
 
 ParliamentRAG is an authority-aware, multi-view Retrieval-Augmented Generation system over the stenographic records of the Camera dei Deputati (XIX Legislature). Ask a policy question and get an answer that covers every parliamentary group, majority and opposition alike, with verbatim citations checked against the original transcripts.
 
 <!-- screenshot: chat view with expert cards, citations, and ideological compass -->
 
-- **176k+ text chunks** from **716 plenary sessions**, updated through 2026-09-30
+- **177k+ text chunks** from **719 plenary sessions**, updated through 2026-10-05
 - **17.5k roll-call votes** with **7M individual vote records** linked to deputies
 - **Verified citations**: every quote is checked verbatim against its source chunk; unverifiable quotes are removed
 - **Topic-aware authority scoring**: the system picks the most credible speaker per party for the specific question asked
 - **6 languages** (IT / EN / FR / DE / ES / PT), editorial newspaper-style UI
+
+---
+
+## Systems
+
+ParliamentRAG is a research project of the University of Milano-Bicocca (Mirko Tritella, Riccardo Pozzi, Matteo Palmonari), presented at ISWC 2026 in the In-Use Track and at Posters & Demos. The live demo is at [parliamentrag.it](https://www.parliamentrag.it). The same knowledge graph serves three public systems, in Italian:
+
+| System | What it does |
+|---|---|
+| [Stenografo](https://www.stenografo.it) | Short, precise answers about the Chamber's work, each with the official source one click away. |
+| [Fascicoli](https://www.fascicoli.it) | Topic dossiers: what each parliamentary group said and how its deputies voted. Voices are ranked by ParliamentRAG's authority model, and readers can adjust its weights. |
+| [Scranno](https://www.scranno.it) | The Chamber in 3D, with every deputy in their real seat. |
 
 ---
 
@@ -93,7 +160,7 @@ reports (Akoma Ntoso) and the SPARQL endpoints of
 [dati.camera.it](https://dati.camera.it/) (deputies, groups, committees, acts,
 roles, votes), with EuroVoc subject links for parliamentary acts.
 
-- **XIX Legislature, data as of 2026-09-30** (updated incrementally): 716 sessions · 47.4k speeches · 176k+ chunks · 36.5k acts · 17.5k roll calls with 7M individual votes
+- **XIX Legislature, data as of 2026-10-05** (updated incrementally): 719 sessions · 47.6k speeches · 177k+ chunks · 36.7k acts · 17.5k roll calls with 7M individual votes
 - **Speaker model**: every speaker is a `Person` (labels `Deputy` / `GovernmentMember`), with date-aware group membership; deputies in the Gruppo Misto are attributed to their political component
 - **Native types throughout**: embeddings as float arrays in Neo4j vector indexes, dates as `date()` values; every `Chunk` is an exact substring of its `Speech` (verified invariant)
 - **Linked Data**: entity URIs conform to the source datasets (dati.camera.it/ocd/…, eurovoc.europa.eu/…) and are dereferenceable
