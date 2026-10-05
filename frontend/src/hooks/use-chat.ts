@@ -15,6 +15,7 @@ import type {
 } from "@/types";
 import type { CompassData } from "@/components/chat/CompassCard";
 import { config } from "@/config";
+import { addMyChat } from "@/lib/my-chats";
 
 interface UseChatOptions {
   onError?: (error: Error) => void;
@@ -596,6 +597,12 @@ export function useChat(options: UseChatOptions = {}) {
                     if (res.ok) {
                       const savedChat = await res.json();
                       updateLastAssistantMessage({ chatId: savedChat.id });
+                      addMyChat({
+                        id: savedChat.id,
+                        query: savedChat.query,
+                        preview: savedChat.preview || "",
+                        timestamp: savedChat.timestamp,
+                      });
                     } else {
                       res.text().then(body => {
                         console.error("[Pipeline] History save failed:", res.status, body);

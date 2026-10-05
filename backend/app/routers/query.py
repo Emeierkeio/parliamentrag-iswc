@@ -224,7 +224,8 @@ async def _semaphore_gated_query(
     # Correlation id: every log line of this query (including those from
     # default-executor threads) carries the same qid
     qid = new_query_id()
-    logger.info(f'Query accettata (qid={qid}, ip={ip}, locale={locale}): "{request.query[:150]}"')
+    # No client IP here: a log line must never tie a question to who asked it
+    logger.info(f'Query accettata (qid={qid}, locale={locale}): "{request.query[:150]}"')
 
     semaphore = _get_pipeline_semaphore()
     # Notify the client immediately if it will have to wait.

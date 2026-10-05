@@ -13,6 +13,7 @@ import type {
   SimpleRatingResponse,
   SimpleRatingCreate,
 } from "@/types/survey";
+import { adminFetch } from "@/lib/admin-fetch";
 
 const BASE_URL = `${config.api.baseUrl}/surveys`;
 
@@ -93,7 +94,7 @@ export async function listSurveys(
   }
 
   const url = params.toString() ? `${BASE_URL}?${params}` : BASE_URL;
-  const response = await fetch(url);
+  const response = await adminFetch(url);
 
   if (!response.ok) {
     throw new Error(`Failed to list surveys: ${response.statusText}`);
@@ -105,7 +106,7 @@ export async function listSurveys(
  * Delete a survey
  */
 export async function deleteSurvey(chatId: string): Promise<void> {
-  const response = await fetch(`${BASE_URL}/${chatId}`, {
+  const response = await adminFetch(`${BASE_URL}/${chatId}`, {
     method: "DELETE",
   });
 
@@ -118,7 +119,7 @@ export async function deleteSurvey(chatId: string): Promise<void> {
  * Get survey statistics summary
  */
 export async function getSurveyStats(): Promise<SurveyStats> {
-  const response = await fetch(`${BASE_URL}/stats/summary`);
+  const response = await adminFetch(`${BASE_URL}/stats/summary`);
   if (!response.ok) {
     throw new Error(`Failed to fetch survey stats: ${response.statusText}`);
   }
@@ -130,7 +131,7 @@ export async function getSurveyStats(): Promise<SurveyStats> {
  */
 export async function getEvaluatedChatIds(evaluatorId?: string): Promise<{ chat_ids: string[] }> {
   const params = evaluatorId ? `?evaluator_id=${encodeURIComponent(evaluatorId)}` : "";
-  const response = await fetch(`${BASE_URL}/chats/evaluated${params}`);
+  const response = await adminFetch(`${BASE_URL}/chats/evaluated${params}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch evaluated chat IDs: ${response.statusText}`);
   }
@@ -142,7 +143,7 @@ export async function getEvaluatedChatIds(evaluatorId?: string): Promise<{ chat_
  */
 export async function getPendingChats(evaluatorId?: string): Promise<PendingChatsResponse> {
   const params = evaluatorId ? `?evaluator_id=${encodeURIComponent(evaluatorId)}` : "";
-  const response = await fetch(`${BASE_URL}/chats/pending${params}`);
+  const response = await adminFetch(`${BASE_URL}/chats/pending${params}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch pending chats: ${response.statusText}`);
   }

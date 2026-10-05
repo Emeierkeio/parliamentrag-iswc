@@ -10,7 +10,7 @@ from typing import List, Optional, Dict
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.models.survey import (
     SurveyResponse,
@@ -24,6 +24,7 @@ from app.models.survey import (
     SimpleRatingResponse,
     SimpleRatingCreate,
 )
+from app.services.retention import require_storage_open
 
 logger = logging.getLogger(__name__)
 
@@ -530,7 +531,7 @@ async def list_surveys(
     )
 
 
-@router.post("", response_model=SurveyResponse)
+@router.post("", response_model=SurveyResponse, dependencies=[Depends(require_storage_open)])
 async def create_survey(survey_data: SurveyResponseCreate):
     """Create a new A/B survey response."""
 
@@ -596,7 +597,7 @@ async def create_survey(survey_data: SurveyResponseCreate):
     return survey
 
 
-@router.post("/simple", response_model=SimpleRatingResponse)
+@router.post("/simple", response_model=SimpleRatingResponse, dependencies=[Depends(require_storage_open)])
 async def create_simple_rating(rating_data: SimpleRatingCreate):
     """Create a new simple Likert-scale rating for a chat without a baseline."""
 
@@ -683,7 +684,7 @@ async def get_survey_by_chat(chat_id: str, evaluator_id: Optional[str] = Query(N
     return SurveyResponse(**_neo4j_record_to_dict(result[0]))
 
 
-@router.put("/{chat_id}", response_model=SurveyResponse)
+@router.put("/{chat_id}", response_model=SurveyResponse, dependencies=[Depends(require_storage_open)])
 async def update_survey(chat_id: str, survey_data: SurveyResponseCreate):
     """Update an existing A/B survey response."""
 

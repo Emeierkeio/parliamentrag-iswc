@@ -1,4 +1,5 @@
 import { config } from "@/config";
+import { adminFetch } from "@/lib/admin-fetch";
 
 // Config API — maps to GET/PUT /api/config
 export interface SystemConfig {
@@ -80,7 +81,7 @@ export interface ConfigUpdate {
 }
 
 export async function reloadConfig(): Promise<SystemConfig> {
-  const response = await fetch(`${config.api.baseUrl}/config/reload`, { method: "POST" });
+  const response = await adminFetch(`${config.api.baseUrl}/config/reload`, { method: "POST" });
   if (!response.ok) {
     throw new Error(`Errore nel reload config: ${response.statusText}`);
   }
@@ -88,7 +89,7 @@ export async function reloadConfig(): Promise<SystemConfig> {
 }
 
 export async function updateConfig(update: ConfigUpdate): Promise<SystemConfig> {
-  const response = await fetch(`${config.api.baseUrl}/config`, {
+  const response = await adminFetch(`${config.api.baseUrl}/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),

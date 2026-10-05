@@ -28,6 +28,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { config } from "@/config";
+import { listMyChats, removeMyChat, type MyChatEntry } from "@/lib/my-chats";
 import { useTranslations } from "next-intl";
 
 interface HistoryModalProps {
@@ -50,31 +51,27 @@ function useIsMobile() {
 export function HistoryModal({ open, onClose, onLoadChat }: HistoryModalProps) {
   const isMobile = useIsMobile();
   const t = useTranslations("HistoryModal");
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<MyChatEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<string | null>(null);
 
-  const fetchHistory = async () => {
-    setIsLoading(true);
+  // Only the chats saved from this browser: the backend list of every
+  // user's questions is admin-only
+  const fetchHistory = () => {
     setError("");
-    try {
-      const res = await fetch(`${config.api.baseUrl}/history`);
-      if (!res.ok) throw new Error("Failed to load history");
-      const data = await res.json();
-      setHistory(data.history || []);
-    } catch (err) {
-      console.error(err);
-      setError(t("loadError"));
-    } finally {
-      setIsLoading(false);
-    }
+    setHistory(listMyChats());
   };
 
   const handleSelectChat = async (id: string) => {
     setIsLoading(true);
     try {
       const res = await fetch(`${config.api.baseUrl}/history/${id}`);
+      if (res.status === 404) {
+        // The server keeps a bounded number of chats: drop expired ids
+        removeMyChat(id);
+        setHistory((prev) => prev.filter((h) => h.id !== id));
+      }
       if (!res.ok) throw new Error("Failed to load chat details");
       const data = await res.json();
       if (onLoadChat) {
@@ -106,20 +103,15 @@ export function HistoryModal({ open, onClose, onLoadChat }: HistoryModalProps) {
     setDeleteConfirmationId(null);
   };
 
-  const handleConfirmDelete = async (e: React.MouseEvent, id: string) => {
+  const handleConfirmDelete = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
     e.nativeEvent.stopImmediatePropagation();
-    try {
-      const res = await fetch(`${config.api.baseUrl}/history/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setHistory((prev) => prev.filter((h) => h.id !== id));
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setDeleteConfirmationId(null);
-    }
+    // Removes the chat from this browser's list; the server copy is
+    // reachable only by its id and rotates out with the stored-chat cap
+    removeMyChat(id);
+    setHistory((prev) => prev.filter((h) => h.id !== id));
+    setDeleteConfirmationId(null);
   };
 
   useEffect(() => {

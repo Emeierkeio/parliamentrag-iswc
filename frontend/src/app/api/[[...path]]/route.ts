@@ -18,6 +18,12 @@ async function proxyRequest(request: NextRequest) {
   // Locale-aware endpoints (e.g. /api/timeline) read Accept-Language
   const acceptLanguage = request.headers.get("Accept-Language");
   if (acceptLanguage) headers["Accept-Language"] = acceptLanguage;
+  // Admin endpoints check X-API-Key on the backend; the proxy only relays
+  // what the caller sent and never adds a key of its own
+  const apiKey = request.headers.get("X-API-Key");
+  if (apiKey) headers["X-API-Key"] = apiKey;
+  const clientIp = request.headers.get("X-Forwarded-For");
+  if (clientIp) headers["X-Forwarded-For"] = clientIp;
 
   const fetchOptions: RequestInit = {
     method: request.method,

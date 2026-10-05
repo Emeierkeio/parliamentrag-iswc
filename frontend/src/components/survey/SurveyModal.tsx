@@ -59,6 +59,7 @@ import {
 } from "@/lib/survey-api";
 import { useLastUpdate, formatLastUpdateShort } from "@/hooks/use-last-update";
 import { NewsletterSignup } from "@/components/feedback/NewsletterSignup";
+import { adminFetch } from "@/lib/admin-fetch";
 
 interface SurveyModalProps {
   isOpen: boolean;
@@ -760,7 +761,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
     setIsLoadingSystemExperts(true);
     setSystemExperts([]);
     try {
-      const res = await fetch(`${config.api.baseUrl}/history/${chatId}/baseline-experts`, {
+      const res = await adminFetch(`${config.api.baseUrl}/history/${chatId}/baseline-experts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ baseline_text: answerText }),
@@ -783,7 +784,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
     setIsLoadingBaselineExperts(true);
     setBaselineExperts([]);
     try {
-      const res = await fetch(`${config.api.baseUrl}/history/${chatId}/baseline-experts`, {
+      const res = await adminFetch(`${config.api.baseUrl}/history/${chatId}/baseline-experts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ baseline_text: baselineText }),
