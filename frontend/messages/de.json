@@ -988,7 +988,7 @@
   "Privacy": {
     "metaTitle": "Datenschutz",
     "title": "Datenschutzerklärung",
-    "updated": "Zuletzt aktualisiert: 3. Oktober 2026",
+    "updated": "Zuletzt aktualisiert: 5. Oktober 2026",
     "sections": [
       {
         "h": "Wer die Daten verarbeitet",
@@ -1021,8 +1021,8 @@
         "h": "Wer die Daten erhält",
         "p": [
           "Wir arbeiten mit diesen Anbietern. Sie verarbeiten die Daten in unserem Auftrag, als Auftragsverarbeiter (Art. 28 DSGVO).",
-          "Railway Corp. (Vereinigte Staaten): hostet die Website.",
-          "Hetzner Online GmbH (Deutschland): hostet die Datenbank mit den Antworten auf die Fragebögen, auf einem Server in Finnland.",
+          "Railway Corp. (Vereinigte Staaten): hostet die Website und, auf Servern in der Europäischen Union, die Datenbank mit den Antworten auf die Fragebögen.",
+          "Hetzner Online GmbH (Deutschland): bewahrt auf einem Server in Finnland die Antworten auf die Fragebögen auf, die bis zum 5. Oktober 2026 eingegangen sind.",
           "Sendinblue SAS, Marke Brevo (Frankreich): verwaltet den Newsletter.",
           "Wir verkaufen die Daten nicht und geben sie nicht für Werbung an Dritte weiter. Behörden erhalten sie nur, wenn das Gesetz es verlangt."
         ]

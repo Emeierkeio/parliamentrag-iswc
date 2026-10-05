@@ -8,7 +8,6 @@ import { cookies } from 'next/headers';
 import { SidebarStateProvider } from '@/components/layout/SidebarStateProvider';
 import { Suspense } from "react";
 import { UrlParamSync } from "@/components/layout/UrlParamSync";
-import { BackendWakeGate } from "@/components/layout/BackendWakeGate";
 import { LaunchScreen } from "@/components/brand/LaunchScreen";
 import "./globals.css";
 
@@ -182,7 +181,6 @@ export default async function RootLayout({
               <UrlParamSync />
             </Suspense>
             <TooltipProvider delayDuration={0}>
-              <BackendWakeGate />
               {children}
             </TooltipProvider>
             </SidebarStateProvider>

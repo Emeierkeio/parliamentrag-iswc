@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import graphSamples from "@/data/graph-samples.json";
 import { useLocale, useTranslations } from "next-intl";
 import { ArrowUpRight, Download } from "lucide-react";
 import { CentroBar } from "@/components/shell/CentroBar";
@@ -103,28 +104,16 @@ const GRAPH_SAMPLE_FALLBACK: GraphSample = {
   vote: "leg19_sed43_vot_11",
 };
 
+/* Real neighbourhoods taken from the graph by scripts/snapshot-data.mjs:
+   one is picked at random after hydration, so server and client markup match. */
 function useGraphSample(): { sample: GraphSample; loaded: boolean } {
   const [sample, setSample] = useState<GraphSample>(GRAPH_SAMPLE_FALLBACK);
-  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/data/graph-sample", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        if (data?.person?.id) {
-          setSample({ ...GRAPH_SAMPLE_FALLBACK, ...data, person: data.person });
-        }
-        setLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
+    const samples = graphSamples as GraphSample[];
+    const pick = samples[Math.floor(Math.random() * samples.length)];
+    if (pick?.person?.id) setSample({ ...GRAPH_SAMPLE_FALLBACK, ...pick, person: pick.person });
   }, []);
-  return { sample, loaded };
+  return { sample, loaded: true };
 }
 
 function titleCase(name: string) {
@@ -133,30 +122,28 @@ function titleCase(name: string) {
     .replace(/(^|[\s'-])\p{L}/gu, (c) => c.toUpperCase());
 }
 
-type RdfFile = { filename: string; bytes: number; modified?: string };
+type RdfFile = { filename: string; bytes: number; modified?: string; url: string };
+
+/* The dumps are served by Zenodo (latest version of the DOI record): the site
+   has no backend of its own. Sizes and date from the Zenodo record 21602327. */
+const ZENODO_FILES = "https://zenodo.org/records/21602327/files";
+const RDF_FILES: Record<string, RdfFile> = {
+  "parliamentrag_kg.ttl": {
+    filename: "parliamentrag_kg.ttl",
+    bytes: 184497234,
+    modified: "2026-07-26",
+    url: `${ZENODO_FILES}/parliamentrag_kg.ttl?download=1`,
+  },
+  "parliamentrag_votes.nt": {
+    filename: "parliamentrag_votes.nt",
+    bytes: 4112098532,
+    modified: "2026-07-26",
+    url: `${ZENODO_FILES}/parliamentrag_votes.nt?download=1`,
+  },
+};
 
 function useRdfManifest() {
-  const [files, setFiles] = useState<Record<string, RdfFile>>({});
-  const [loaded, setLoaded] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/data/rdf")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        const map: Record<string, RdfFile> = {};
-        for (const f of (data?.files ?? []) as RdfFile[]) map[f.filename] = f;
-        setFiles(map);
-        setLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return { files, loaded };
+  return { files: RDF_FILES, loaded: true };
 }
 
 export default function DataPage() {
@@ -585,7 +572,7 @@ function FileCard({
       ) : file ? (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <Button asChild className="h-11">
-            <a href={`/api/data/rdf/${file.filename}`} download={file.filename}>
+            <a href={file.url} download={file.filename}>
               <Download aria-hidden />
               {downloadLabel}
             </a>

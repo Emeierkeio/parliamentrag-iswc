@@ -1032,7 +1032,7 @@
   "Privacy": {
     "metaTitle": "Privacy",
     "title": "Privacy notice",
-    "updated": "Last updated: 3 October 2026",
+    "updated": "Last updated: 5 October 2026",
     "sections": [
       {
         "h": "Who processes the data",
@@ -1065,8 +1065,8 @@
         "h": "Who receives the data",
         "p": [
           "We rely on these providers. They process the data on our behalf, as processors (Art. 28 GDPR).",
-          "Railway Corp. (United States): hosts the site.",
-          "Hetzner Online GmbH (Germany): hosts the database with the survey answers, on a server in Finland.",
+          "Railway Corp. (United States): hosts the site and, on servers in the European Union, the database with the survey answers.",
+          "Hetzner Online GmbH (Germany): keeps, on a server in Finland, the survey answers received until 5 October 2026.",
           "Sendinblue SAS, Brevo brand (France): manages the newsletter.",
           "We do not sell the data or hand it to third parties for advertising. We disclose it to authorities only when the law requires it."
         ]

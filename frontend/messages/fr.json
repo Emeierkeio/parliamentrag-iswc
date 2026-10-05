@@ -988,7 +988,7 @@
   "Privacy": {
     "metaTitle": "Confidentialité",
     "title": "Politique de confidentialité",
-    "updated": "Dernière mise à jour : 3 octobre 2026",
+    "updated": "Dernière mise à jour : 5 octobre 2026",
     "sections": [
       {
         "h": "Qui traite les données",
@@ -1021,8 +1021,8 @@
         "h": "Qui reçoit les données",
         "p": [
           "Nous faisons appel à ces prestataires. Ils traitent les données pour notre compte, en tant que sous-traitants (art. 28 du RGPD).",
-          "Railway Corp. (États-Unis) : héberge le site.",
-          "Hetzner Online GmbH (Allemagne) : héberge la base de données avec les réponses aux questionnaires, sur un serveur en Finlande.",
+          "Railway Corp. (États-Unis) : héberge le site et, sur des serveurs dans l'Union européenne, la base de données avec les réponses aux questionnaires.",
+          "Hetzner Online GmbH (Allemagne) : conserve, sur un serveur en Finlande, les réponses aux questionnaires reçues jusqu'au 5 octobre 2026.",
           "Sendinblue SAS, marque Brevo (France) : gère la newsletter.",
           "Nous ne vendons pas les données et ne les cédons pas à des tiers à des fins publicitaires. Nous les communiquons aux autorités seulement si la loi l'impose."
         ]
