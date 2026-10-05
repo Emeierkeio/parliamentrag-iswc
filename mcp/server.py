@@ -532,7 +532,7 @@ footer .credits{max-width:1152px;margin:20px auto 0;padding-top:16px;border-top:
 <div class="row">
 <a class="brand" href="https://www.parliamentrag.it"><img src="https://www.parliamentrag.it/logo-blue.svg" alt="" width="26" height="18"><span>ParliamentRAG</span></a>
 <nav>
-<a href="https://github.com/Emeierkeio/parliamentrag-iswc">GitHub</a>
+<a href="https://github.com/Emeierkeio/ParliamentRAG">GitHub</a>
 <a href="https://orkg.org/papers/R1909763">ORKG</a>
 <a href="https://doi.org/10.5281/zenodo.21560331">Zenodo</a>
 <a href="https://www.parliamentrag.it/data">§footer_data§</a>
@@ -544,7 +544,7 @@ footer .credits{max-width:1152px;margin:20px auto 0;padding-top:16px;border-top:
 </footer>
 </body></html>"""
 
-_MCP_URL_ANCHOR = '<a href="https://github.com/Emeierkeio/parliamentrag-iswc/tree/main/mcp">github.com/Emeierkeio/parliamentrag-iswc</a>'
+_MCP_URL_ANCHOR = '<a href="https://github.com/Emeierkeio/ParliamentRAG/blob/main/docs/mcp.md">github.com/Emeierkeio/ParliamentRAG</a>'
 _MCP_PROTO_ANCHOR = '<a href="https://modelcontextprotocol.io">Model Context Protocol</a>'
 _DATI_ANCHOR = '<a href="https://dati.camera.it">dati.camera.it</a>'
 

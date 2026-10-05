@@ -31,7 +31,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (compatible; ParliamentRAG/1.0; "
-        "+https://github.com/Emeierkeio/parliamentrag-iswc)"
+        "+https://github.com/Emeierkeio/ParliamentRAG)"
     )
 }
 

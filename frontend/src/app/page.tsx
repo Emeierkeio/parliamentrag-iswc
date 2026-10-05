@@ -301,7 +301,7 @@ export default function LandingPage() {
               </Link>
               <div className="mt-5 flex w-full sm:w-auto flex-wrap items-center justify-between sm:justify-start gap-x-3 gap-y-1 sm:gap-x-8">
                 <a
-                  href="https://github.com/Emeierkeio/parliamentrag-iswc"
+                  href="https://github.com/Emeierkeio/ParliamentRAG"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group inline-flex items-baseline gap-1 py-1.5 text-[13px] sm:text-sm whitespace-nowrap text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
@@ -592,7 +592,7 @@ export default function LandingPage() {
               </span>
             </div>
             <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-              <FooterLink href="https://github.com/Emeierkeio/parliamentrag-iswc" external>
+              <FooterLink href="https://github.com/Emeierkeio/ParliamentRAG" external>
                 GitHub
               </FooterLink>
               <FooterLink href="https://emeierkeio.github.io/papers/who-speaks-matters-iswc2026.pdf" external>

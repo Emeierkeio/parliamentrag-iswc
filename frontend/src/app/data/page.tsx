@@ -469,7 +469,7 @@ export default function DataPage() {
           <p className="mt-8 text-xs text-primary-foreground/45 max-w-3xl leading-relaxed">
             {t("licenseNote")}{" "}
             <a
-              href="https://github.com/Emeierkeio/parliamentrag-iswc"
+              href="https://github.com/Emeierkeio/ParliamentRAG"
               target="_blank"
               rel="noopener noreferrer"
               className="group inline-flex items-baseline gap-0.5 text-primary-foreground/70 border-b border-primary-foreground/30 hover:border-primary-foreground hover:text-primary-foreground transition-colors"

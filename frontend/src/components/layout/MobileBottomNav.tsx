@@ -266,7 +266,7 @@ function MoreSheetContent({ onOpenSettings }: { onOpenSettings: () => void }) {
             <Settings className="h-4 w-4" />
           </button>
           <a
-            href="https://github.com/Emeierkeio/parliamentrag-iswc"
+            href="https://github.com/Emeierkeio/ParliamentRAG"
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t("documentation")}
