@@ -1716,6 +1716,7 @@
     "talkPlace": "Universität Mailand-Bicocca",
     "eventPage": "Veranstaltungsseite",
     "iswcProgram": "ISWC-Programm",
+    "iswcDemo": "Demo ausprobieren",
     "devKicker": "API · MCP · Dumps",
     "devTitle": "Entwickler",
     "devLead": "Ein MCP-Server für KI-Assistenten und vollständige Dumps des Graphen, offen und ohne Zugangsdaten. Die HTTP-API ist auf Anfrage verfügbar.",

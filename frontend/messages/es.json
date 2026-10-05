@@ -1716,6 +1716,7 @@
     "talkPlace": "Universidad de Milán-Bicocca",
     "eventPage": "Página del evento",
     "iswcProgram": "Programa de ISWC",
+    "iswcDemo": "Prueba la demo",
     "devKicker": "API · MCP · Volcados",
     "devTitle": "Desarrolladores",
     "devLead": "Un servidor MCP para asistentes de IA y volcados completos del grafo, abiertos y sin credenciales. La API HTTP está disponible bajo solicitud.",

@@ -1760,6 +1760,7 @@
     "talkPlace": "University of Milano-Bicocca",
     "eventPage": "Event page",
     "iswcProgram": "ISWC programme",
+    "iswcDemo": "Try the demo",
     "devKicker": "API · MCP · Dumps",
     "devTitle": "Developers",
     "devLead": "An MCP server for AI assistants and full dumps of the graph, open and without credentials. The HTTP API is available on request.",

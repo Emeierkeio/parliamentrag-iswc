@@ -53,6 +53,9 @@ const VISUAL = "aspect-[432/267] w-28 shrink-0 self-start overflow-hidden rounde
 /* The ISWC site renders the list client-side and has no per-paper URL, so a text
    fragment cannot land on our row: link the accepted-papers page itself. */
 const ISWC_ACCEPTED = "https://iswc2026.semanticweb.org/#/program/acceptedpapers";
+/* The system as presented at ISWC 2026, frozen on the release/iswc2026 branch
+   and served by its own Railway service. */
+const ISWC_DEMO = "https://truthful-amazement-production.up.railway.app";
 const MDW_EVENT = "https://www.milanodigitalweek.com/event/parliamentrag-navigare-gli-atti-parlamentari-con-lia-affidabile";
 
 function VisualLink({ href, label, children }: { href: string; label: string; children: ReactNode }) {
@@ -181,6 +184,10 @@ export default function PubblicazioniPage() {
             <Action href={PAPER_DEMO_PDF} primary>
               <FileText className="size-4" aria-hidden />
               PDF
+            </Action>
+            <Action href={ISWC_DEMO}>
+              {t("iswcDemo")}
+              <ArrowUpRight className="size-3.5" aria-hidden />
             </Action>
             <Action href={ISWC_ACCEPTED}>
               {t("iswcProgram")}
