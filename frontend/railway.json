@@ -5,10 +5,5 @@
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
-  },
-  "build": {
-    "watchPatterns": [
-      "/frontend/**"
-    ]
   }
 }
