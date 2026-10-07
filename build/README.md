@@ -23,6 +23,18 @@ make enrich-sparql      # votes and committee roles from SPARQL
 make generate-summaries # AI recaps for sessions/debates/speakers (resumable)
 ```
 
+## Nightly update
+
+`build/nightly.sh` runs `update_data.sh` on the VPS that hosts Neo4j: it
+resets the checkout to `origin/main`, talks to Neo4j on localhost, skips the
+local snapshot and the Hugging Face upload, and keeps 30 days of logs in
+`build/logs/`. Cron entry (03:30 Europe/Rome):
+
+```cron
+CRON_TZ=Europe/Rome
+30 3 * * * /opt/parliamentrag-job/build/nightly.sh >> /var/log/parliamentrag-nightly.log 2>&1
+```
+
 ## Validation gate
 
 Every build/update ends with the invariant suite:
