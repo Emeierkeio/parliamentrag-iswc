@@ -293,6 +293,9 @@ fi
 # rigenera downloads/emendamenti/emendamenti_leg19.jsonl (circa un minuto).
 # Il caricamento nel DB arriverà con la decisione su dove tenere i testi.
 EMEND_DAYS=14
+# senato.it blocca l'IP (403 su tutto il sito) dopo qualche ora a 0,5 s tra le
+# richieste: di notte le richieste sono poche, quindi si va piano.
+SENATO_DELAY=2
 AKN_DIR="downloads/akn_senato"
 akn_pull() {
 	if [ -d "$AKN_DIR/.git" ]; then
@@ -308,11 +311,11 @@ akn_pull() {
 run "Emendamenti Camera (nuovi e cambiati)" "$PY" build/download_emendamenti_camera.py --recenti "$EMEND_DAYS" \
 	|| warn "emendamenti Camera: download incompleto, riprova al prossimo giro"
 run "Fasi Senato + pagine emendamenti di commissione" \
-	"$PY" build/download_emendamenti_senato.py --recenti "$EMEND_DAYS" \
+	"$PY" build/download_emendamenti_senato.py --recenti "$EMEND_DAYS" --delay "$SENATO_DELAY" \
 	|| warn "emendamenti Senato (HTML): download incompleto"
 run "Akoma Ntoso Senato (git pull)" akn_pull \
 	|| warn "Akoma Ntoso Senato: pull fallito"
-run "Esiti Senato + testi mancanti" "$PY" build/download_esiti_senato.py --recenti "$EMEND_DAYS" \
+run "Esiti Senato + testi mancanti" "$PY" build/download_esiti_senato.py --recenti "$EMEND_DAYS" --delay "$SENATO_DELAY" \
 	|| warn "esiti Senato: download incompleto"
 run "Emendamenti → JSONL unico" "$PY" build/parse_emendamenti.py \
 	|| warn "parse emendamenti fallito"

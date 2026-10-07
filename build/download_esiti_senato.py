@@ -83,6 +83,10 @@ class SenateFetcher:
                     print(f"{label}: errore di rete ({exc})", flush=True)
                 time.sleep(5 * (attempt + 1))
                 continue
+            if r.status_code == 403:
+                # A rate-based WAF block: every page, the home page included, answers
+                # 403 for a while. Retrying only extends it.
+                raise SystemExit("Senato: accesso bloccato (403), riprovare più tardi")
             if not _is_challenge(r):
                 self.failed_refreshes = 0
                 return r
