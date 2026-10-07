@@ -16,6 +16,7 @@
 #   make db-backup                    # dated dump of the remote DB on the server (few min downtime)
 #   make db-pull                      # download latest dump + restore into a local Neo4j (:7691)
 #   make db-use-local / db-use-remote # switch NEO4J_URI in .env between local copy and remote
+#   make purge-user-data DRY=1        # count user data past DATA_RETENTION_UNTIL (drop DRY=1 to delete)
 
 BACKEND_PORT  ?= 8000
 FRONTEND_PORT ?= 3000
@@ -54,7 +55,7 @@ LOCAL_BACKUP_DIR       := $(CURDIR)/neo4j-local-backups
 # Hugging Face dataset (parquet mirror of the KG, follows the live DB)
 HF_DATASET_REPO        := emeierkeio/parliamentrag-camera-leg19
 
-.PHONY: help dev dev-backend dev-frontend stop install install-backend install-frontend build check-ports update-data link-refs og-images tunnel browser db-backup db-pull db-use-local db-use-remote export-hf hf-upload
+.PHONY: help purge-user-data dev dev-backend dev-frontend stop install install-backend install-frontend build check-ports update-data link-refs og-images tunnel browser db-backup db-pull db-use-local db-use-remote export-hf hf-upload
 
 help:
 	@grep -E '^#   make' Makefile | sed 's/^#   //'
@@ -84,6 +85,11 @@ dev: tunnel
 	( cd $(BACKEND_DIR) && venv/bin/uvicorn app.main:app --reload --port $$BP ) & \
 	( cd $(FRONTEND_DIR) && BACKEND_URL=http://localhost:$$BP npx next dev --port $$FP ) & \
 	wait
+
+## Delete user data outside the retention window (app/services/retention.py) on the
+## demo DB, the same database Fascicoli writes to. DRY=1 only counts.
+purge-user-data: tunnel
+	@cd $(BACKEND_DIR) && NEO4J_URI=$(DEMO_NEO4J) venv/bin/python -m app.services.retention $(if $(DRY),--dry-run)
 
 dev-backend:
 	@cd $(BACKEND_DIR) && venv/bin/uvicorn app.main:app --reload --port $(BACKEND_PORT)

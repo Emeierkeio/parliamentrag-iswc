@@ -10,11 +10,14 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from ..services.retention import require_storage_open
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feedback", tags=["Feedback"])
+_STORES = [Depends(require_storage_open)]
 
 TOOLS = {"chat", "search", "ranking", "compass", "timeline", "explorer", "data"}
 VOTES = {"up", "down"}
@@ -49,7 +52,7 @@ class FeedbackDetails(BaseModel):
     comment: Optional[str] = Field(default=None, max_length=1000)
 
 
-@router.post("")
+@router.post("", dependencies=_STORES)
 async def create_feedback(payload: FeedbackCreate):
     """Registra un voto; ritorna l'id per l'eventuale commento successivo."""
     if payload.tool not in TOOLS:
@@ -80,7 +83,7 @@ async def create_feedback(payload: FeedbackCreate):
     return {"id": feedback_id}
 
 
-@router.post("/{feedback_id}/details")
+@router.post("/{feedback_id}/details", dependencies=_STORES)
 async def add_details(feedback_id: str, payload: FeedbackDetails):
     """Completa un voto già registrato: voto corretto, motivi, commento."""
     if payload.vote is not None and payload.vote not in VOTES:
@@ -155,7 +158,7 @@ class BoothCreate(BaseModel):
     context: Optional[str] = Field(default=None, max_length=300)
 
 
-@router.post("/booth")
+@router.post("/booth", dependencies=_STORES)
 async def create_booth_survey(payload: BoothCreate):
     survey_id = str(uuid4())
     client = _get_client()

@@ -226,9 +226,14 @@ async def lifespan(app: FastAPI):
     from .routers.survey import ensure_survey_constraint
     ensure_survey_constraint()
 
+    from .routers.history import _get_client
+    from .services import retention
+    purger = asyncio.create_task(retention.run_daily(_get_client))
+
     yield
 
     logger.info("Shutting down Multi-View RAG API...")
+    await retention.stop(purger)
 
 
 async def _warmup_neo4j_index(settings):

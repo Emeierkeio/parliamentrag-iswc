@@ -544,7 +544,7 @@ footer .credits{max-width:1152px;margin:20px auto 0;padding-top:16px;border-top:
 </footer>
 </body></html>"""
 
-_MCP_URL_ANCHOR = '<a href="https://github.com/Emeierkeio/ParliamentRAG/tree/main/mcp">github.com/Emeierkeio/ParliamentRAG</a>'
+_MCP_URL_ANCHOR = '<a href="https://github.com/Emeierkeio/ParliamentRAG/blob/main/docs/mcp.md">github.com/Emeierkeio/ParliamentRAG</a>'
 _MCP_PROTO_ANCHOR = '<a href="https://modelcontextprotocol.io">Model Context Protocol</a>'
 _DATI_ANCHOR = '<a href="https://dati.camera.it">dati.camera.it</a>'
 

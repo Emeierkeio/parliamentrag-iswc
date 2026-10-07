@@ -11,10 +11,11 @@ from typing import List, Optional, Dict, Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..services.neo4j_client import get_neo4j_client
+from ..services.retention import require_storage_open
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["History"])
@@ -105,7 +106,7 @@ async def get_history() -> HistoryListResponse:
     return HistoryListResponse(history=history_list)
 
 
-@router.post("/history")
+@router.post("/history", dependencies=[Depends(require_storage_open)])
 async def save_chat(chat: ChatHistoryItem) -> ChatHistoryItem:
     """Save a chat session to history."""
     # The id is the only access control on GET /history/{id}: always a fresh

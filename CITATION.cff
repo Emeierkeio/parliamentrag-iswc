@@ -12,10 +12,13 @@ authors:
   - family-names: Palmonari
     given-names: Matteo
     orcid: "https://orcid.org/0000-0002-1801-5118"
-repository-code: "https://github.com/Emeierkeio/ParliamentRAG"
+repository-code: "https://github.com/Emeierkeio/parliamentrag-iswc"
 url: "https://www.parliamentrag.it"
 license: Apache-2.0
 identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23173703
+    description: "Source code archived on Zenodo (tags iswc2026-eval and iswc2026-demo)"
   - type: doi
     value: 10.5281/zenodo.21560331
     description: "RDF dump of the knowledge graph (concept DOI, resolves to the latest version)"

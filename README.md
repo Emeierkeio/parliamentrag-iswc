@@ -6,13 +6,17 @@
 </p>
 
 <p align="center">
-  <a href="https://www.parliamentrag.it/"><img alt="Live demo at parliamentrag.it" src="https://img.shields.io/badge/Live_demo-parliamentrag.it-1E3A5F?style=flat-square"></a>
+  <a href="https://truthful-amazement-production.up.railway.app"><img alt="ISWC 2026 live demo" src="https://img.shields.io/badge/Live_demo-ISWC_2026-1E3A5F?style=flat-square"></a>
+  <a href="https://doi.org/10.5281/zenodo.23173703"><img alt="Source code on Zenodo" src="https://img.shields.io/badge/Code-Zenodo_DOI-1682D4?style=flat-square&logo=zenodo&logoColor=white"></a>
   <a href="https://iswc2026.semanticweb.org"><img alt="Two papers accepted at ISWC 2026" src="https://img.shields.io/badge/ISWC_2026-In--Use_%2B_Demo_papers-6A4C93?style=flat-square"></a>
   <a href="https://doi.org/10.5281/zenodo.21560331"><img alt="RDF dataset on Zenodo" src="https://img.shields.io/badge/Dataset-Zenodo_DOI-1682D4?style=flat-square&logo=zenodo&logoColor=white"></a>
   <a href="https://huggingface.co/datasets/emeierkeio/parliamentrag-camera-leg19"><img alt="Dataset on Hugging Face" src="https://img.shields.io/badge/Dataset-Hugging_Face-FFD21E?style=flat-square&logo=huggingface&logoColor=black"></a>
   <a href="LICENSE"><img alt="Code license Apache 2.0" src="https://img.shields.io/badge/Code-Apache_2.0-0969DA?style=flat-square"></a>
   <a href="https://creativecommons.org/licenses/by-sa/4.0/"><img alt="Data license CC BY-SA 4.0" src="https://img.shields.io/badge/Data-CC_BY--SA_4.0-97CA00?style=flat-square&logo=creativecommons&logoColor=white"></a>
 </p>
+
+> [!NOTE]
+> **You are looking at the code of the ISWC 2026 papers.** The papers cite `github.com/Emeierkeio/ParliamentRAG`; since 6 October 2026 that name points to the project website ([Emeierkeio/ParliamentRAG](https://github.com/Emeierkeio/ParliamentRAG), [parliamentrag.it](https://www.parliamentrag.it)). Tag [`iswc2026-eval`](https://github.com/Emeierkeio/parliamentrag-iswc/tree/iswc2026-eval) holds the code that generated the evaluated answers, tag [`iswc2026-demo`](https://github.com/Emeierkeio/parliamentrag-iswc/tree/iswc2026-demo) the demo. Zenodo archives both under DOI [10.5281/zenodo.23173703](https://doi.org/10.5281/zenodo.23173703). For the tools built on this code, see [Fascicoli](https://www.fascicoli.it), [Stenografo](https://www.stenografo.it) and [Scranno](https://www.scranno.it).
 
 **Balanced, verifiable answers about Italian parliamentary debate, grounded in what was actually said and by whom.**
 

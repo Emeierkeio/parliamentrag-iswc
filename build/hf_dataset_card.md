@@ -86,7 +86,7 @@ Sources:
 - Stenographic reports of the Chamber (XML): speech transcripts, debate structure.
 - [EuroVoc](https://eurovoc.europa.eu): multilingual subject thesaurus of the EU.
 
-The build pipeline (download, parsing, entity resolution, NER linking) is open source: [github.com/Emeierkeio/ParliamentRAG](https://github.com/Emeierkeio/ParliamentRAG). This export is produced by `build/export_hf.py` in that repository. Session and debate recaps are LLM-generated summaries and are marked as such; everything else comes from the official record.
+The build pipeline (download, parsing, entity resolution, NER linking) is open source: [github.com/Emeierkeio/parliamentrag-iswc](https://github.com/Emeierkeio/parliamentrag-iswc). This export is produced by `build/export_hf.py` in that repository. Session and debate recaps are LLM-generated summaries and are marked as such; everything else comes from the official record.
 
 Known limits:
 

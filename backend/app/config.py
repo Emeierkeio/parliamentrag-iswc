@@ -6,12 +6,13 @@ Loads configuration from:
 2. .env - secrets only (API keys, passwords)
 """
 import logging
+from datetime import date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from functools import lru_cache
 
 import yaml
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,21 @@ class Settings(BaseSettings):
         default="https://www.parliamentrag.it",
         description="Public site base URL, target of the confirmation redirect"
     )
+
+    # The privacy notice promises deletion after this date (Europe/Rome)
+    data_retention_until: date = Field(
+        default=date(2027, 12, 31),
+        description="Last day user data is kept; app.services.retention deletes it afterwards"
+    )
+    data_retention_max_days: Optional[int] = Field(
+        default=None,
+        description="Also delete user data older than this many days (unset = keep until the date)"
+    )
+
+    @field_validator("data_retention_max_days", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, v):
+        return None if v == "" else v
 
     # Debug settings
     debug: bool = Field(default=False, description="Enable debug mode")
