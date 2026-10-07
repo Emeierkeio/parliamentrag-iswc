@@ -157,10 +157,12 @@ fi
 
 # ── Cache topic della landing ────────────────────────────────────────────────
 # Ricalcolata ora che i dati sono cambiati, così nessun visitatore aspetta la
-# computazione Neo4j+LLM. La curl sveglia anche il backend prod.
+# computazione Neo4j+LLM. La curl sveglia anche il backend prod, che dal 5/10
+# non sta più dietro www.parliamentrag.it (ora sito del centro).
+: "${BACKEND_URL:=https://thesis-parliamentrag-production.up.railway.app}"
 for L in it en; do
 	run "Warm recent-topics cache (lang=$L)" \
-		curl -sf -m 120 "https://www.parliamentrag.it/api/config/recent-topics?lang=$L&refresh=1" -o /dev/null \
+		curl -sf -m 120 "$BACKEND_URL/api/config/recent-topics?lang=$L&refresh=1" -o /dev/null \
 		|| warn "recent-topics lang=$L FAILED (will recompute on first visit)"
 done
 
@@ -299,7 +301,10 @@ SENATO_DELAY=2
 AKN_DIR="downloads/akn_senato"
 akn_pull() {
 	if [ -d "$AKN_DIR/.git" ]; then
-		git -C "$AKN_DIR" pull --quiet --depth 1
+		# Clone superficiale in sola lettura: un pull non trova storia comune con
+		# il commit giornaliero del Senato, quindi si allinea all'ultimo commit.
+		git -C "$AKN_DIR" fetch --quiet --depth 1 origin master \
+			&& git -C "$AKN_DIR" reset --quiet --hard FETCH_HEAD
 	else
 		git clone --quiet --filter=blob:none --no-checkout --depth 1 \
 			https://github.com/SenatoDellaRepubblica/AkomaNtosoBulkData.git "$AKN_DIR" \
