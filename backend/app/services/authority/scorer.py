@@ -400,12 +400,14 @@ class AuthorityScorer:
         CALL {
             WITH d
             OPTIONAL MATCH (d)-[ar:PRIMARY_SIGNATORY|CO_SIGNATORY]->(a:ParliamentaryAct)
-            WITH a, ar ORDER BY a.presentation_date DESC LIMIT 500
+            // Undated acts last: Neo4j sorts nulls first in DESC order
+            WITH a, ar ORDER BY coalesce(a.presentation_date, date('1900-01-01')) DESC LIMIT 500
             RETURN collect(
                 CASE WHEN a IS NOT NULL
                      THEN {uri: a.uri, date: a.presentation_date,
                            signatory_type: type(ar),
-                           description_embedding: a.description_embedding}
+                           // Bills have an empty dc:description: fall back to the title
+                           description_embedding: coalesce(a.description_embedding, a.title_embedding)}
                 END
             ) AS acts
         }
