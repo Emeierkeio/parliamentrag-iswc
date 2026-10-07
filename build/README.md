@@ -48,12 +48,17 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `db_builder.py` | all Neo4j writes (nodes, relationships, indexes) |
 | `sparql_ingester.py`, `senate_sparql_ingester.py` | aggregate + individual votes, committee roles |
 | `ingest_atti_parlamentari.py` | parliamentary acts + EuroVoc subjects |
+| `repair_bills.py` | presentation dates and topic embeddings (from the title) for Chamber bills |
 | `ingest_misto_componenti.py` | political components of the Gruppo Misto |
 | `classify_chunk_citability.py` | LLM batch classification of chunk citability |
 | `generate_summaries.py` | AI recaps (IT/EN) for timeline |
 | `precalculate_embeddings.py`, `embedding_service.py` | OpenAI embeddings with local cache |
 | `validate_db.py` | post-build invariant gate |
 | `export_rdf.py` | RDF export of the KG (Linked Data deliverable, `make export-rdf`) |
+| `download_emendamenti_camera.py` | Chamber amendment XMLs, one file per bill |
+| `download_emendamenti_senato.py` | Senate readings (SPARQL) and committee amendment pages |
+| `download_esiti_senato.py` | Senate amendment outcomes and the floor texts missing from Akoma Ntoso |
+| `parse_emendamenti.py` | both chambers' amendments in one JSONL (`downloads/emendamenti/`) |
 
 ## Notes
 
@@ -61,5 +66,12 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
   git-ignored): rebuilding with unchanged texts costs ~zero API calls.
 - Credentials are never hardcoded: set `NEO4J_PASSWORD` and `OPENAI_API_KEY`
   in `.env` or the environment.
+- Amendments (XIX): `make update-data` downloads only bills that are new or
+  whose status changed in the last 14 days, pulls the Senate Akoma Ntoso bulk
+  data ([SenatoDellaRepubblica/AkomaNtosoBulkData](https://github.com/SenatoDellaRepubblica/AkomaNtosoBulkData))
+  and rebuilds the JSONL. The files stay in `downloads/` (not versioned) and
+  are not loaded into the graph yet. senato.it is behind an AWS WAF challenge,
+  solved with Playwright (`playwright install chromium`), and blocks the IP
+  for a few hours if requests come too fast: keep at least 2 s between them.
 - Tests: `pytest build/tests/` (integration tests need a running Neo4j and
   `NEO4J_PASSWORD` set).

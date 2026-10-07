@@ -99,6 +99,7 @@ roles, votes), with EuroVoc subject links for parliamentary acts.
 - **Linked Data**: entity URIs conform to the source datasets (dati.camera.it/ocd/…, eurovoc.europa.eu/…) and are dereferenceable
 - Every build/update ends with an **invariant validation gate** (`build/validate_db.py`): string embeddings, orphan speeches, broken chunk offsets or malformed URIs fail the build
 - **RDF export**: the whole graph is serialized back to RDF (`make export-rdf`; Turtle, plus the 6.3M individual votes in N-Triples) and archived on Zenodo under CC BY-SA 4.0 with DOI [10.5281/zenodo.21560331](https://doi.org/10.5281/zenodo.21560331); project terms use the [w3id.org/parliamentrag](https://w3id.org/parliamentrag/) namespace
+- **Amendments**: the update pipeline also collects the XIX amendments of both chambers (about 223k, with signatories, outcome when published and the bill's iter across chambers) into one JSONL; they are not part of the graph yet
 - **Hugging Face dataset**: the corpus is also published in tabular form as [emeierkeio/parliamentrag-camera-leg19](https://huggingface.co/datasets/emeierkeio/parliamentrag-camera-leg19) (CC BY-SA 4.0), refreshed via `make export-hf`
 
 The construction pipeline lives in [`build/`](build/README.md):
@@ -106,7 +107,7 @@ The construction pipeline lives in [`build/`](build/README.md):
 ```bash
 make db-populate        # full build from scratch
 make db-update-all      # incremental: new sessions + votes + summaries + citability
-make update-data        # demo-oriented incremental update + graph repairs
+make update-data        # incremental update, graph repairs and XIX amendments
 ```
 
 <p align="center"><img src="assets/kg-schema.svg" alt="Knowledge graph schema v2" width="820"/></p>
@@ -138,7 +139,7 @@ Other useful targets:
 make dev-backend / make dev-frontend   # run one side only
 make stop                              # free the dev ports
 make build                             # production build of the frontend
-make update-data                       # incremental data ingestion + graph repairs
+make update-data                       # incremental data ingestion, graph repairs, amendments
 make db-backup                         # dated dump of the production Neo4j
 make db-pull                           # restore latest dump into a local Neo4j (:7691)
 make db-use-local / db-use-remote      # switch NEO4J_URI between local copy and production
@@ -236,7 +237,7 @@ In the original study against Google NotebookLM (6 domain experts), the system s
 
 ## Data attribution
 
-Parliamentary data are sourced from the **Camera dei Deputati open data** program ([dati.camera.it](https://dati.camera.it/)), released under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); the derived RDF and Hugging Face datasets keep the same license. The texts of stenographic reports are official acts of the Italian State and as such are not subject to copyright (art. 5, L. 633/1941). ParliamentRAG is an independent project and is not affiliated with or endorsed by the Camera dei Deputati.
+Parliamentary data are sourced from the **Camera dei Deputati open data** program ([dati.camera.it](https://dati.camera.it/)), released under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); the derived RDF and Hugging Face datasets keep the same license. The texts of stenographic reports are official acts of the Italian State and as such are not subject to copyright (art. 5, L. 633/1941). Senate amendment texts come from the Senato della Repubblica Akoma Ntoso bulk data (CC BY 4.0) and from [dati.senato.it](https://dati.senato.it/) (CC BY 3.0). ParliamentRAG is an independent project and is not affiliated with or endorsed by the Camera dei Deputati or the Senato della Repubblica.
 
 ---
 
