@@ -346,6 +346,35 @@ def parse_senato_html(page: str, fase: dict, sede: str, esiti_by_num: dict, leg:
         }
 
 
+
+SINGLE_RE = {k: re.compile(rf'<p class="{k}"[^>]*>(.*?)</p>', re.S) for k in ("num", "firm", "esito")}
+
+
+def parse_senato_single(page: str, fase: dict, sede: str, leg: int, id_testo: str) -> dict | None:
+    """Single EMEND/EMENDC page: paragraphs tagged num, firm, esito, then the text."""
+    body = page[page.find('class="bgt"'):]
+    body = body[:body.find("</section>")]
+    num = SINGLE_RE["num"].search(body)
+    if not num:
+        return None
+    firm = SINGLE_RE["firm"].search(body)
+    esito = SINGLE_RE["esito"].search(body)
+    last = max(m.end() for m in (num, firm, esito) if m)
+    numero, versione = split_version(html_to_text(num.group(1)))
+    tipo = "ordine_del_giorno" if numero.startswith("G") else "emendamento"
+    tipodoc = "EMEND" if sede == "assemblea" else "EMENDC"
+    return {
+        "ramo": "S", "atto": fase["fase"], "atti_congiunti": [], "id_ddl": fase["idDdl"],
+        "id_testo": id_testo, "sede": sede, "sede_esame": None, "commissione": None,
+        "seduta_data": None, "data_presentazione": None, "numero": numero, "versione": versione,
+        "tipo": tipo, "articolo": numero.split(".")[0] if tipo != "ordine_del_giorno" else None,
+        "esito": html_to_text(esito.group(1)) if esito else None,
+        "decreto": None, "documento": None,
+        "firmatari": html_signers(firm.group(0)) if firm else [],
+        "testo": html_to_text(body[last:]),
+        "fonte": f"https://www.senato.it/show-doc?leg={leg}&tipodoc={tipodoc}&id={id_testo}",
+    }
+
 # --------------------------------------------------------------------- main
 
 def main() -> None:
@@ -387,8 +416,9 @@ def main() -> None:
     for v in akn_vuoti:
         page = singoli_dir / f"{v['id_testo']}.html"
         if page.exists() and v["id_fase"] in fasi:
-            for row in parse_senato_html(page.read_text(encoding="utf-8"), fasi[v["id_fase"]], v["sede"],
-                                         esiti_by_num, args.leg, id_testo=v["id_testo"]):
+            row = parse_senato_single(page.read_text(encoding="utf-8"), fasi[v["id_fase"]], v["sede"],
+                                      args.leg, v["id_testo"])
+            if row:
                 row["esito"] = row["esito"] or esiti.get(v["id_testo"])
                 rows.append(row)
                 recuperati += 1

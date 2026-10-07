@@ -159,34 +159,55 @@ def download_esiti(fetcher: SenateFetcher, out: Path, fasi: list[dict], delay: f
     return errors
 
 
-def empty_akn_files(akn_dir: Path) -> list[tuple[str, str]]:
-    """(id_testo, tipodoc) for the empty <akomaNtoso/> files in the bulk data."""
+def empty_akn_files(akn_dir: Path) -> list[tuple[str, str, str]]:
+    """(id_testo, tipodoc, id_fase) for the empty <akomaNtoso/> files in the bulk data."""
     found = []
     for path in akn_dir.glob("Atto*/emend*/*.akn.xml"):
         if path.stat().st_size < 600 and "<an:amendment" not in path.read_text(encoding="utf-8", errors="ignore"):
             tipodoc = "EMEND" if path.parent.name == "emend" else "EMENDC"
-            found.append((str(int(path.name.split("-", 1)[0])), tipodoc))
+            found.append((str(int(path.name.split("-", 1)[0])), tipodoc, str(int(path.parent.parent.name[4:]))))
     return sorted(found)
 
 
+IDOGGETTO_RE = re.compile(r"tipodoc=EMENDC?&amp;id=(\d+)&amp;idoggetto=(\d+)")
+
+
 def download_singoli(fetcher: SenateFetcher, out: Path, akn_dir: Path, leg: int, delay: float) -> int:
+    """Single amendment pages need the idoggetto the bill page links them with."""
     singoli = out / "singoli"
     singoli.mkdir(exist_ok=True)
-    todo = [(i, t) for i, t in empty_akn_files(akn_dir) if not (singoli / f"{i}.html").exists()]
+    todo = [t for t in empty_akn_files(akn_dir) if not (singoli / f"{t[0]}.html").exists()]
     print(f"Testi singoli da scaricare: {len(todo)}", flush=True)
-    errors = 0
-    for n, (id_testo, tipodoc) in enumerate(todo, 1):
-        url = f"https://www.senato.it/show-doc?leg={leg}&tipodoc={tipodoc}&id={id_testo}"
-        r = fetcher.get(url, f"{tipodoc} {id_testo}")
-        if r is not None and r.status_code == 200 and 'class="bgt"' in r.text:
-            (singoli / f"{id_testo}.html").write_text(r.text, encoding="utf-8")
-        else:
-            errors += 1
-            print(f"{tipodoc} {id_testo}: HTTP {getattr(r, 'status_code', '-')}", flush=True)
-        if n % 100 == 0:
-            print(f"-- singoli {n}/{len(todo)}", flush=True)
+    by_fase: dict[str, list[tuple[str, str]]] = {}
+    for id_testo, tipodoc, id_fase in todo:
+        by_fase.setdefault(id_fase, []).append((id_testo, tipodoc))
+    errors = done = 0
+    for id_fase, items in by_fase.items():
+        r = fetcher.get(TAB_URL.format(id_fase=id_fase), f"scheda {id_fase}")
+        if r is None or r.status_code != 200:
+            errors += len(items)
+            print(f"scheda {id_fase}: HTTP {getattr(r, 'status_code', '-')}", flush=True)
+            continue
+        idoggetto = dict(IDOGGETTO_RE.findall(r.text))
         time.sleep(delay)
-    print(f"Singoli: {len(todo) - errors} scaricati, {errors} errori", flush=True)
+        for id_testo, tipodoc in items:
+            if id_testo not in idoggetto:
+                errors += 1
+                print(f"{tipodoc} {id_testo}: non elencato nella scheda {id_fase}", flush=True)
+                continue
+            url = (f"https://www.senato.it/show-doc?leg={leg}&tipodoc={tipodoc}"
+                   f"&id={id_testo}&idoggetto={idoggetto[id_testo]}")
+            page = fetcher.get(url, f"{tipodoc} {id_testo}")
+            if page is not None and page.status_code == 200 and 'class="bgt"' in page.text:
+                (singoli / f"{id_testo}.html").write_text(page.text, encoding="utf-8")
+                done += 1
+            else:
+                errors += 1
+                print(f"{tipodoc} {id_testo}: HTTP {getattr(page, 'status_code', '-')}", flush=True)
+            if (done + errors) % 100 == 0:
+                print(f"-- singoli {done + errors}/{len(todo)}", flush=True)
+            time.sleep(delay)
+    print(f"Singoli: {done} scaricati, {errors} errori", flush=True)
     return errors
 
 
