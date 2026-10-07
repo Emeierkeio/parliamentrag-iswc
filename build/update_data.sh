@@ -258,7 +258,7 @@ run "Date ed embedding progetti di legge" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/repair_bills.py --neo4j-uri "$DEMO_NEO4J" \
 	|| warn "bill dates repair failed — retry at next update-data"
 if [ -n "$LOCAL_UP" ]; then
-	run "Date progetti di legge (locale)" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	run "Date ed embedding progetti di legge (locale)" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 		"$PY" build/repair_bills.py --neo4j-uri "$LOCAL_NEO4J" \
 		|| warn "bill dates repair failed on local snapshot"
 fi
