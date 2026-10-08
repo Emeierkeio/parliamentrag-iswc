@@ -633,17 +633,20 @@ class RoleComponent(AuthorityComponent):
     Institutional role component.
 
     Computes score based on:
-    1. Base role weight (president > vice_president > secretary)
+    1. Base role weight (president > vice_president > secretary = group_leader)
     2. Topic relevance bonus if the committee is relevant to the query
 
     Formula: base_weight × (1 + relevance_bonus)
     """
 
     # Base weights for institutional roles in committees
+    # group_leader: the group's representative in the committee (CAPOGRUPPO),
+    # weighted as in Fascicoli's scorer.
     ROLE_BASE_WEIGHTS = {
         "president": 0.7,
         "vice_president": 0.5,
         "secretary": 0.4,
+        "group_leader": 0.4,
     }
 
     # Government position weights (for GovernmentMember)
@@ -664,6 +667,7 @@ class RoleComponent(AuthorityComponent):
         "president": "Presidente",
         "vice_president": "Vicepresidente",
         "secretary": "Segretario",
+        "group_leader": "Capogruppo in",
     }
 
     def __init__(self):

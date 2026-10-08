@@ -355,47 +355,28 @@ class AuthorityScorer:
             end_date: mc.end_date
         }) AS committee_memberships
 
-        // Institutional roles (president, vice president, secretary of committees)
-        OPTIONAL MATCH (d)-[rp:IS_PRESIDENT]->(cp:Committee)
-        WITH d, group_memberships, committee_memberships, collect({
-            role_type: 'president',
-            committee_name: cp.name,
-            committee_embedding: cp.embedding,
-            start_date: rp.start_date,
-            end_date: rp.end_date
-        }) AS president_roles
-
-        OPTIONAL MATCH (d)-[rv:IS_VICE_PRESIDENT]->(cv:Committee)
-        WITH d, group_memberships, committee_memberships, president_roles, collect({
-            role_type: 'vice_president',
-            committee_name: cv.name,
-            committee_embedding: cv.embedding,
-            start_date: rv.start_date,
-            end_date: rv.end_date
-        }) AS vice_president_roles
-
-        OPTIONAL MATCH (d)-[rs:IS_SECRETARY]->(cs:Committee)
-        WITH d, group_memberships, committee_memberships, president_roles, vice_president_roles, collect({
-            role_type: 'secretary',
-            committee_name: cs.name,
-            committee_embedding: cs.embedding,
-            start_date: rs.start_date,
-            end_date: rs.end_date
-        }) AS secretary_roles
-
-        // schema v2: official roles as properties on MEMBER_OF_COMMITTEE
+        // Committee offices live in MEMBER_OF_COMMITTEE.officerRole with their own
+        // dates (sparql_ingester). The IS_PRESIDENT/IS_VICE_PRESIDENT/IS_SECRETARY
+        // relationships read before never existed in the graph, so almost every
+        // officer scored the 0.3 base (found 2026-10-08: 642 offices ignored).
+        // MEMBER_OF_COMMITTEE.role (67 edges) is the fallback when officerRole is missing.
         OPTIONAL MATCH (d)-[rm:MEMBER_OF_COMMITTEE]->(cm:Committee)
-        WHERE rm.role IN ['president', 'vice_president', 'secretary']
-        WITH d, group_memberships, committee_memberships, president_roles, vice_president_roles, secretary_roles, collect(
+        WHERE rm.officerRole IN ['PRESIDENTE', 'VICEPRESIDENTE', 'SEGRETARIO', 'CAPOGRUPPO']
+           OR (rm.officerRole IS NULL AND rm.role IN ['president', 'vice_president', 'secretary'])
+        WITH d, group_memberships, committee_memberships, collect(
             CASE WHEN cm IS NOT NULL
-                 THEN {role_type: rm.role, committee_name: cm.name,
+                 THEN {role_type: CASE rm.officerRole
+                                      WHEN 'PRESIDENTE' THEN 'president'
+                                      WHEN 'VICEPRESIDENTE' THEN 'vice_president'
+                                      WHEN 'SEGRETARIO' THEN 'secretary'
+                                      WHEN 'CAPOGRUPPO' THEN 'group_leader'
+                                      ELSE rm.role END,
+                       committee_name: cm.name,
                        committee_embedding: cm.embedding,
-                       start_date: rm.start_date, end_date: rm.end_date}
+                       start_date: CASE WHEN rm.officerRole IS NULL THEN rm.start_date ELSE rm.officerRoleStart END,
+                       end_date: CASE WHEN rm.officerRole IS NULL THEN rm.end_date ELSE rm.officerRoleEnd END}
             END
-        ) AS v2_officer_roles
-
-        WITH d, group_memberships, committee_memberships,
-             president_roles + vice_president_roles + secretary_roles + v2_officer_roles AS institutional_roles
+        ) AS institutional_roles
 
         CALL {
             WITH d

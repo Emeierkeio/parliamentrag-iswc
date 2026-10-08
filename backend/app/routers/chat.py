@@ -833,10 +833,10 @@ def _fetch_speaker_details(neo4j_client: Neo4jClient, speaker_id: str) -> Dict[s
         OPTIONAL MATCH (d)-[rp:IS_PRESIDENT]->(cp:Committee)
         WHERE rp.end_date IS NULL OR rp.end_date >= date()
         WITH d, collect(DISTINCT 'Presidente ' + cp.name) AS v1_president_roles
-        // schema v2: role stored as a property on MEMBER_OF_COMMITTEE
+        // committee offices: MEMBER_OF_COMMITTEE.officerRole (role only as fallback)
         OPTIONAL MATCH (d)-[rpm:MEMBER_OF_COMMITTEE]->(cpm:Committee)
-        WHERE rpm.role = 'president'
-          AND (rpm.end_date IS NULL OR rpm.end_date >= date())
+        WHERE (rpm.officerRole = 'PRESIDENTE' OR (rpm.officerRole IS NULL AND rpm.role = 'president'))
+          AND (coalesce(rpm.officerRoleEnd, rpm.end_date) IS NULL OR coalesce(rpm.officerRoleEnd, rpm.end_date) >= date())
         WITH v1_president_roles, collect(DISTINCT 'Presidente ' + cpm.name) AS v2_president_roles
         RETURN v1_president_roles + v2_president_roles AS president_roles
     }
@@ -845,10 +845,10 @@ def _fetch_speaker_details(neo4j_client: Neo4jClient, speaker_id: str) -> Dict[s
         OPTIONAL MATCH (d)-[rv:IS_VICE_PRESIDENT]->(cv:Committee)
         WHERE rv.end_date IS NULL OR rv.end_date >= date()
         WITH d, collect(DISTINCT 'Vicepresidente ' + cv.name) AS v1_vice_roles
-        // schema v2: role stored as a property on MEMBER_OF_COMMITTEE
+        // committee offices: MEMBER_OF_COMMITTEE.officerRole (role only as fallback)
         OPTIONAL MATCH (d)-[rvm:MEMBER_OF_COMMITTEE]->(cvm:Committee)
-        WHERE rvm.role = 'vice_president'
-          AND (rvm.end_date IS NULL OR rvm.end_date >= date())
+        WHERE (rvm.officerRole = 'VICEPRESIDENTE' OR (rvm.officerRole IS NULL AND rvm.role = 'vice_president'))
+          AND (coalesce(rvm.officerRoleEnd, rvm.end_date) IS NULL OR coalesce(rvm.officerRoleEnd, rvm.end_date) >= date())
         WITH v1_vice_roles, collect(DISTINCT 'Vicepresidente ' + cvm.name) AS v2_vice_roles
         RETURN v1_vice_roles + v2_vice_roles AS vice_roles
     }
@@ -857,10 +857,10 @@ def _fetch_speaker_details(neo4j_client: Neo4jClient, speaker_id: str) -> Dict[s
         OPTIONAL MATCH (d)-[rs:IS_SECRETARY]->(cs:Committee)
         WHERE rs.end_date IS NULL OR rs.end_date >= date()
         WITH d, collect(DISTINCT 'Segretario ' + cs.name) AS v1_secretary_roles
-        // schema v2: role stored as a property on MEMBER_OF_COMMITTEE
+        // committee offices: MEMBER_OF_COMMITTEE.officerRole (role only as fallback)
         OPTIONAL MATCH (d)-[rsm:MEMBER_OF_COMMITTEE]->(csm:Committee)
-        WHERE rsm.role = 'secretary'
-          AND (rsm.end_date IS NULL OR rsm.end_date >= date())
+        WHERE (rsm.officerRole = 'SEGRETARIO' OR (rsm.officerRole IS NULL AND rsm.role = 'secretary'))
+          AND (coalesce(rsm.officerRoleEnd, rsm.end_date) IS NULL OR coalesce(rsm.officerRoleEnd, rsm.end_date) >= date())
         WITH v1_secretary_roles, collect(DISTINCT 'Segretario ' + csm.name) AS v2_secretary_roles
         RETURN v1_secretary_roles + v2_secretary_roles AS secretary_roles
     }

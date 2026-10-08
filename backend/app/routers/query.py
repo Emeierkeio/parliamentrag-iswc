@@ -962,30 +962,30 @@ def _fetch_speaker_details(neo4j_client: Neo4jClient, speaker_id: str) -> Dict[s
         WITH d
         OPTIONAL MATCH (d)-[rp:IS_PRESIDENT]->(cp:Committee)
         WITH d, collect(DISTINCT CASE WHEN cp IS NULL THEN NULL ELSE {role: 'Presidente ' + cp.name, active: rp.end_date IS NULL OR rp.end_date >= date()} END) AS v1_president_roles
-        // schema v2: role as a property on MEMBER_OF_COMMITTEE
+        // committee offices: MEMBER_OF_COMMITTEE.officerRole (role only as fallback)
         OPTIONAL MATCH (d)-[rpm:MEMBER_OF_COMMITTEE]->(cpm:Committee)
-        WHERE rpm.role = 'president'
-        WITH v1_president_roles, collect(DISTINCT CASE WHEN cpm IS NULL THEN NULL ELSE {role: 'Presidente ' + cpm.name, active: rpm.end_date IS NULL OR rpm.end_date >= date()} END) AS v2_president_roles
+        WHERE (rpm.officerRole = 'PRESIDENTE' OR (rpm.officerRole IS NULL AND rpm.role = 'president'))
+        WITH v1_president_roles, collect(DISTINCT CASE WHEN cpm IS NULL THEN NULL ELSE {role: 'Presidente ' + cpm.name, active: coalesce(rpm.officerRoleEnd, rpm.end_date) IS NULL OR coalesce(rpm.officerRoleEnd, rpm.end_date) >= date()} END) AS v2_president_roles
         RETURN v1_president_roles + v2_president_roles AS president_roles
     }
     CALL {
         WITH d
         OPTIONAL MATCH (d)-[rv:IS_VICE_PRESIDENT]->(cv:Committee)
         WITH d, collect(DISTINCT CASE WHEN cv IS NULL THEN NULL ELSE {role: 'Vicepresidente ' + cv.name, active: rv.end_date IS NULL OR rv.end_date >= date()} END) AS v1_vice_roles
-        // schema v2: role as a property on MEMBER_OF_COMMITTEE
+        // committee offices: MEMBER_OF_COMMITTEE.officerRole (role only as fallback)
         OPTIONAL MATCH (d)-[rvm:MEMBER_OF_COMMITTEE]->(cvm:Committee)
-        WHERE rvm.role = 'vice_president'
-        WITH v1_vice_roles, collect(DISTINCT CASE WHEN cvm IS NULL THEN NULL ELSE {role: 'Vicepresidente ' + cvm.name, active: rvm.end_date IS NULL OR rvm.end_date >= date()} END) AS v2_vice_roles
+        WHERE (rvm.officerRole = 'VICEPRESIDENTE' OR (rvm.officerRole IS NULL AND rvm.role = 'vice_president'))
+        WITH v1_vice_roles, collect(DISTINCT CASE WHEN cvm IS NULL THEN NULL ELSE {role: 'Vicepresidente ' + cvm.name, active: coalesce(rvm.officerRoleEnd, rvm.end_date) IS NULL OR coalesce(rvm.officerRoleEnd, rvm.end_date) >= date()} END) AS v2_vice_roles
         RETURN v1_vice_roles + v2_vice_roles AS vice_roles
     }
     CALL {
         WITH d
         OPTIONAL MATCH (d)-[rs:IS_SECRETARY]->(cs:Committee)
         WITH d, collect(DISTINCT CASE WHEN cs IS NULL THEN NULL ELSE {role: 'Segretario ' + cs.name, active: rs.end_date IS NULL OR rs.end_date >= date()} END) AS v1_secretary_roles
-        // schema v2: role as a property on MEMBER_OF_COMMITTEE
+        // committee offices: MEMBER_OF_COMMITTEE.officerRole (role only as fallback)
         OPTIONAL MATCH (d)-[rsm:MEMBER_OF_COMMITTEE]->(csm:Committee)
-        WHERE rsm.role = 'secretary'
-        WITH v1_secretary_roles, collect(DISTINCT CASE WHEN csm IS NULL THEN NULL ELSE {role: 'Segretario ' + csm.name, active: rsm.end_date IS NULL OR rsm.end_date >= date()} END) AS v2_secretary_roles
+        WHERE (rsm.officerRole = 'SEGRETARIO' OR (rsm.officerRole IS NULL AND rsm.role = 'secretary'))
+        WITH v1_secretary_roles, collect(DISTINCT CASE WHEN csm IS NULL THEN NULL ELSE {role: 'Segretario ' + csm.name, active: coalesce(rsm.officerRoleEnd, rsm.end_date) IS NULL OR coalesce(rsm.officerRoleEnd, rsm.end_date) >= date()} END) AS v2_secretary_roles
         RETURN v1_secretary_roles + v2_secretary_roles AS secretary_roles
     }
     WITH d, current_committee, president_roles + vice_roles + secretary_roles AS all_roles
