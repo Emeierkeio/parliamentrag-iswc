@@ -28,11 +28,12 @@ make generate-summaries # AI recaps for sessions/debates/speakers (resumable)
 `build/nightly.sh` runs `update_data.sh` on the VPS that hosts Neo4j: it
 resets the checkout to `origin/main`, talks to Neo4j on localhost, skips the
 local snapshot and the Hugging Face upload, and keeps 30 days of logs in
-`build/logs/`. Cron entry (03:30 Europe/Rome):
+`build/logs/`. The VPS clock is UTC and Ubuntu's cron ignores `CRON_TZ`, so
+the entry in `/etc/cron.d/parliamentrag-nightly` runs at 01:30 UTC (03:30 in
+Italy in summer, 02:30 in winter):
 
 ```cron
-CRON_TZ=Europe/Rome
-30 3 * * * /opt/parliamentrag-job/build/nightly.sh >> /var/log/parliamentrag-nightly.log 2>&1
+30 1 * * * root /opt/parliamentrag-job/build/nightly.sh >> /var/log/parliamentrag-nightly.log 2>&1
 ```
 
 ## Validation gate
