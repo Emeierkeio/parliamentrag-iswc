@@ -325,6 +325,39 @@ run "Esiti Senato + testi mancanti" "$PY" build/download_esiti_senato.py --recen
 run "Emendamenti → JSONL unico" "$PY" build/parse_emendamenti.py \
 	|| warn "parse emendamenti fallito"
 
+# ── Fotografia del grafo per il sito del centro ──────────────────────────────
+# www.parliamentrag.it non ha backend: numeri e data del grafo stanno in
+# src/data/site-data.json del repo del centro, che Railway pubblica a ogni push
+# su main. Commit solo se cambiano i numeri o la data (gli esempi di
+# graph-samples.json sono casuali e cambiano a ogni giro). Si salta se il
+# checkout non è su main o ha modifiche, per non spingere lavoro altrui.
+: "${CENTRO_DIR:=../centro}"
+centro_snapshot() {
+	local branch
+	branch=$(git -C "$CENTRO_DIR" rev-parse --abbrev-ref HEAD) || return 1
+	if [ "$branch" != "main" ] || [ -n "$(git -C "$CENTRO_DIR" status --porcelain)" ]; then
+		echo "WARNING: $CENTRO_DIR non è su main pulito ($branch), fotografia saltata"
+		return 0
+	fi
+	git -C "$CENTRO_DIR" fetch --quiet origin main \
+		&& git -C "$CENTRO_DIR" merge --quiet --ff-only origin/main \
+		&& (cd "$CENTRO_DIR" && node scripts/snapshot-data.mjs) || return 1
+	if [ -z "$(git -C "$CENTRO_DIR" diff -U0 -- src/data/site-data.json | grep -E '^[+-] ' | grep -v snapshot_at)" ]; then
+		echo "numeri invariati, nessun commit"
+		git -C "$CENTRO_DIR" checkout --quiet -- src/data
+		return 0
+	fi
+	git -C "$CENTRO_DIR" add src/data/site-data.json src/data/graph-samples.json \
+		&& git -C "$CENTRO_DIR" commit --quiet -m "chore(data): fotografia del grafo $(date +%Y-%m-%d)" \
+		&& git -C "$CENTRO_DIR" push --quiet origin main
+}
+if [ -d "$CENTRO_DIR/.git" ] && command -v node >/dev/null 2>&1; then
+	run "Fotografia del grafo → sito del centro" centro_snapshot \
+		|| warn "fotografia del centro fallita — rilancia 'node scripts/snapshot-data.mjs' in $CENTRO_DIR"
+else
+	note "Sito del centro: checkout $CENTRO_DIR o node mancanti — fotografia saltata"
+fi
+
 # ── Dataset Hugging Face ─────────────────────────────────────────────────────
 # A differenza di Zenodo (snapshot congelato) segue il DB vivo: rigenera i
 # parquet + card dallo snapshot locale e ricarica il repo. Non blocca.

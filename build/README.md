@@ -36,6 +36,13 @@ Italy in summer, 02:30 in winter):
 30 1 * * * root /opt/parliamentrag-job/build/nightly.sh >> /var/log/parliamentrag-nightly.log 2>&1
 ```
 
+The run also refreshes the graph figures of www.parliamentrag.it, which has
+no backend: it runs `scripts/snapshot-data.mjs` in the centro checkout
+(`CENTRO_DIR`, `/opt/parliamentrag-centro` on the VPS, `../centro` on a
+laptop) and pushes to `main` only when the counts or the update date change,
+so Railway redeploys the site. That checkout needs Node and a deploy key with
+write access to `Emeierkeio/ParliamentRAG`; without it the step is skipped.
+
 ## Validation gate
 
 Every build/update ends with the invariant suite:
