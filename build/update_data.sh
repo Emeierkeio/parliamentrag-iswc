@@ -6,6 +6,7 @@
 #
 # Variabili (passate dal Makefile, con default identici):
 #   V2_DIR, DEMO_NEO4J, BACKEND_DIR, LOCAL_BOLT_PORT, LOCAL_SYNC, HF_DATASET_REPO
+#   SENATO_NEO4J (facoltativa: DB con il Senato da aggiornare, vedi update_senato.sh)
 set -u -o pipefail
 
 cd "$(dirname "$0")/.."
@@ -324,6 +325,17 @@ run "Esiti Senato + testi mancanti" "$PY" build/download_esiti_senato.py --recen
 	|| warn "esiti Senato: download incompleto"
 run "Emendamenti → JSONL unico" "$PY" build/parse_emendamenti.py \
 	|| warn "parse emendamenti fallito"
+
+# ── Senato XIX ───────────────────────────────────────────────────────────────
+# Solo su un DB che contiene già il Senato (oggi lo staging): finché il Senato
+# non è in produzione SENATO_NEO4J resta vuoto e il passo si salta.
+: "${SENATO_NEO4J:=}"
+if [ -z "$SENATO_NEO4J" ]; then
+	note "Senato: SENATO_NEO4J non impostato — saltato."
+else
+	run "Senato XIX → $SENATO_NEO4J" env BACKEND_DIR="$BACKEND_DIR" build/update_senato.sh "$SENATO_NEO4J" \
+		|| warn "Senato: aggiornamento incompleto (rc 3 = dati.senato.it rifiuta le richieste), riprende al prossimo giro"
+fi
 
 # ── Dataset Hugging Face ─────────────────────────────────────────────────────
 # A differenza di Zenodo (snapshot congelato) segue il DB vivo: rigenera i

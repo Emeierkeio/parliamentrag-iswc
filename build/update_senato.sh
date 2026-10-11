@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Aggiornamento incrementale del Senato su un DB che lo contiene già.
+#
+#   build/update_senato.sh <bolt uri>     (make staging-update-senato, o da update_data.sh)
+#
+# Il Senato non è ancora nel DB di produzione: update_data.sh chiama questo
+# script solo se SENATO_NEO4J è impostato. Ogni passo è idempotente e riprende
+# da dove si era fermato.
+#
+# dati.senato.it blocca l'IP dopo circa 400 richieste, a qualunque ritmo
+# (11/10/2026): a regime un giro ne fa poche decine (sedute nuove + ultimi
+# 30 giorni, ~10 per i DDL). Exit 3 = il Senato ha cominciato a rifiutare le
+# richieste: il resto si recupera al giro dopo.
+set -u -o pipefail
+
+cd "$(dirname "$0")/.."
+
+URI="${1:?uso: build/update_senato.sh <bolt uri>}"
+: "${BACKEND_DIR:=backend}"
+: "${SENATO_DELAY:=4}"
+PY="$BACKEND_DIR/venv/bin/python"
+USER_VAL=$(grep '^NEO4J_USER=' .env | cut -d= -f2-)
+PASS_VAL=$(grep '^NEO4J_PASSWORD=' .env | cut -d= -f2-)
+USER_VAL="${USER_VAL:-neo4j}"
+
+rc_all=0
+step() { # label cmd...
+	local label="$1"; shift
+	echo "── Senato: $label"
+	"$@"
+	local rc=$?
+	if [ "$rc" -eq 3 ]; then
+		echo "!! Senato: $label interrotto (dati.senato.it rifiuta le richieste) — riprende al prossimo giro"
+		exit 3
+	elif [ "$rc" -ne 0 ]; then
+		echo "!! Senato: $label fallito (rc=$rc)"
+		rc_all=1
+	fi
+}
+
+votes() {
+	"$PY" build/senate_sparql_ingester.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" \
+		--neo4j-password "$PASS_VAL" --legislature 19 --delay "$SENATO_DELAY" "$@"
+}
+
+step "resoconti nuovi, senatori, gruppi, commissioni" \
+	"$PY" build/build_and_update.py update-senate --legislature 19 \
+	--neo4j-uri "$URI" --neo4j-user "$USER_VAL" --neo4j-password "$PASS_VAL"
+step "voti aggregati (sedute nuove e ultimi 30 giorni)" votes --aggregate-only
+step "voti individuali (votazioni che non li hanno ancora)" votes --individual-only
+step "disegni di legge e firmatari" "$PY" build/download_senate_ddl.py --legislature 19
+step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/link_senate_acts.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
+
+exit "$rc_all"

@@ -184,7 +184,7 @@ STAGING_HTTP   := 7478
 STAGING_NEO4J  := bolt://localhost:$(STAGING_BOLT)
 STAGING_ENV    := NEO4J_URI=$(STAGING_NEO4J) NEO4J_PASSWORD=$(NEO4J_PASS)
 
-.PHONY: staging-create staging-up staging-ingest-leg18 staging-ingest-senato19 staging-validate
+.PHONY: staging-create staging-up staging-ingest-leg18 staging-ingest-senato19 staging-update-senato staging-validate
 
 staging-create: ## Create the staging Neo4j (:7692) as a copy of the demo snapshot volume
 	@if docker volume inspect $(STAGING_VOLUME) >/dev/null 2>&1; then \
@@ -214,6 +214,9 @@ staging-ingest-leg18: db-install ## Ingest Camera XVIII into staging (raw data o
 staging-ingest-senato19: db-install ## Ingest Senato XIX into staging (downloads new AKN sittings and senator CSVs)
 	@$(STAGING_ENV) $(PYTHON) $(BUILD_SCRIPT) update-senate --legislature 19 \
 		--neo4j-uri $(STAGING_NEO4J) --neo4j-user $(NEO4J_USER) --neo4j-password $(NEO4J_PASS)
+
+staging-update-senato: db-install ## Incremental Senate update on staging (sittings, votes, bills, links)
+	@bash build/update_senato.sh $(STAGING_NEO4J)
 
 staging-validate: db-install ## Run validate_db.py against staging
 	@$(STAGING_ENV) $(PYTHON) $(BUILD_DIR)/validate_db.py --neo4j-uri $(STAGING_NEO4J)
