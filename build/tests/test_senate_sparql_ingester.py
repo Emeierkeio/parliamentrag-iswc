@@ -296,7 +296,8 @@ class TestSenatorLinksBulk:
             links = SenateVoteIngester(None)._get_senate_senator_links_bulk([(seduta, 1, 2)])
         assert get.call_count == 1
         assert get.call_args.kwargs["strict"] is True
-        assert f"?s = <{seduta}> && ?n >= 1 && ?n <= 2" in get.call_args.args[0]
+        query = get.call_args.args[0]
+        assert f"?v osr:seduta <{seduta}>" in query and "?n >= 1 && ?n <= 2" in query
         assert links[v1] == {"favor": ["s/1"], "against": [], "abstain": ["s/2"]}
         assert links[v2]["against"] == ["s/1"]
 

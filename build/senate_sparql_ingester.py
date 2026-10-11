@@ -569,14 +569,19 @@ WHERE {{
                 ("favorevole", "favor"), ("contrario", "against"), ("astenuto", "abstain"),
             )
         }
-        rfilter = " || ".join(
-            f"(?s = <{uri}> && ?n >= {lo} && ?n <= {hi})" for uri, lo, hi in ranges
+        # One UNION branch per sitting with the seduta URI as a constant: an
+        # OR of sittings in a single FILTER makes Virtuoso scan every
+        # votazione and the gateway times out (502 after ~37 s, 2026-10-11).
+        branches = " UNION ".join(
+            f"{{ ?v osr:seduta <{uri}> ; osr:numero ?n ; ?p ?senatore . "
+            f"FILTER(?n >= {lo} && ?n <= {hi}) }}"
+            for uri, lo, hi in ranges
         )
         query = f"""
 PREFIX osr: <http://dati.senato.it/osr/>
 SELECT ?v ?p ?senatore WHERE {{
-  ?v a osr:Votazione ; osr:seduta ?s ; osr:numero ?n ; ?p ?senatore .
-  FILTER(({rfilter}) && (?p = osr:favorevole || ?p = osr:contrario || ?p = osr:astenuto))
+  {branches}
+  FILTER(?p = osr:favorevole || ?p = osr:contrario || ?p = osr:astenuto)
 }}
 """
         links: dict = {}
