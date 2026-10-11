@@ -46,3 +46,10 @@ def test_senate_only_group_expected_only_with_the_senate():
         assert AUTONOMIE in config.get_all_parties()
     finally:
         config.save_config(original)
+
+
+def test_government_is_majority_in_both_coalition_functions():
+    from app.services.authority.coalition_logic import CoalitionLogic
+    for name in ("GOVERNO", "Governo"):
+        assert get_config().get_coalition(name) == "maggioranza"
+        assert CoalitionLogic().get_coalition(name) == "maggioranza"

@@ -294,6 +294,9 @@ class ConfigLoader:
         """
         if not group_name:
             return "opposizione"
+        # Same rule as CoalitionLogic: the government belongs to the majority
+        if group_name.strip().upper() == "GOVERNO":
+            return "maggioranza"
 
         from .models.evidence import normalize_party_name
 
