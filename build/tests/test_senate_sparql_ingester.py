@@ -23,6 +23,8 @@ from senate_sparql_ingester import (
     _senato_sparql_get,
     parse_senate_votazione_uri,
     _derive_senate_outcome,
+    _senate_outcome,
+    _senate_vote_flags,
     SENATO_USER_AGENT,
     SENATO_SPARQL_ENDPOINT,
 )
@@ -96,6 +98,40 @@ class TestSenateOutcomeDerivation:
 
     def test_both_none_returns_unknown(self):
         assert _derive_senate_outcome(favorevoli=None, maggioranza=None) == "unknown"
+
+
+class TestSenateOutcomeFromEsito:
+    """osr:esito wins over the counts; counts are the fallback."""
+
+    def test_esito_respinto_overrides_counts(self):
+        assert _senate_outcome("respinto", favorevoli=60, maggioranza=51) == "rejected"
+
+    def test_esito_approvato(self):
+        assert _senate_outcome("approvato", favorevoli=None, maggioranza=None) == "approved"
+
+    def test_missing_esito_falls_back_to_counts(self):
+        assert _senate_outcome(None, favorevoli=60, maggioranza=51) == "approved"
+
+
+class TestSenateVoteFlags:
+    """Flags derived from real osr:Votazione labels (leg. 19)."""
+
+    def test_confidence_vote(self):
+        flags = _senate_vote_flags("Disegno di legge n. 1272.  Votazione questione di fiducia.", "elettronica")
+        assert flags == {"confidenceVote": True, "finalVote": False, "secretVote": False}
+
+    def test_final_vote(self):
+        assert _senate_vote_flags("Votazione finale", "elettronica")["finalVote"] is True
+
+    def test_amendment_has_no_flags(self):
+        flags = _senate_vote_flags("Em. 33.2, Turco e altri", "elettronica")
+        assert not any(flags.values())
+
+    def test_secret_ballot_from_type(self):
+        assert _senate_vote_flags("Em. 1.1", "segreta")["secretVote"] is True
+
+    def test_none_label(self):
+        assert not any(_senate_vote_flags(None, None).values())
 
 
 # ---------------------------------------------------------------------------
@@ -374,3 +410,32 @@ class TestSenateIndividualResume:
 
         assert "sittings_processed" in result
         assert "ivotes_written" in result
+
+
+class TestSenatorLinksBulk:
+    """One request per chunk of votazioni, rows grouped by votazione and outcome."""
+
+    def test_groups_rows_and_chunks_requests(self):
+        osr = "http://dati.senato.it/osr/"
+        v1, v2, v3 = (f"http://dati.senato.it/votazione/19-300-{n}" for n in (1, 2, 3))
+        rows = [
+            {"v": {"value": v1}, "p": {"value": osr + "favorevole"}, "senatore": {"value": "s/1"}},
+            {"v": {"value": v1}, "p": {"value": osr + "astenuto"}, "senatore": {"value": "s/2"}},
+            {"v": {"value": v2}, "p": {"value": osr + "contrario"}, "senatore": {"value": "s/1"}},
+        ]
+        queries = []
+
+        def fake_get(query):
+            queries.append(query)
+            return rows if len(queries) == 1 else []
+
+        with patch("senate_sparql_ingester._senato_sparql_get", side_effect=fake_get):
+            links = SenateVoteIngester(None)._get_senate_senator_links_bulk(
+                [v1, v2, v3], chunk_size=2
+            )
+
+        assert len(queries) == 2
+        assert links[v1] == {"favor": ["s/1"], "against": [], "abstain": ["s/2"]}
+        assert links[v2]["against"] == ["s/1"]
+        # the failed chunk is absent, so the caller can leave the sitting for later
+        assert v3 not in links
