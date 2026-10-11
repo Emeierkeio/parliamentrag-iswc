@@ -9,6 +9,7 @@ a legislature never changes the candidates of another.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Iterable, List, Literal, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field
@@ -27,11 +28,57 @@ class ScopeItem(BaseModel):
     legislature: int = Field(ge=1, le=30)
 
 
+CURRENT_LEGISLATURE = 19
+
+# A chamber named in the question. "Camera" alone is not enough ("camera di
+# commercio", "camera iperbarica"): it needs a preposition or "dei deputati".
+_SENATE_RE = re.compile(r"\b(senato|senator[ei]|senatric[ei]|palazzo madama)\b", re.IGNORECASE)
+_CAMERA_RE = re.compile(
+    r"\b((all[ao']|nell[ao']|dell[ao']|in)\s*camera\b(?!\s+di\s+commercio)"
+    r"|camera dei deputati|deputat[ie]|montecitorio)",
+    re.IGNORECASE,
+)
+
+
+def loaded_chambers() -> Tuple[str, ...]:
+    """Chambers whose sittings the graph holds (chambers in default.yaml)."""
+    from ...config import get_config
+    chambers = get_config().load_config().get("chambers") or ["camera"]
+    return tuple(c for c in CHAMBERS if c in chambers)
+
+
+def default_scope() -> Scope:
+    """Every loaded chamber of the current legislature: answers mix Camera and
+    Senate citations unless the question names one chamber."""
+    return tuple((c, CURRENT_LEGISLATURE) for c in loaded_chambers())
+
+
+def chambers_in_question(query: str) -> Tuple[str, ...]:
+    """Chambers the question names explicitly, in CHAMBERS order."""
+    found = set()
+    if _SENATE_RE.search(query or ""):
+        found.add("senato")
+    if _CAMERA_RE.search(query or ""):
+        found.add("camera")
+    return tuple(c for c in CHAMBERS if c in found)
+
+
+def resolve_scope(raw: Optional[Iterable[Any]], query: str = "") -> Scope:
+    """Scope of a request: the explicit one if given; else the loaded chambers
+    the question names, if it names exactly one; else default_scope()."""
+    if raw:
+        return normalize_scope(raw)
+    named = [c for c in chambers_in_question(query) if c in loaded_chambers()]
+    if len(named) == 1:
+        return ((named[0], CURRENT_LEGISLATURE),)
+    return default_scope()
+
+
 def normalize_scope(raw: Optional[Iterable[Any]]) -> Scope:
     """Accept None, [{"chamber": "camera", "legislature": 19}, ...] or
     [("camera", 19), ...]; return a sorted, deduplicated scope."""
     if not raw:
-        return DEFAULT_SCOPE
+        return default_scope()
     pairs = set()
     for item in raw:
         if isinstance(item, dict):

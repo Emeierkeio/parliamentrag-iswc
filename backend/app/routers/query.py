@@ -38,7 +38,7 @@ from ..config import get_config
 logger = logging.getLogger(__name__)
 
 from ..log_context import new_query_id  # noqa: E402
-from ..services.retrieval.scope import ScopeItem, normalize_scope
+from ..services.retrieval.scope import ScopeItem, resolve_scope
 router = APIRouter(prefix="/api", tags=["Query"])
 
 # Pipeline concurrency limiter, shared across all requests in the same
@@ -337,7 +337,7 @@ async def process_query_streaming(
             date_start=request.date_start,
             date_end=request.date_end,
             locale=request_locale,
-            scope=normalize_scope(request.scope),
+            scope=resolve_scope(request.scope, request.query),
         )
 
         evidence_list = retrieval_result["evidence"]
@@ -1436,7 +1436,7 @@ async def query_endpoint(request: QueryRequest, http_request: Request):
                 top_k=request.top_k,
                 date_start=request.date_start,
                 date_end=request.date_end,
-                scope=normalize_scope(request.scope),
+                scope=resolve_scope(request.scope, request.query),
             )
 
             evidence_list = retrieval_result["evidence"]

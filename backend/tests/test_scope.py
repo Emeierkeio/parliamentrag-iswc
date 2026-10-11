@@ -57,3 +57,51 @@ def test_scope_indexes_used_when_present():
 def test_missing_scope_index_falls_back_to_global():
     client = FakeClient(["chunk_embedding_index"])
     assert vector_indexes(client, DEFAULT_SCOPE, "chunk_embedding_index") == ["chunk_embedding_index"]
+
+
+# Default scope and chambers named in the question
+
+import copy
+
+from app.config import get_config
+from app.services.retrieval.scope import chambers_in_question, default_scope, resolve_scope
+
+
+@pytest.mark.parametrize("question, chambers", [
+    ("Cosa si è detto al Senato sul premierato?", ("senato",)),
+    ("Come hanno votato i senatori sulla legge elettorale?", ("senato",)),
+    ("Il dibattito alla Camera sulla manovra", ("camera",)),
+    ("Cosa pensano i deputati del salario minimo?", ("camera",)),
+    ("Riforma delle camere di commercio", ()),
+    ("Il ruolo della camera di commercio nella legge sulle PMI", ()),
+    ("Cosa pensano i partiti dell'autonomia differenziata?", ()),
+    ("Differenze tra Camera dei deputati e Senato sul premierato", ("camera", "senato")),
+])
+def test_chambers_in_question(question, chambers):
+    assert chambers_in_question(question) == chambers
+
+
+def _with_chambers(chambers):
+    config = get_config()
+    original = config.load_config()
+    changed = copy.deepcopy(original)
+    changed["chambers"] = chambers
+    config.save_config(changed)
+    return original
+
+
+def test_camera_only_graph_ignores_senate_in_question():
+    # production today: only the Camera is loaded
+    assert default_scope() == (("camera", 19),)
+    assert resolve_scope(None, "Cosa si è detto al Senato?") == (("camera", 19),)
+
+
+def test_both_chambers_by_default_one_when_named():
+    original = _with_chambers(["camera", "senato"])
+    try:
+        assert resolve_scope(None, "Cosa pensano i partiti del premierato?") == (("camera", 19), ("senato", 19))
+        assert resolve_scope(None, "Cosa si è detto al Senato sul premierato?") == (("senato", 19),)
+        assert resolve_scope(None, "Camera dei deputati e Senato sul premierato") == (("camera", 19), ("senato", 19))
+        assert resolve_scope([{"chamber": "camera", "legislature": 19}], "al Senato") == (("camera", 19),)
+    finally:
+        get_config().save_config(original)

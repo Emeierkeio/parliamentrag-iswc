@@ -28,7 +28,7 @@ from ..services.response_cache import (
 )
 from ..services.deps import get_services
 from ..config import get_config
-from ..services.retrieval.scope import ScopeItem, normalize_scope, scope_key
+from ..services.retrieval.scope import ScopeItem, scope_key, resolve_scope
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Chat"])
@@ -245,7 +245,7 @@ async def process_chat_background(
 
         def _do_retrieval():
             return services["retrieval"].retrieve_sync(
-                query=request.query, top_k=100, scope=normalize_scope(request.scope),
+                query=request.query, top_k=100, scope=resolve_scope(request.scope, request.query),
             )
 
         retrieval_result = await asyncio.get_running_loop().run_in_executor(None, _do_retrieval)
@@ -1432,7 +1432,7 @@ async def chat_endpoint(request: ChatRequest, http_request: Request):
                 mode=request.mode,
                 data_version=data_version,
                 config_fingerprint=config_fingerprint(get_config().load_config()),
-                legislature=scope_key(normalize_scope(request.scope)) or LEGISLATURE,
+                legislature=scope_key(resolve_scope(request.scope, request.query)) or LEGISLATURE,
             )
 
             cached_events = await cache.lookup(cache_key)

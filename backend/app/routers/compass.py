@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from .query import get_services
 from ..services.translation import translate_compass_axes
-from ..services.retrieval.scope import ScopeItem, normalize_scope
+from ..services.retrieval.scope import ScopeItem, resolve_scope
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Compass"])
@@ -39,7 +39,7 @@ async def compass_endpoint(request: CompassRequest, http_request: Request):
             query=request.query,
             top_k=request.top_k,
             locale=locale,
-            scope=normalize_scope(request.scope),
+            scope=resolve_scope(request.scope, request.query),
         )
         evidence_list = retrieval_result["evidence"]
 
