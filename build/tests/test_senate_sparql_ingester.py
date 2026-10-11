@@ -274,168 +274,149 @@ class TestSenateIndividualVoteId:
 
 
 # ---------------------------------------------------------------------------
-# Individual vote: per-senator outcome mapping
+# Individual votes: bulk links, per-vote resume, failures
 # ---------------------------------------------------------------------------
 
-class TestSenateIndividualOutcomeMap:
-    """Tests for per-senator vote outcome mapping (osr:favorevole/contrario/astenuto → favor/against/abstain)."""
-
-    def test_senator_links_returns_favor_against_abstain_keys(self):
-        """_get_senate_senator_links returns dict with exactly keys favor/against/abstain."""
-        mock_driver = MagicMock()
-        ingester = SenateVoteIngester(mock_driver)
-
-        with patch("senate_sparql_ingester._senato_sparql_get", return_value=[]):
-            result = ingester._get_senate_senator_links(  # AttributeError -> RED
-                "http://dati.senato.it/votazione/19-167-42"
-            )
-
-        assert set(result.keys()) == {"favor", "against", "abstain"}
-
-    def test_favorevole_maps_to_favor(self):
-        """osr:favorevole senatore URIs appear under 'favor' key."""
-        mock_driver = MagicMock()
-        ingester = SenateVoteIngester(mock_driver)
-
-        def side_effect(query, **kwargs):
-            if "favorevole" in query:
-                return [{"senatore": {"value": "http://dati.senato.it/senatore/17542"}}]
-            return []
-
-        with patch("senate_sparql_ingester._senato_sparql_get", side_effect=side_effect):
-            result = ingester._get_senate_senator_links(
-                "http://dati.senato.it/votazione/19-167-42"
-            )
-
-        assert "http://dati.senato.it/senatore/17542" in result["favor"]
-
-    def test_contrario_maps_to_against(self):
-        """osr:contrario senatore URIs appear under 'against' key."""
-        mock_driver = MagicMock()
-        ingester = SenateVoteIngester(mock_driver)
-
-        def side_effect(query, **kwargs):
-            if "contrario" in query:
-                return [{"senatore": {"value": "http://dati.senato.it/senatore/12345"}}]
-            return []
-
-        with patch("senate_sparql_ingester._senato_sparql_get", side_effect=side_effect):
-            result = ingester._get_senate_senator_links(
-                "http://dati.senato.it/votazione/19-167-42"
-            )
-
-        assert "http://dati.senato.it/senatore/12345" in result["against"]
-
-    def test_astenuto_maps_to_abstain(self):
-        """osr:astenuto senatore URIs appear under 'abstain' key."""
-        mock_driver = MagicMock()
-        ingester = SenateVoteIngester(mock_driver)
-
-        def side_effect(query, **kwargs):
-            if "astenuto" in query:
-                return [{"senatore": {"value": "http://dati.senato.it/senatore/54321"}}]
-            return []
-
-        with patch("senate_sparql_ingester._senato_sparql_get", side_effect=side_effect):
-            result = ingester._get_senate_senator_links(
-                "http://dati.senato.it/votazione/19-167-42"
-            )
-
-        assert "http://dati.senato.it/senatore/54321" in result["abstain"]
+OSR = "http://dati.senato.it/osr/"
 
 
-# ---------------------------------------------------------------------------
-# Individual vote: per-sitting resume
-# ---------------------------------------------------------------------------
-
-class TestSenateIndividualResume:
-    """Tests for per-sitting resume logic in ingest_individual_votes."""
-
-    def test_skips_sitting_already_ingested(self):
-        """ingest_individual_votes must not call _get_senate_seduta_uri for already-done sittings."""
-        mock_driver = MagicMock()
-        ingester = SenateVoteIngester(mock_driver)
-
-        ingester._get_senate_sittings_in_db = MagicMock(return_value={166, 167})
-        ingester._get_senate_sittings_with_individual_votes = MagicMock(  # AttributeError -> RED
-            return_value={166}
-        )
-        ingester._get_senate_seduta_uri = MagicMock(return_value=None)
-
-        ingester.ingest_individual_votes(legislature=19)  # AttributeError -> RED
-
-        called_session_nums = [
-            call[0][1] for call in ingester._get_senate_seduta_uri.call_args_list
-        ]
-        assert 166 not in called_session_nums
-        assert 167 in called_session_nums
-
-    def test_processes_only_todo_sittings(self):
-        """ingest_individual_votes calls _get_senate_seduta_uri exactly once for sitting 167."""
-        mock_driver = MagicMock()
-        ingester = SenateVoteIngester(mock_driver)
-
-        ingester._get_senate_sittings_in_db = MagicMock(return_value={166, 167})
-        ingester._get_senate_sittings_with_individual_votes = MagicMock(return_value={166})
-        ingester._get_senate_seduta_uri = MagicMock(return_value=None)
-
-        ingester.ingest_individual_votes(legislature=19)
-
-        assert ingester._get_senate_seduta_uri.call_count == 1
-        ingester._get_senate_seduta_uri.assert_called_once_with(19, 167)
-
-    def test_all_sittings_done_processes_none(self):
-        """ingest_individual_votes skips all sittings when all are already done."""
-        mock_driver = MagicMock()
-        ingester = SenateVoteIngester(mock_driver)
-
-        ingester._get_senate_sittings_in_db = MagicMock(return_value={166, 167})
-        ingester._get_senate_sittings_with_individual_votes = MagicMock(return_value={166, 167})
-        ingester._get_senate_seduta_uri = MagicMock(return_value=None)
-
-        result = ingester.ingest_individual_votes(legislature=19)
-
-        ingester._get_senate_seduta_uri.assert_not_called()
-        assert result["sittings_processed"] == 0
-
-    def test_returns_stats_dict_with_expected_keys(self):
-        """ingest_individual_votes returns dict with sittings_processed and ivotes_written."""
-        mock_driver = MagicMock()
-        ingester = SenateVoteIngester(mock_driver)
-
-        ingester._get_senate_sittings_in_db = MagicMock(return_value=set())
-        ingester._get_senate_sittings_with_individual_votes = MagicMock(return_value=set())
-
-        result = ingester.ingest_individual_votes(legislature=19)
-
-        assert "sittings_processed" in result
-        assert "ivotes_written" in result
+def _row(v, prop, sen):
+    return {"v": {"value": v}, "p": {"value": OSR + prop}, "senatore": {"value": sen}}
 
 
 class TestSenatorLinksBulk:
     """One request per chunk of votazioni, rows grouped by votazione and outcome."""
 
-    def test_groups_rows_and_chunks_requests(self):
-        osr = "http://dati.senato.it/osr/"
-        v1, v2, v3 = (f"http://dati.senato.it/votazione/19-300-{n}" for n in (1, 2, 3))
-        rows = [
-            {"v": {"value": v1}, "p": {"value": osr + "favorevole"}, "senatore": {"value": "s/1"}},
-            {"v": {"value": v1}, "p": {"value": osr + "astenuto"}, "senatore": {"value": "s/2"}},
-            {"v": {"value": v2}, "p": {"value": osr + "contrario"}, "senatore": {"value": "s/1"}},
-        ]
-        queries = []
-
-        def fake_get(query):
-            queries.append(query)
-            return rows if len(queries) == 1 else []
-
-        with patch("senate_sparql_ingester._senato_sparql_get", side_effect=fake_get):
-            links = SenateVoteIngester(None)._get_senate_senator_links_bulk(
-                [v1, v2, v3], chunk_size=2
-            )
-
-        assert len(queries) == 2
+    def test_groups_rows_by_votazione_and_outcome(self):
+        v1, v2 = (f"http://dati.senato.it/votazione/19-300-{n}" for n in (1, 2))
+        rows = [_row(v1, "favorevole", "s/1"), _row(v1, "astenuto", "s/2"),
+                _row(v2, "contrario", "s/1")]
+        seduta = "http://dati.senato.it/sedutaassemblea/24207"
+        with patch("senate_sparql_ingester._senato_sparql_get", return_value=rows) as get:
+            links = SenateVoteIngester(None)._get_senate_senator_links_bulk([(seduta, 1, 2)])
+        assert get.call_count == 1
+        assert get.call_args.kwargs["strict"] is True
+        assert f"?s = <{seduta}> && ?n >= 1 && ?n <= 2" in get.call_args.args[0]
         assert links[v1] == {"favor": ["s/1"], "against": [], "abstain": ["s/2"]}
         assert links[v2]["against"] == ["s/1"]
-        # the failed chunk is absent, so the caller can leave the sitting for later
-        assert v3 not in links
+
+
+def _pending(n_votes, session=300):
+    return [{"session": session, "vote": k, "id": f"senato_leg19_sed{session}_v{k:03d}",
+             "expected": 1} for k in range(1, n_votes + 1)]
+
+
+class TestIndividualIngest:
+    def _ingester(self, pending):
+        ing = SenateVoteIngester(MagicMock())
+        ing._get_votes_without_individual_votes = MagicMock(return_value=pending)
+        ing._get_senate_seduta_uris = MagicMock(
+            return_value={n: f"http://dati.senato.it/sedutaassemblea/{n}" for n in range(1, 500)}
+        )
+        ing._write_senate_individual_votes = MagicMock(side_effect=lambda b: len(b))
+        ing._mark_individual_missing = MagicMock()
+        return ing
+
+    def test_packs_votes_across_sittings(self):
+        pending = _pending(15, session=300) + _pending(10, session=301)
+        ing = self._ingester(pending)
+        ing._get_senate_senator_links_bulk = MagicMock(return_value={})
+        ing.ingest_individual_votes(19)
+        assert ing._get_senate_senator_links_bulk.call_count == 1
+        ranges = ing._get_senate_senator_links_bulk.call_args.args[0]
+        assert [(lo, hi) for _, lo, hi in ranges] == [(1, 15), (1, 10)]
+
+    def test_vote_without_names_is_marked(self):
+        ing = self._ingester(_pending(2))
+        v1 = "http://dati.senato.it/votazione/19-300-1"
+        ing._get_senate_senator_links_bulk = MagicMock(
+            return_value={v1: {"favor": ["http://dati.senato.it/senatore/1"], "against": [], "abstain": []}}
+        )
+        stats = ing.ingest_individual_votes(19)
+        assert stats["ivotes_written"] == 1
+        ing._mark_individual_missing.assert_called_once_with(["senato_leg19_sed300_v002"])
+
+    def test_failed_request_marks_nothing(self):
+        from senate_sparql_ingester import SenateRequestFailed
+        ing = self._ingester(_pending(3))
+        ing._get_senate_senator_links_bulk = MagicMock(side_effect=SenateRequestFailed("500"))
+        stats = ing.ingest_individual_votes(19)
+        ing._mark_individual_missing.assert_not_called()
+        assert stats["ivotes_written"] == 0 and not stats["aborted"]
+
+    def test_blocked_endpoint_aborts(self):
+        from senate_sparql_ingester import SenateEndpointBlocked
+        ing = self._ingester(_pending(60))
+        ing._get_senate_senator_links_bulk = MagicMock(side_effect=SenateEndpointBlocked("403"))
+        stats = ing.ingest_individual_votes(19)
+        assert stats["aborted"] and ing._get_senate_senator_links_bulk.call_count == 1
+
+
+class TestPackRanges:
+    def _p(self, session, vote):
+        return {"session": session, "vote": vote, "id": f"{session}-{vote}", "expected": 1}
+
+    def test_width_counts_gaps(self):
+        from senate_sparql_ingester import _pack_ranges, INDIVIDUAL_CHUNK
+        # votes 1 and 100 of one sitting: a single range 1..100 would exceed the budget
+        chunks = _pack_ranges([self._p(300, 1), self._p(300, 100)])
+        assert len(chunks) == 2
+
+    def test_big_sitting_split(self):
+        from senate_sparql_ingester import _pack_ranges, INDIVIDUAL_CHUNK
+        chunks = _pack_ranges([self._p(300, v) for v in range(1, 101)])
+        assert all(c[-1]["vote"] - c[0]["vote"] + 1 <= INDIVIDUAL_CHUNK for c in chunks)
+        assert sum(len(c) for c in chunks) == 100 and len(chunks) == 3
+
+    def test_small_sittings_packed_up_to_limit(self):
+        from senate_sparql_ingester import _pack_ranges, INDIVIDUAL_SITTINGS
+        chunks = _pack_ranges([self._p(n, 1) for n in range(1, 31)])
+        assert [len(c) for c in chunks] == [INDIVIDUAL_SITTINGS, INDIVIDUAL_SITTINGS]
+
+
+class TestAggregateIngest:
+    def _ingester(self, in_db, checked):
+        ing = SenateVoteIngester(MagicMock())
+        ing._get_senate_sittings_in_db = MagicMock(return_value=set(in_db))
+        ing._get_senate_sittings_checked = MagicMock(return_value=set(checked))
+        ing._get_senate_seduta_uris = MagicMock(
+            return_value={n: f"http://dati.senato.it/sedutaassemblea/{n}" for n in in_db}
+        )
+        ing._write_senate_votes = MagicMock(side_effect=lambda b, leg: len(b))
+        ing._mark_sittings_checked = MagicMock()
+        return ing
+
+    def test_checked_sittings_cost_no_request(self):
+        ing = self._ingester(range(1, 31), checked=range(1, 26))
+        ing._get_senate_votes_for_sedute = MagicMock(return_value=[])
+        ing.ingest_aggregate_votes(19)
+        assert ing._get_senate_votes_for_sedute.call_count == 1
+        ing._mark_sittings_checked.assert_called_once_with(19, [26, 27, 28, 29, 30])
+
+    def test_sittings_batched(self):
+        ing = self._ingester(range(1, 46), checked=())
+        ing._get_senate_votes_for_sedute = MagicMock(return_value=[])
+        ing.ingest_aggregate_votes(19)
+        assert ing._get_senate_votes_for_sedute.call_count == 3
+
+    def test_failed_chunk_not_marked_checked(self):
+        from senate_sparql_ingester import SenateRequestFailed
+        ing = self._ingester(range(1, 6), checked=())
+        ing._get_senate_votes_for_sedute = MagicMock(side_effect=SenateRequestFailed("500"))
+        stats = ing.ingest_aggregate_votes(19)
+        ing._mark_sittings_checked.assert_not_called()
+        assert not stats["aborted"]
+
+    def test_rows_mapped_to_sitting(self):
+        ing = self._ingester([300], checked=())
+        ing._get_senate_votes_for_sedute = MagicMock(return_value=[{
+            "seduta": {"value": "http://dati.senato.it/sedutaassemblea/300"},
+            "votazione": {"value": "http://dati.senato.it/votazione/19-300-2"},
+            "favorevoli": {"value": "83"}, "contrari": {"value": "52"},
+            "astenuti": {"value": "0"}, "maggioranza": {"value": "68"},
+            "esito": {"value": "approvato"}, "label": {"value": "Votazione finale"},
+        }])
+        ing.ingest_aggregate_votes(19)
+        row = ing._write_senate_votes.call_args.args[0][0]
+        assert row["id"] == "senato_leg19_sed300_v002"
+        assert row["outcome"] == "approved" and row["finalVote"] is True

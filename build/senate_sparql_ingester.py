@@ -140,6 +140,11 @@ class SenateEndpointBlocked(RuntimeError):
     and resume later (resume logic skips completed sittings)."""
 
 
+class SenateRequestFailed(RuntimeError):
+    """One request failed after its retries (strict mode only), so an empty
+    answer is not mistaken for "no votes"."""
+
+
 # Consecutive all-retries-failed requests before declaring the endpoint blocked.
 _CIRCUIT_BREAKER_THRESHOLD = 5
 _consecutive_failures = 0
@@ -147,16 +152,24 @@ _consecutive_failures = 0
 # Politeness delay after each successful request. 2026-07-05: 0.5s got the
 # run rate-banned mid-flight (886 sittings x 2+ queries) — keep >= 1.5s.
 _POLITENESS_DELAY = 1.5
-# Votazioni per individual-vote request. 20 x 200 senators stays under the
-# endpoint's 10,000-row cap, and the GET URL under the size the senato.it WAF
-# accepts (40 URIs already get a 403, measured 2026-10-11).
-INDIVIDUAL_CHUNK = 20
+# Votazioni per individual-vote request: 45 x ~200 senators stays under the
+# endpoint's 10,000-row cap. Requests select them by sitting and vote-number
+# range, because listing votazione URIs hits the WAF's URL size limit
+# (40 URIs got a 403, 2026-10-11).
+INDIVIDUAL_CHUNK = 45
+# Sittings packed into one individual-vote request (URL size, as above).
+INDIVIDUAL_SITTINGS = 15
+# Sittings per aggregate request: same URL size limit, ~150 votazioni each at most.
+SITTING_CHUNK = 20
+# Recent sittings are re-checked: the endpoint publishes votes with a delay.
+RECHECK_DAYS = 30
 
 
 def _senato_sparql_get(
     query: str,
     timeout: int = SPARQL_TIMEOUT,
     max_retries: int = 3,
+    strict: bool = False,
 ) -> list[dict]:
     """Execute a SPARQL SELECT query against dati.senato.it and return bindings.
 
@@ -211,6 +224,8 @@ def _senato_sparql_get(
             if isinstance(exc, urllib.error.HTTPError) and exc.code == 403:
                 logger.warning("Senate SPARQL HTTP 403 (ban signal, no retry)")
                 _record_failure()
+                if strict:
+                    raise SenateRequestFailed(str(exc))
                 return []
             if attempt < max_retries:
                 wait = 5 * attempt  # 5s, 10s, 15s
@@ -225,6 +240,8 @@ def _senato_sparql_get(
                     max_retries, exc,
                 )
                 _record_failure()
+                if strict:
+                    raise SenateRequestFailed(str(exc))
                 return []
         except (json.JSONDecodeError, ValueError) as exc:
             if attempt < max_retries:
@@ -240,6 +257,8 @@ def _senato_sparql_get(
                     max_retries, exc,
                 )
                 _record_failure()
+                if strict:
+                    raise SenateRequestFailed(str(exc))
                 return []
         except Exception as exc:
             if attempt < max_retries:
@@ -255,6 +274,8 @@ def _senato_sparql_get(
                     max_retries, exc,
                 )
                 _record_failure()
+                if strict:
+                    raise SenateRequestFailed(str(exc))
                 return []
     return []  # Should not reach here
 
@@ -280,6 +301,35 @@ def _int_or_none(binding: dict, key: str) -> Optional[int]:
 # ---------------------------------------------------------------------------
 
 
+def _pack_ranges(pending: list[dict]) -> list[list[dict]]:
+    """Split pending votes (sorted by sitting, vote) into request-sized chunks.
+
+    A request asks for vote-number ranges, which may also span votes already
+    done, so the budget counts range widths (rows ~ width x 200 senators),
+    not pending votes; at most INDIVIDUAL_SITTINGS ranges per request.
+    """
+    chunks: list[list[dict]] = []
+    cur: list[dict] = []
+    width = 0          # sum of range widths in cur
+    lo = None          # first vote of the open range (same sitting as cur[-1])
+    for p in pending:
+        same = cur and cur[-1]["session"] == p["session"]
+        if same and width - (cur[-1]["vote"] - lo + 1) + (p["vote"] - lo + 1) <= INDIVIDUAL_CHUNK:
+            width += p["vote"] - cur[-1]["vote"]
+            cur.append(p)
+            continue
+        n_ranges = len({q["session"] for q in cur})
+        if cur and (width + 1 > INDIVIDUAL_CHUNK or same or n_ranges >= INDIVIDUAL_SITTINGS):
+            chunks.append(cur)
+            cur, width = [], 0
+        cur.append(p)
+        width += 1
+        lo = p["vote"]
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
 class SenateVoteIngester:
     """Ingests Senate aggregate Vote nodes from dati.senato.it SPARQL endpoint."""
 
@@ -295,94 +345,75 @@ class SenateVoteIngester:
         legislature: int = 19,
         limit_sessions: int = 0,
         force: bool = False,
+        sittings: Optional[set[int]] = None,
     ) -> dict:
         """Fetch aggregate Senate Vote nodes from SPARQL and write to Neo4j.
+
+        dati.senato.it blocks an IP after ~400 requests whatever the pace
+        (2026-10-11: at 1.5 s and at 4 s between requests), so requests are
+        batched: one query maps sitting numbers to URIs, then one query per
+        SITTING_CHUNK sittings. A sitting answered without error is marked
+        `senate_votes_checked` and skipped next time, so sittings without
+        roll calls cost nothing on later runs; recent ones are re-checked
+        because the endpoint publishes votes with some delay.
 
         Args:
             legislature: Legislature number (18 or 19).
             limit_sessions: If > 0, process at most this many sittings (for testing).
-            force: Re-fetch sittings that already have votes (MERGE by id keeps
+            force: Re-fetch checked sittings too (MERGE by id keeps
                 IndividualVote links intact), e.g. after adding a field.
-
-        Returns:
-            Stats dict: {"sittings_processed": N, "votes_written": N}
+            sittings: Restrict the run to these sitting numbers.
         """
-        logger.info(
-            "Starting Senate aggregate vote ingest — legislature %d", legislature
-        )
+        logger.info("Starting Senate aggregate vote ingest — legislature %d", legislature)
 
-        # 1. Session numbers present in DB for this legislature
-        sittings = self._get_senate_sittings_in_db(legislature)
-        logger.info("Found %d Senate sessions in DB for legislature %d", len(sittings), legislature)
-
-        # 2. Skip sittings that already have HAS_VOTE (idempotency / resume)
-        done = set() if force else self._get_senate_sittings_with_votes(legislature)
-        todo = sorted(sittings - done)
-        logger.info(
-            "%d sittings need aggregate votes (%d already done)",
-            len(todo), len(done),
-        )
-
+        in_db = self._get_senate_sittings_in_db(legislature)
+        if sittings is not None:
+            in_db &= sittings
+        done = set() if force else self._get_senate_sittings_checked(legislature)
+        todo = sorted(in_db - done)
+        logger.info("%d sittings to check (%d already checked)", len(todo), len(in_db & done))
         if limit_sessions:
             todo = todo[:limit_sessions]
-            logger.info("Limited to %d sessions (test mode)", limit_sessions)
 
-        sittings_processed = 0
-        total_votes_written = 0
-        aborted = False
+        stats = {"sittings_processed": 0, "votes_written": 0, "aborted": False}
+        if not todo:
+            return stats
+        try:
+            seduta_uris = self._get_senate_seduta_uris(legislature)
+        except (SenateEndpointBlocked, SenateRequestFailed) as exc:
+            logger.error("ABORTING: sitting URIs not available: %s", exc)
+            stats["aborted"] = True
+            return stats
 
-        for session_num in todo:
-            logger.debug("Processing sitting %d/%d ...", session_num, legislature)
+        unknown = [n for n in todo if n not in seduta_uris]
+        if unknown:
+            logger.warning("No sedutaassemblea URI for sittings %s", unknown)
+        todo = [n for n in todo if n in seduta_uris]
 
-            # Resolve the sedutaassemblea URI for this session
+        for i in range(0, len(todo), SITTING_CHUNK):
+            chunk = todo[i : i + SITTING_CHUNK]
+            num_of = {seduta_uris[n]: n for n in chunk}
             try:
-                seduta_uri = self._get_senate_seduta_uri(legislature, session_num)
+                bindings = self._get_senate_votes_for_sedute(list(num_of))
             except SenateEndpointBlocked as exc:
-                logger.error(
-                    "ABORTING run at leg%d sed%d: %s",
-                    legislature, session_num, exc,
-                )
-                aborted = True
+                logger.error("ABORTING run at leg%d sed%d: %s", legislature, chunk[0], exc)
+                stats["aborted"] = True
                 break
-            if not seduta_uri:
-                logger.warning(
-                    "  leg%d sed%d: no sedutaassemblea URI found — skipping",
-                    legislature, session_num,
-                )
+            except SenateRequestFailed as exc:
+                logger.warning("  sittings %d-%d failed, left for the next run: %s",
+                               chunk[0], chunk[-1], exc)
                 continue
 
-            # Fetch all votazioni for this seduta
-            try:
-                votazioni = self._get_senate_votes_for_seduta(seduta_uri)
-            except SenateEndpointBlocked as exc:
-                logger.error(
-                    "ABORTING run at leg%d sed%d: %s",
-                    legislature, session_num, exc,
-                )
-                aborted = True
-                break
-            if not votazioni:
-                logger.debug(
-                    "  leg%d sed%d: no votazioni returned — skipping",
-                    legislature, session_num,
-                )
-                sittings_processed += 1
-                continue
-
-            # Build batch and write
             batch = []
-            for b in votazioni:
-                vot_uri = b.get("votazione", {}).get("value", "")
-                _, _, vote_num = parse_senate_votazione_uri(vot_uri)
-                if vote_num is None:
-                    logger.debug("    Skipping unparseable votazione URI: %s", vot_uri)
+            for b in bindings:
+                session_num = num_of.get(b.get("seduta", {}).get("value", ""))
+                _, _, vote_num = parse_senate_votazione_uri(b.get("votazione", {}).get("value", ""))
+                if session_num is None or vote_num is None:
                     continue
-
                 favorevoli = _int_or_none(b, "favorevoli")
                 maggioranza = _int_or_none(b, "maggioranza")
                 label = b.get("label", {}).get("value")
                 tipo = b.get("tipo", {}).get("value")
-
                 batch.append({
                     "id": f"senato_leg{legislature}_sed{session_num:03d}_v{vote_num:03d}",
                     "sessionNumber": session_num,
@@ -403,21 +434,17 @@ class SenateVoteIngester:
                 })
 
             written = self._write_senate_votes(batch, legislature)
-            total_votes_written += written
-            sittings_processed += 1
-            logger.info(
-                "  leg%d sed%d: %d votes written", legislature, session_num, written
-            )
+            self._mark_sittings_checked(legislature, chunk)
+            stats["votes_written"] += written
+            stats["sittings_processed"] += len(chunk)
+            logger.info("  leg%d sed%d-%d: %d votes written",
+                        legislature, chunk[0], chunk[-1], written)
 
         logger.info(
             "Senate aggregate ingest complete — %d sittings, %d votes",
-            sittings_processed, total_votes_written,
+            stats["sittings_processed"], stats["votes_written"],
         )
-        return {
-            "sittings_processed": sittings_processed,
-            "votes_written": total_votes_written,
-            "aborted": aborted,
-        }
+        return stats
 
     # ------------------------------------------------------------------
     # Neo4j read helpers
@@ -433,63 +460,82 @@ class SenateVoteIngester:
             )
             return {record["n"] for record in result if record["n"] is not None}
 
-    def _get_senate_sittings_with_votes(self, legislature: int) -> set[int]:
-        """Return session numbers that already have HAS_VOTE rels for chamber='senato'."""
+    def _get_senate_sittings_checked(self, legislature: int) -> set[int]:
+        """Sittings already answered by the endpoint (or holding votes from
+        runs that predate the marker), except the last RECHECK_DAYS days."""
         with self._driver.session() as neo_session:
             result = neo_session.run(
-                "MATCH (s:Session {chamber:'senato', legislature:$legislature})"
-                "-[:HAS_VOTE]->(:Vote) "
-                "RETURN DISTINCT s.number AS n",
-                legislature=legislature,
+                "MATCH (s:Session {chamber:'senato', legislature:$legislature}) "
+                "WHERE (s.senate_votes_checked IS NOT NULL OR (s)-[:HAS_VOTE]->()) "
+                "  AND (s.date IS NULL OR s.date < date() - duration({days: $days})) "
+                "RETURN s.number AS n",
+                legislature=legislature, days=RECHECK_DAYS,
             )
             return {record["n"] for record in result if record["n"] is not None}
 
-    def _get_senate_sittings_with_individual_votes(self, legislature: int) -> set[int]:
-        """Return session numbers where senators already have VOTED rels for this legislature.
+    def _mark_sittings_checked(self, legislature: int, numbers: list[int]) -> None:
+        with self._driver.session() as neo_session:
+            neo_session.run(
+                "MATCH (s:Session {chamber:'senato', legislature:$legislature}) "
+                "WHERE s.number IN $numbers SET s.senate_votes_checked = date()",
+                legislature=legislature, numbers=numbers,
+            )
 
-        Resume is per-sitting: if ANY senator in a sitting already has a VOTED rel linking
-        through an IndividualVote to a Vote in this Senate session, that sitting is skipped.
+    def _get_votes_without_individual_votes(self, legislature: int) -> list[dict]:
+        """Senate votes whose per-senator rows are still to fetch.
+
+        Secret ballots have no names, and a vote the endpoint answered with no
+        names is marked `individual_missing`, so neither is asked again.
         """
         with self._driver.session() as neo_session:
             result = neo_session.run(
-                "MATCH (:Person)-[:VOTED]->(:IndividualVote)"
-                "-[:ON_VOTE]->(:Vote)<-[:HAS_VOTE]-(s:Session {legislature:$legislature, chamber:'senato'}) "
-                "RETURN DISTINCT s.number AS num",
+                """
+                MATCH (s:Session {chamber:'senato', legislature:$legislature})-[:HAS_VOTE]->(v:Vote)
+                WHERE NOT coalesce(v.secretVote, false)
+                  AND v.individual_missing IS NULL
+                  AND coalesce(v.inFavor, 0) + coalesce(v.against, 0) + coalesce(v.abstained, 0) > 0
+                  AND NOT EXISTS { (v)<-[:ON_VOTE]-(:IndividualVote) }
+                RETURN s.number AS session, v.number AS vote, v.id AS id,
+                       coalesce(v.inFavor, 0) + coalesce(v.against, 0)
+                       + coalesce(v.abstained, 0) AS expected
+                ORDER BY session, vote
+                """,
                 legislature=legislature,
             )
-            return {record["num"] for record in result if record["num"] is not None}
+            return [r.data() for r in result]
 
     # ------------------------------------------------------------------
     # SPARQL query methods
     # ------------------------------------------------------------------
 
-    def _get_senate_seduta_uri(
-        self, legislature: int, session_num: int
-    ) -> Optional[str]:
-        """Resolve the SedutaAssemblea URI for a given legislature + session number."""
+    def _get_senate_seduta_uris(self, legislature: int) -> dict[int, str]:
+        """{sitting number: SedutaAssemblea URI} for a legislature, one request."""
         query = f"""
 PREFIX osr: <http://dati.senato.it/osr/>
-SELECT ?seduta WHERE {{
+SELECT ?seduta ?numero WHERE {{
   ?seduta a osr:SedutaAssemblea ;
           osr:legislatura {legislature} ;
-          osr:numeroSeduta {session_num} .
+          osr:numeroSeduta ?numero .
 }}
-LIMIT 1
 """
-        bindings = _senato_sparql_get(query)
-        if not bindings:
-            return None
-        return bindings[0].get("seduta", {}).get("value")
+        uris: dict[int, str] = {}
+        for b in _senato_sparql_get(query, strict=True):
+            num = _int_or_none(b, "numero")
+            if num is not None:
+                uris.setdefault(num, b["seduta"]["value"])
+        return uris
 
-    def _get_senate_votes_for_seduta(self, seduta_uri: str) -> list[dict]:
-        """Fetch all Votazione bindings for a given SedutaAssemblea URI."""
+    def _get_senate_votes_for_sedute(self, seduta_uris: list[str]) -> list[dict]:
+        """All Votazione bindings for a chunk of sittings (strict: raises on failure)."""
+        sfilter = " || ".join(f"?seduta = <{u}>" for u in seduta_uris)
         query = f"""
 PREFIX osr: <http://dati.senato.it/osr/>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-SELECT ?votazione ?label ?tipo ?presenti ?votanti ?favorevoli ?contrari ?astenuti ?maggioranza ?congedo ?esito
+SELECT ?seduta ?votazione ?label ?tipo ?presenti ?votanti ?favorevoli ?contrari ?astenuti ?maggioranza ?congedo ?esito
 WHERE {{
   ?votazione a osr:Votazione ;
-             osr:seduta <{seduta_uri}> .
+             osr:seduta ?seduta .
+  FILTER({sfilter})
   OPTIONAL {{ ?votazione rdfs:label ?label . }}
   OPTIONAL {{ ?votazione osr:tipoVotazione ?tipo . }}
   OPTIONAL {{ ?votazione osr:presenti ?presenti . }}
@@ -497,51 +543,22 @@ WHERE {{
   OPTIONAL {{ ?votazione osr:favorevoli ?favorevoli . }}
   OPTIONAL {{ ?votazione osr:contrari ?contrari . }}
   OPTIONAL {{ ?votazione osr:astenuti ?astenuti . }}
-  OPTIONAL {{ ?votazione osr:esito ?esito . }}
   OPTIONAL {{ ?votazione osr:maggioranza ?maggioranza . }}
   OPTIONAL {{ ?votazione osr:congedoMissione ?congedo . }}
+  OPTIONAL {{ ?votazione osr:esito ?esito . }}
 }}
 """
-        return _senato_sparql_get(query)
+        return _senato_sparql_get(query, strict=True)
 
-    def _get_senate_senator_links(self, votazione_uri: str) -> dict:
-        """Return per-senator vote links for a Votazione URI.
-
-        Executes three separate SPARQL queries (one per outcome) to retrieve
-        the senator URIs that voted favorevole, contrario, or astenuto.
-
-        Returns:
-            {"favor": [uri, ...], "against": [uri, ...], "abstain": [uri, ...]}
-        """
-        results: dict = {}
-        for prop, outcome in [
-            ("favorevole", "favor"),
-            ("contrario", "against"),
-            ("astenuto", "abstain"),
-        ]:
-            query = f"""
-PREFIX osr: <http://dati.senato.it/osr/>
-SELECT ?senatore WHERE {{
-  <{votazione_uri}> osr:{prop} ?senatore .
-}}
-"""
-            bindings = _senato_sparql_get(query)
-            results[outcome] = [
-                b["senatore"]["value"] for b in bindings if "senatore" in b
-            ]
-        return results
-
-    def _get_senate_senator_links_bulk(
-        self, votazione_uris: list[str], chunk_size: int = INDIVIDUAL_CHUNK
-    ) -> dict:
-        """Per-senator votes for many votazioni, a few requests per sitting.
+    def _get_senate_senator_links_bulk(self, ranges: list[tuple[str, int, int]]) -> dict:
+        """Per-senator votes for (seduta URI, first vote, last vote) ranges, one request.
 
         The endpoint (an old Virtuoso: no BIND/VALUES) caps results at 10,000
-        rows counting the OFFSET, so paging one big query fails; chunks of
-        votazioni stay under the cap and under the WAF's URL size limit.
+        rows counting the OFFSET, so paging one big query fails; the caller
+        keeps each request under INDIVIDUAL_CHUNK votazioni. Strict: raises
+        SenateRequestFailed instead of returning a partial answer.
 
-        Returns {votazione_uri: {"favor": [...], "against": [...], "abstain": [...]}}
-        with only the votazioni that came back; a failed chunk is simply absent.
+        Returns {votazione_uri: {"favor": [...], "against": [...], "abstain": [...]}}.
         """
         outcome_of = {
             f"http://dati.senato.it/osr/{prop}": outcome
@@ -549,29 +566,29 @@ SELECT ?senatore WHERE {{
                 ("favorevole", "favor"), ("contrario", "against"), ("astenuto", "abstain"),
             )
         }
-        links: dict = {}
-        for i in range(0, len(votazione_uris), chunk_size):
-            chunk = votazione_uris[i : i + chunk_size]
-            vfilter = " || ".join(f"?v = <{u}>" for u in chunk)
-            query = f"""
+        rfilter = " || ".join(
+            f"(?s = <{uri}> && ?n >= {lo} && ?n <= {hi})" for uri, lo, hi in ranges
+        )
+        query = f"""
 PREFIX osr: <http://dati.senato.it/osr/>
 SELECT ?v ?p ?senatore WHERE {{
-  ?v a osr:Votazione ; ?p ?senatore .
-  FILTER(({vfilter}) && (?p = osr:favorevole || ?p = osr:contrario || ?p = osr:astenuto))
+  ?v a osr:Votazione ; osr:seduta ?s ; osr:numero ?n ; ?p ?senatore .
+  FILTER(({rfilter}) && (?p = osr:favorevole || ?p = osr:contrario || ?p = osr:astenuto))
 }}
 """
-            for b in _senato_sparql_get(query):
-                outcome = outcome_of.get(b["p"]["value"])
-                if outcome is None:
-                    continue
-                per_vote = links.setdefault(
-                    b["v"]["value"], {"favor": [], "against": [], "abstain": []}
-                )
-                per_vote[outcome].append(b["senatore"]["value"])
+        links: dict = {}
+        for b in _senato_sparql_get(query, strict=True):
+            outcome = outcome_of.get(b["p"]["value"])
+            if outcome is None:
+                continue
+            per_vote = links.setdefault(
+                b["v"]["value"], {"favor": [], "against": [], "abstain": []}
+            )
+            per_vote[outcome].append(b["senatore"]["value"])
         return links
 
     # ------------------------------------------------------------------
-    # Neo4j write helpers
+    # Individual votes
     # ------------------------------------------------------------------
 
     def ingest_individual_votes(
@@ -579,133 +596,108 @@ SELECT ?v ?p ?senatore WHERE {{
         legislature: int = 19,
         limit_sessions: int = 0,
     ) -> dict:
-        """Ingest per-senator IndividualVote nodes for all Senate sittings not yet processed.
+        """Ingest per-senator IndividualVote nodes for the Vote nodes in the graph.
 
-        Resume is per-sitting: sittings where senators already have VOTED rels are skipped.
-        IndividualVote ids come from sparql_ingester.individual_vote_id (chamber and legislature scoped).
+        Works from the aggregate votes already loaded and packs vote-number
+        ranges of several sittings into one request (see _pack_ranges).
+        Resume is per vote: a vote is done once it has IndividualVote nodes.
 
         Args:
             legislature: Legislature number (18 or 19).
-            limit_sessions: If > 0, process at most this many sittings (for testing).
-
-        Returns:
-            Stats dict: {"sittings_processed": N, "ivotes_written": N}
+            limit_sessions: If > 0, only votes of the first N pending sittings.
         """
-        logger.info(
-            "Starting Senate individual vote ingest — legislature %d", legislature
-        )
-
-        sittings = self._get_senate_sittings_in_db(legislature)
-        done = self._get_senate_sittings_with_individual_votes(legislature)
-        todo = sorted(sittings - done)
-        logger.info(
-            "%d sittings to process for individual votes (%d already done)",
-            len(todo), len(done),
-        )
-
+        logger.info("Starting Senate individual vote ingest — legislature %d", legislature)
+        pending = self._get_votes_without_individual_votes(legislature)
         if limit_sessions:
-            todo = todo[:limit_sessions]
-            logger.info("Limited to %d sessions (test mode)", limit_sessions)
+            keep = sorted({p["session"] for p in pending})[:limit_sessions]
+            pending = [p for p in pending if p["session"] in keep]
+        logger.info("%d votes in %d sittings to fetch",
+                    len(pending), len({p["session"] for p in pending}))
 
-        total = 0
-        sittings_processed = 0
-        aborted = False
+        stats = {"sittings_processed": 0, "ivotes_written": 0, "aborted": False}
+        if not pending:
+            return stats
+        try:
+            seduta_uris = self._get_senate_seduta_uris(legislature)
+        except (SenateEndpointBlocked, SenateRequestFailed) as exc:
+            logger.error("ABORTING: sitting URIs not available: %s", exc)
+            stats["aborted"] = True
+            return stats
+        pending = [p for p in pending if p["session"] in seduta_uris]
 
-        for num in todo:
+        sittings_seen: set[int] = set()
+        for chunk in _pack_ranges(pending):
+            by_uri = {
+                f"http://dati.senato.it/votazione/{legislature}-{p['session']}-{p['vote']}": p
+                for p in chunk
+            }
+            ranges = {}
+            for p in chunk:
+                lo, hi = ranges.get(p["session"], (p["vote"], p["vote"]))
+                ranges[p["session"]] = (min(lo, p["vote"]), max(hi, p["vote"]))
             try:
-                seduta_uri = self._get_senate_seduta_uri(legislature, num)
-                if not seduta_uri:
-                    logger.warning(
-                        "  leg%d sed%d: no sedutaassemblea URI found — skipping",
-                        legislature, num,
-                    )
-                    continue
-
-                votazioni = self._get_senate_votes_for_seduta(seduta_uri)
+                links = self._get_senate_senator_links_bulk(
+                    [(seduta_uris[n], lo, hi) for n, (lo, hi) in ranges.items()]
+                )
             except SenateEndpointBlocked as exc:
-                logger.error("ABORTING run at leg%d sed%d: %s", legislature, num, exc)
-                aborted = True
+                logger.error("ABORTING run at leg%d sed%d: %s",
+                             legislature, chunk[0]["session"], exc)
+                stats["aborted"] = True
                 break
-            if not votazioni:
-                logger.debug(
-                    "  leg%d sed%d: no votazioni returned — skipping",
-                    legislature, num,
-                )
-                sittings_processed += 1
-                continue
-
-            by_uri = {}
-            for vz in votazioni:
-                vz_uri = vz.get("votazione", {}).get("value", "")
-                _, _, vote = parse_senate_votazione_uri(vz_uri)
-                if vote is None:
-                    logger.debug("    Skipping unparseable votazione URI: %s", vz_uri)
-                    continue
-                expected = sum(
-                    _int_or_none(vz, k) or 0 for k in ("favorevoli", "contrari", "astenuti")
-                )
-                by_uri[vz_uri] = (vote, expected)
-
-            try:
-                links = self._get_senate_senator_links_bulk(list(by_uri))
-            except SenateEndpointBlocked as exc:
-                logger.error("ABORTING run at leg%d sed%d: %s", legislature, num, exc)
-                aborted = True
-                break
-
-            # A chunk that failed comes back empty: write nothing for this
-            # sitting, so the per-sitting resume retries it on the next run.
-            missing = [
-                u for u, (_, expected) in by_uri.items()
-                if expected and u not in links
-            ]
-            if missing:
-                logger.warning(
-                    "  leg%d sed%d: %d/%d votazioni without individual votes — "
-                    "sitting left for the next run",
-                    legislature, num, len(missing), len(by_uri),
-                )
+            except SenateRequestFailed as exc:
+                logger.warning("  votes %s..%s failed, left for the next run: %s",
+                               chunk[0]["id"], chunk[-1]["id"], exc)
                 continue
 
             batch: list[dict] = []
-            for vz_uri, (vote, expected) in by_uri.items():
-                vote_id = f"senato_leg{legislature}_sed{num:03d}_v{vote:03d}"
-                got = sum(len(v) for v in links.get(vz_uri, {}).values())
-                if got != expected:
-                    logger.warning(
-                        "  %s: %d individual votes, aggregate says %d",
-                        vote_id, got, expected,
-                    )
-                for outcome, uris in links.get(vz_uri, {}).items():
+            missing: list[str] = []
+            for vz_uri, p in by_uri.items():
+                got = links.get(vz_uri)
+                if not got:
+                    missing.append(p["id"])
+                    continue
+                n = sum(len(v) for v in got.values())
+                if n != p["expected"]:
+                    logger.warning("  %s: %d individual votes, aggregate says %d",
+                                   p["id"], n, p["expected"])
+                for outcome, uris in got.items():
                     for sen_uri in uris:
                         sen_id = _senator_id_from_uri(sen_uri)
                         if not sen_id:
                             continue
                         batch.append({
-                            "id": individual_vote_id("senato", legislature, sen_id, num, vote),
+                            "id": individual_vote_id(
+                                "senato", legislature, sen_id, p["session"], p["vote"]
+                            ),
                             "senatorUri": sen_uri,
-                            "voteId": vote_id,
+                            "voteId": p["id"],
                             "outcome": outcome,
                         })
+            if missing:
+                logger.warning("  %d votes without names at the source: %s",
+                               len(missing), missing[:5])
+                self._mark_individual_missing(missing)
+            stats["ivotes_written"] += self._write_senate_individual_votes(batch)
+            sittings_seen.update(p["session"] for p in chunk)
+            logger.info("  up to leg%d sed%d: %d individual votes so far",
+                        legislature, chunk[-1]["session"], stats["ivotes_written"])
 
-            if batch:
-                written = self._write_senate_individual_votes(batch)
-                total += written
-                logger.info(
-                    "  leg%d sed%d: %d individual votes written",
-                    legislature, num, written,
-                )
-
-            sittings_processed += 1
-
+        stats["sittings_processed"] = len(sittings_seen)
         logger.info(
             "Senate individual vote ingest complete — %d sittings, %d individual votes",
-            sittings_processed, total,
+            stats["sittings_processed"], stats["ivotes_written"],
         )
-        return {"sittings_processed": sittings_processed, "ivotes_written": total, "aborted": aborted}
+        return stats
+
+    def _mark_individual_missing(self, vote_ids: list[str]) -> None:
+        with self._driver.session() as neo_session:
+            neo_session.run(
+                "MATCH (v:Vote) WHERE v.id IN $ids SET v.individual_missing = true",
+                ids=vote_ids,
+            )
 
     # ------------------------------------------------------------------
-    # Neo4j read helpers
+    # Neo4j write helpers
     # ------------------------------------------------------------------
 
     def _write_senate_votes(self, batch: list[dict], legislature: int) -> int:
