@@ -329,6 +329,7 @@ class SenateVoteIngester:
 
         sittings_processed = 0
         total_votes_written = 0
+        aborted = False
 
         for session_num in todo:
             logger.debug("Processing sitting %d/%d ...", session_num, legislature)
@@ -341,6 +342,7 @@ class SenateVoteIngester:
                     "ABORTING run at leg%d sed%d: %s",
                     legislature, session_num, exc,
                 )
+                aborted = True
                 break
             if not seduta_uri:
                 logger.warning(
@@ -357,6 +359,7 @@ class SenateVoteIngester:
                     "ABORTING run at leg%d sed%d: %s",
                     legislature, session_num, exc,
                 )
+                aborted = True
                 break
             if not votazioni:
                 logger.debug(
@@ -413,6 +416,7 @@ class SenateVoteIngester:
         return {
             "sittings_processed": sittings_processed,
             "votes_written": total_votes_written,
+            "aborted": aborted,
         }
 
     # ------------------------------------------------------------------
@@ -870,5 +874,11 @@ if __name__ == "__main__":
                 f"Done — sittings_processed={stats['sittings_processed']}, "
                 f"votes_written={stats['votes_written']}"
             )
+            if stats.get("aborted"):
+                print(
+                    "ABORTED early: dati.senato.it is blocking requests (HTTP 403). "
+                    "Progress is saved — rerun later to resume from the next sitting."
+                )
+                sys.exit(3)
     finally:
         driver.close()

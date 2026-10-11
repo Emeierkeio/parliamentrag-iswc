@@ -888,6 +888,9 @@ class DatabaseBuilder:
                 d.mandates = CASE
                     WHEN row.mandate IN coalesce(d.mandates, []) THEN d.mandates
                     ELSE coalesce(d.mandates, []) + row.mandate END
+            // Ministers who sit in the Senate (Salvini, Bernini, ...) keep the
+            // gov_* node but must still count as senators
+            FOREACH (_ IN CASE WHEN row.chamber = 'senato' THEN [1] ELSE [] END | SET d:Senator)
         """, batch=batch)
 
     def load_deputies(self, data_path: str, legislature: int = 19) -> None:
