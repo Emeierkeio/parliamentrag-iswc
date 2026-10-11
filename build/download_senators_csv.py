@@ -216,16 +216,19 @@ def _add_current_group_names(rows: list[dict], legislature: int) -> None:
     rename (Forza Italia -> "... - PPE", Azione-IV -> "Italia Viva - Il
     Centro") members who joined earlier keep the old label and one group
     would split into two nodes. gruppoAttuale is the same for all of them;
-    gruppoAlias lists every name the group had, separated by "|".
+    gruppoAlias lists the names the group had during this legislature,
+    separated by "|": a group URI spans legislatures (Lega goes back to "Lega
+    Padana"), so older names are dropped.
     """
     query = """
-    SELECT DISTINCT ?gruppo ?titolo ?breve ?inizio WHERE {
+    SELECT DISTINCT ?gruppo ?titolo ?breve ?inizio ?fine WHERE {
       ?ades <http://dati.senato.it/osr/legislatura> {legislature} ;
             <http://dati.senato.it/osr/gruppo> ?gruppo .
       ?gruppo <http://dati.senato.it/osr/denominazione> ?den .
       ?den <http://dati.senato.it/osr/titolo> ?titolo ;
            <http://dati.senato.it/osr/titoloBreve> ?breve ;
            <http://dati.senato.it/osr/inizio> ?inizio .
+      OPTIONAL { ?den <http://dati.senato.it/osr/fine> ?fine }
     }
     """
     try:
@@ -236,8 +239,18 @@ def _add_current_group_names(rows: list[dict], legislature: int) -> None:
     by_group: dict[str, list[dict]] = {}
     for n in names:
         by_group.setdefault(n["gruppo"], []).append(n)
+    # gruppoStart is YYYYMMDD here, denominazione dates are ISO
+    first_start = {}
     for r in rows:
-        dens = sorted(by_group.get(r["gruppoUri"], []), key=lambda n: n["inizio"])
+        start = f"{r['gruppoStart'][:4]}-{r['gruppoStart'][4:6]}-{r['gruppoStart'][6:8]}"
+        first_start[r["gruppoUri"]] = min(first_start.get(r["gruppoUri"], start), start)
+    for r in rows:
+        since = first_start[r["gruppoUri"]]
+        dens = sorted(
+            (n for n in by_group.get(r["gruppoUri"], [])
+             if not n.get("fine") or n["fine"][:10] >= since),
+            key=lambda n: n["inizio"],
+        )
         if not dens:
             continue
         r["gruppoAttuale"] = dens[-1]["titolo"]

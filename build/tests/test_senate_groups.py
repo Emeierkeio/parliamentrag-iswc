@@ -35,15 +35,18 @@ def test_other_people_untouched():
 def test_current_group_name_and_aliases(monkeypatch):
     fi = "http://dati.senato.it/gruppo/fi"
     names = [
-        {"gruppo": fi, "titolo": "Forza Italia Berlusconi Presidente", "breve": "FIBP", "inizio": "2022-10-13"},
+        {"gruppo": fi, "titolo": "Forza Italia", "breve": "FI", "inizio": "2001-05-30", "fine": "2008-04-28"},
+        {"gruppo": fi, "titolo": "Forza Italia Berlusconi Presidente", "breve": "FIBP", "inizio": "2022-10-13", "fine": "2023-11-20"},
         {"gruppo": fi, "titolo": "Forza Italia - Berlusconi Presidente - PPE", "breve": "FI-BP-PPE", "inizio": "2023-11-21"},
     ]
     monkeypatch.setattr(dsc, "sparql_query", lambda q: names)
     # Lotito joined under the old name and never changed adhesion
-    rows = [{"senatore": "s/lotito", "gruppoUri": fi, "gruppoLabel": "Forza Italia Berlusconi Presidente"}]
+    rows = [{"senatore": "s/lotito", "gruppoUri": fi, "gruppoStart": "20221018",
+             "gruppoLabel": "Forza Italia Berlusconi Presidente"}]
     dsc._add_current_group_names(rows, 19)
     assert rows[0]["gruppoAttuale"] == "Forza Italia - Berlusconi Presidente - PPE"
     assert rows[0]["gruppoAttualeBreve"] == "FI-BP-PPE"
+    # "Forza Italia" (2001-2008) is the same URI in an older legislature
     assert rows[0]["gruppoAlias"].split("|") == [
         "Forza Italia Berlusconi Presidente",
         "Forza Italia - Berlusconi Presidente - PPE",
