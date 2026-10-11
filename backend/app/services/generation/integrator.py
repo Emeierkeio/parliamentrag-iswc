@@ -18,6 +18,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+
+
+def _members_word() -> str:
+    """Speakers are "deputati" while the graph holds the Camera alone, and
+    "parlamentari" once it also holds the Senate."""
+    from ..retrieval.scope import loaded_chambers
+
+    return "parlamentari" if "senato" in loaded_chambers() else "deputati"
+
+
+def _for_chambers(prompt: str) -> str:
+    """The prompts were written for the Camera: with the Senate loaded their
+    "deputati" become "parlamentari"; with the Camera alone they are unchanged."""
+    word = _members_word()
+    return prompt if word == "deputati" else prompt.replace("deputati", word)
+
 class NarrativeIntegrator:
     """Merge party sections into one coherent document, positions kept distinct.
 
@@ -305,7 +321,7 @@ REGOLE INDEROGABILI:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "system", "content": _for_chambers(self.SYSTEM_PROMPT)},
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.0,
@@ -432,7 +448,7 @@ Scrivi le 2 frasi dell'introduzione."""
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.INTRO_PROMPT},
+                    {"role": "system", "content": _for_chambers(self.INTRO_PROMPT)},
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.0,
@@ -468,7 +484,7 @@ Scrivi le 2 frasi dell'introduzione."""
                 fmt = lambda d: d.strftime("%d/%m/%Y") if hasattr(d, "strftime") else str(d)
                 period = f", nel periodo dal {fmt(first)} al {fmt(last)}"
             parts.append(
-                f"Sono stati analizzati {n_int} interventi di {n_spk} deputati{period}."
+                f"Sono stati analizzati {n_int} interventi di {n_spk} {_members_word()}{period}."
             )
         return " ".join(parts)
 
@@ -687,7 +703,7 @@ Sezioni originali con citazioni:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "system", "content": _for_chambers(self.SYSTEM_PROMPT)},
                     {"role": "user", "content": retry_prompt}
                 ],
                 temperature=0.1,  # Even lower for retry

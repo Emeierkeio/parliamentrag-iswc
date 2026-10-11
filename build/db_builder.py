@@ -288,6 +288,10 @@ SIGLA_FALLBACKS = {
 # DatabaseBuilder
 # ---------------------------------------------------------------------------
 
+def senator_profile_url(card, legislature: int) -> str:
+    return f"https://www.senato.it/loc/link.asp?tipodoc=sattsen&leg={legislature}&id={int(float(card))}"
+
+
 def _close_superseded_memberships(df, person_col: str, start_col: str, end_col: str):
     """Close an open membership the day before the same person's next one.
 
@@ -1200,7 +1204,9 @@ class DatabaseBuilder:
                 "education": None,
                 "profession": None,
                 "photo": r.get("foto"),
-                "deputyCard": str(card) if pd.notna(card) else None,
+                # The frontend links deputy_card as is: for senators it is the
+                # senato.it permalink of the profile, not the bare id.
+                "deputyCard": senator_profile_url(card, legislature) if pd.notna(card) else None,
                 "termOfOffice": None,
                 # Schema v2 (C1): data nativa, non stringa DD/MM/YYYY
                 "termOfOfficeStart": parse_date_to_neo4j(r.get("mandatoStart")),

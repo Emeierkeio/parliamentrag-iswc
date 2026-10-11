@@ -312,8 +312,10 @@ class ConfigLoader:
     def get_all_parties(self) -> List[str]:
         """Groups expected in an answer: every coalition member, except groups
         of a chamber whose data is not loaded (see chambers in default.yaml)."""
+        from .services.retrieval.scope import loaded_chambers
+
         cfg = self.load_config()
-        chambers = set(cfg.get("chambers", ["camera"]))
+        chambers = set(loaded_chambers())
         only_in = cfg.get("chamber_only_groups", {}) or {}
         all_parties = []
         for groups in self.coalitions.values():

@@ -9,6 +9,7 @@ a legislature never changes the candidates of another.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any, Iterable, List, Literal, Optional, Sequence, Tuple
 
@@ -41,9 +42,13 @@ _CAMERA_RE = re.compile(
 
 
 def loaded_chambers() -> Tuple[str, ...]:
-    """Chambers whose sittings the graph holds (chambers in default.yaml)."""
+    """Chambers whose sittings the graph holds: chambers in default.yaml, or
+    the CHAMBERS environment variable ("camera,senato") for a deployment on a
+    graph with the Senate, such as the staging one."""
     from ...config import get_config
-    chambers = get_config().load_config().get("chambers") or ["camera"]
+    env = os.environ.get("CHAMBERS", "").strip()
+    chambers = [c.strip() for c in env.split(",") if c.strip()] if env else (
+        get_config().load_config().get("chambers") or ["camera"])
     return tuple(c for c in CHAMBERS if c in chambers)
 
 
