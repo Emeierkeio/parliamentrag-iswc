@@ -120,6 +120,10 @@ class TestSenateVoteFlags:
         flags = _senate_vote_flags("Disegno di legge n. 1272.  Votazione questione di fiducia.", "elettronica")
         assert flags == {"confidenceVote": True, "finalVote": False, "secretVote": False}
 
+    def test_no_confidence_motion_is_not_a_confidence_vote(self):
+        label = "Mozione n.62, Patuanelli e altri, di sfiducia individuale nei confronti del Ministro"
+        assert _senate_vote_flags(label, "elettronica")["confidenceVote"] is False
+
     def test_final_vote(self):
         assert _senate_vote_flags("Votazione finale", "elettronica")["finalVote"] is True
 

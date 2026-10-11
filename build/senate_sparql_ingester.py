@@ -105,6 +105,7 @@ def _derive_senate_outcome(favorevoli: Optional[int], maggioranza: Optional[int]
 
 _SENATE_ESITO = {"approvato": "approved", "respinto": "rejected"}
 _FINAL_VOTE_RE = re.compile(r"votazione finale|nel suo complesso", re.IGNORECASE)
+_CONFIDENCE_RE = re.compile(r"\bfiducia", re.IGNORECASE)
 
 
 def _senate_outcome(
@@ -122,7 +123,8 @@ def _senate_vote_flags(label: Optional[str], tipo: Optional[str]) -> dict:
     and from tipoVotazione for secret ballots."""
     label = label or ""
     return {
-        "confidenceVote": "fiducia" in label.lower(),
+        # \b keeps out "mozione di sfiducia individuale"
+        "confidenceVote": bool(_CONFIDENCE_RE.search(label)),
         "finalVote": bool(_FINAL_VOTE_RE.search(label)),
         "secretVote": "segret" in (tipo or "").lower() or "scrutinio segreto" in label.lower(),
     }
