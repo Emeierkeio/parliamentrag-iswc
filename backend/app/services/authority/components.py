@@ -446,9 +446,11 @@ class ActsComponent(AuthorityComponent):
     Where:
     - role_weight:    1.0 for PRIMARY_SIGNATORY, 0.3 for CO_SIGNATORY
     - time_decay:     exponential decay (half_life = acts_half_life_days)
-    - topic_relevance: cosine similarity(query, act.description_embedding)
-                      if the similarity is >= acts_relevance_threshold;
-                      0.5 (neutral) for acts without an embedding.
+    - topic_relevance: cosine similarity(query, act.description_embedding,
+                      or the title embedding when the act has no
+                      description, as bills do) if the similarity is
+                      >= acts_relevance_threshold; 0.5 (neutral) for acts
+                      without any embedding.
 
     Acts whose description similarity is below the threshold are skipped
     entirely — they are not topically relevant to the query.

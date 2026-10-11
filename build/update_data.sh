@@ -157,10 +157,12 @@ fi
 
 # ── Cache topic della landing ────────────────────────────────────────────────
 # Ricalcolata ora che i dati sono cambiati, così nessun visitatore aspetta la
-# computazione Neo4j+LLM. La curl sveglia anche il backend prod.
+# computazione Neo4j+LLM. La curl sveglia anche il backend prod, che dal 5/10
+# non sta più dietro www.parliamentrag.it (ora sito del centro).
+: "${BACKEND_URL:=https://thesis-parliamentrag-production.up.railway.app}"
 for L in it en; do
 	run "Warm recent-topics cache (lang=$L)" \
-		curl -sf -m 120 "https://www.parliamentrag.it/api/config/recent-topics?lang=$L&refresh=1" -o /dev/null \
+		curl -sf -m 120 "$BACKEND_URL/api/config/recent-topics?lang=$L&refresh=1" -o /dev/null \
 		|| warn "recent-topics lang=$L FAILED (will recompute on first visit)"
 done
 
@@ -249,6 +251,20 @@ if [ -n "$LOCAL_UP" ]; then
 		|| warn "placeholder resolution failed on local snapshot"
 fi
 
+# ── Date ed embedding dei progetti di legge ──────────────────────────────────
+# I PDL (ocd:atto) hanno la data in dc:date, non in ocd:startDate, e la
+# descrizione vuota: senza questo pass l'autorevolezza li scartava (niente
+# data) o li contava con rilevanza neutra su ogni tema (niente embedding).
+# Idempotente: riempie solo date ed embedding mancanti (embedding = titolo).
+run "Date ed embedding progetti di legge" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/repair_bills.py --neo4j-uri "$DEMO_NEO4J" \
+	|| warn "bill dates repair failed — retry at next update-data"
+if [ -n "$LOCAL_UP" ]; then
+	run "Date ed embedding progetti di legge (locale)" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+		"$PY" build/repair_bills.py --neo4j-uri "$LOCAL_NEO4J" \
+		|| warn "bill dates repair failed on local snapshot"
+fi
+
 # ── Cariche di gruppo (direttivo) ────────────────────────────────────────────
 # Presidenti, vice, tesorieri e segretari dei gruppi da dati.camera.it:
 # finiscono come role sulla MEMBER_OF_GROUP attiva (wipe & reapply).
@@ -273,6 +289,41 @@ if [ -n "$LOCAL_UP" ]; then
 	run "Componenti Misto (locale)" misto_ingest "$LOCAL_NEO4J" \
 		|| warn "componenti Misto (locale) failed — snapshot da riallineare al prossimo giro"
 fi
+
+# ── Emendamenti XIX (Camera e Senato) ────────────────────────────────────────
+# Scarica solo ciò che è nuovo o con l'iter cambiato negli ultimi giorni, poi
+# rigenera downloads/emendamenti/emendamenti_leg19.jsonl (circa un minuto).
+# Il caricamento nel DB arriverà con la decisione su dove tenere i testi.
+EMEND_DAYS=14
+# senato.it blocca l'IP (403 su tutto il sito) dopo qualche ora a 0,5 s tra le
+# richieste: di notte le richieste sono poche, quindi si va piano.
+SENATO_DELAY=2
+AKN_DIR="downloads/akn_senato"
+akn_pull() {
+	if [ -d "$AKN_DIR/.git" ]; then
+		# Clone superficiale in sola lettura: un pull non trova storia comune con
+		# il commit giornaliero del Senato, quindi si allinea all'ultimo commit.
+		git -C "$AKN_DIR" fetch --quiet --depth 1 origin master \
+			&& git -C "$AKN_DIR" reset --quiet --hard FETCH_HEAD
+	else
+		git clone --quiet --filter=blob:none --no-checkout --depth 1 \
+			https://github.com/SenatoDellaRepubblica/AkomaNtosoBulkData.git "$AKN_DIR" \
+			&& git -C "$AKN_DIR" sparse-checkout init --no-cone \
+			&& printf '/Leg19/*/emend/\n/Leg19/*/emendc/\n/Leg19/*/README.MD\n' >"$AKN_DIR/.git/info/sparse-checkout" \
+			&& git -C "$AKN_DIR" checkout --quiet master
+	fi
+}
+run "Emendamenti Camera (nuovi e cambiati)" "$PY" build/download_emendamenti_camera.py --recenti "$EMEND_DAYS" \
+	|| warn "emendamenti Camera: download incompleto, riprova al prossimo giro"
+run "Fasi Senato + pagine emendamenti di commissione" \
+	"$PY" build/download_emendamenti_senato.py --recenti "$EMEND_DAYS" --delay "$SENATO_DELAY" \
+	|| warn "emendamenti Senato (HTML): download incompleto"
+run "Akoma Ntoso Senato (git pull)" akn_pull \
+	|| warn "Akoma Ntoso Senato: pull fallito"
+run "Esiti Senato + testi mancanti" "$PY" build/download_esiti_senato.py --recenti "$EMEND_DAYS" --delay "$SENATO_DELAY" \
+	|| warn "esiti Senato: download incompleto"
+run "Emendamenti → JSONL unico" "$PY" build/parse_emendamenti.py \
+	|| warn "parse emendamenti fallito"
 
 # ── Dataset Hugging Face ─────────────────────────────────────────────────────
 # A differenza di Zenodo (snapshot congelato) segue il DB vivo: rigenera i

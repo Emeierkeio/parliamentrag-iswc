@@ -15,6 +15,7 @@
 #   make og-images                    # regenerate Open Graph preview images (home, /home, /data)
 #   make db-backup                    # dated dump of the remote DB on the server (few min downtime)
 #   make db-pull                      # download latest dump + restore into a local Neo4j (:7691)
+#   make zenodo-release               # export RDF + upload + Publish su Zenodo, senza presidio
 #   make db-use-local / db-use-remote # switch NEO4J_URI in .env between local copy and remote
 
 BACKEND_PORT  ?= 8000
@@ -54,7 +55,7 @@ LOCAL_BACKUP_DIR       := $(CURDIR)/neo4j-local-backups
 # Hugging Face dataset (parquet mirror of the KG, follows the live DB)
 HF_DATASET_REPO        := emeierkeio/parliamentrag-camera-leg19
 
-.PHONY: help dev dev-backend dev-frontend stop install install-backend install-frontend build check-ports update-data link-refs og-images tunnel browser db-backup db-pull db-use-local db-use-remote export-hf hf-upload
+.PHONY: help dev dev-backend dev-frontend stop install install-backend install-frontend build check-ports update-data link-refs og-images tunnel browser db-backup db-pull db-use-local db-use-remote export-hf hf-upload zenodo-update zenodo-release
 
 help:
 	@grep -E '^#   make' Makefile | sed 's/^#   //'
@@ -233,6 +234,13 @@ hf-upload:
 ## vedere cosa farebbe, "--skip-votes" per saltare il file voti da 3.8 GB.
 zenodo-update:
 	@$(BACKEND_DIR)/venv/bin/python build/zenodo_update.py $(ZENODO_FLAGS)
+
+## Tutto il flusso senza presidio (lancialo e vai a dormire): tunnel, dry-run
+## Zenodo, export con voti, controllo che il dump non sia più piccolo del
+## precedente, upload e PUBBLICAZIONE (DOI permanente). Tiene sveglio il Mac
+## con caffeinate e notifica a fine corsa; log in build/logs/zenodo-release-*.log.
+zenodo-release: tunnel
+	@BACKEND_DIR="$(BACKEND_DIR)" caffeinate -i bash build/zenodo_release.sh
 
 ## Open the SSH tunnel to the remote demo Neo4j if it is not already up.
 ## Also detects half-dead tunnels (port listening but connection refused/hung after

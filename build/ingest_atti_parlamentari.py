@@ -232,7 +232,10 @@ class AttiParlamentariIngester:
             OPTIONAL {{ ?atto dc:type ?tipo }}
             OPTIONAL {{ ?atto dc:title ?titolo }}
             OPTIONAL {{ ?atto dc:description ?descrizione }}
-            OPTIONAL {{ ?atto ocd:startDate ?dataPresentazione }}
+            # Bills (ocd:atto) carry their date in dc:date, oversight acts in ocd:startDate
+            OPTIONAL {{ ?atto ocd:startDate ?startDate }}
+            OPTIONAL {{ ?atto dc:date ?dcDate }}
+            BIND(COALESCE(?startDate, ?dcDate) AS ?dataPresentazione)
             OPTIONAL {{ ?atto dc:identifier ?numero }}
             OPTIONAL {{
                 ?atto ocd:destinatario ?destinatario .
