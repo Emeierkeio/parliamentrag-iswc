@@ -94,6 +94,50 @@ class Validator:
 
     # ------------------------------------------------------------------
 
+    def check_senate(self, n_sessions: int):
+        print(f"\n[13] Senato ({n_sessions} sedute)")
+        rows = self.q("""
+            MATCH (s:Session {chamber: 'senato'})-[*1..3]->(sp:Speech)
+            WITH DISTINCT sp WHERE NOT (sp)-[:SPOKEN_BY]->()
+            RETURN count(sp) AS c
+        """)
+        self.check(rows[0]["c"] == 0, "tutti gli interventi del Senato hanno un oratore",
+                   f"{rows[0]['c']} senza SPOKEN_BY")
+
+        rows = self.q("""
+            MATCH (p:Person) WHERE any(m IN coalesce(p.mandates, []) WHERE m STARTS WITH 'senato_')
+              AND NOT p:Senator
+            RETURN count(p) AS c
+        """)
+        self.check(rows[0]["c"] == 0, "chi ha un mandato al Senato ha la label Senator",
+                   f"{rows[0]['c']} senza")
+
+        rows = self.q("""
+            MATCH (p:Person)-[m:MEMBER_OF_GROUP {chamber: 'senato'}]->()
+            WHERE m.end_date IS NULL
+            WITH p, m.legislature AS leg, count(m) AS n WHERE n > 1
+            RETURN p.last_name AS sen, leg, n LIMIT 10
+        """)
+        self.check(not rows, "0 senatori con più gruppi aperti nella stessa legislatura",
+                   f"{rows}")
+
+        # dati.senato.it publishes both the totals and the per-senator votes;
+        # a gap means a half-loaded sitting (the per-sitting resume skips it).
+        rows = self.q("""
+            MATCH (s:Session {chamber: 'senato'})-[:HAS_VOTE]->(v:Vote)<-[:ON_VOTE]-(iv:IndividualVote)
+            WITH v, sum(CASE iv.outcome WHEN 'favor' THEN 1 ELSE 0 END) AS fav,
+                    sum(CASE iv.outcome WHEN 'against' THEN 1 ELSE 0 END) AS con,
+                    sum(CASE iv.outcome WHEN 'abstain' THEN 1 ELSE 0 END) AS ast
+            WITH count(v) AS tot,
+                 sum(CASE WHEN fav <> v.inFavor OR con <> v.against
+                           OR (v.abstained IS NOT NULL AND ast <> v.abstained)
+                      THEN 1 ELSE 0 END) AS diff
+            RETURN tot, diff
+        """)
+        tot, diff = rows[0]["tot"], rows[0]["diff"]
+        self.check(diff == 0, f"voti individuali coerenti con gli aggregati ({tot} votazioni)",
+                   f"{diff} votazioni con conteggi diversi", warn_only=diff <= tot * 0.01)
+
     def run_all(self):
         print("=== VALIDAZIONE SCHEMA V2 ===\n")
 
@@ -261,6 +305,10 @@ class Validator:
             rows = self.q(f"MATCH (n:`{label}`) RETURN count(n) AS c")
             c = rows[0]["c"]
             self.check(c > 0, f"{label}: {c} nodi", "0 nodi!")
+
+        rows = self.q("MATCH (s:Session {chamber: 'senato'}) RETURN count(s) AS c")
+        if rows[0]["c"]:
+            self.check_senate(rows[0]["c"])
 
         # ------------------------------------------------------------------
         print(f"\n=== ESITO: {self.failures} FAIL, {self.warnings} WARN ===")
