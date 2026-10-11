@@ -157,7 +157,7 @@ def download_senator_groups(legislature: int = 19) -> list[dict] | None:
     """
     print("Downloading senator parliamentary groups...")
     query = """
-    SELECT DISTINCT ?senatore ?gruppoLabel ?gruppoBreve ?gruppoStart ?gruppoEnd
+    SELECT DISTINCT ?senatore ?gruppo ?gruppoLabel ?gruppoBreve ?gruppoStart ?gruppoEnd
     WHERE {
       ?senatore a <http://xmlns.com/foaf/0.1/Person> .
       ?senatore <http://dati.senato.it/osr/mandato> ?mandato .
@@ -198,13 +198,52 @@ def download_senator_groups(legislature: int = 19) -> list[dict] | None:
                     r["gruppoStart"] = _iso_to_yyyymmdd(r["gruppoStart"])
                 if r.get("gruppoEnd"):
                     r["gruppoEnd"] = _iso_to_yyyymmdd(r["gruppoEnd"])
+                r["gruppoUri"] = r.pop("gruppo", "")
                 deduped.append(r)
 
         print(f"  Deduplicated to {len(deduped)} group membership rows")
+        _add_current_group_names(deduped, legislature)
         return deduped
     except Exception as e:
         print(f"  SPARQL query failed: {e}")
         return None
+
+
+def _add_current_group_names(rows: list[dict], legislature: int) -> None:
+    """Add the group's latest name to every membership row.
+
+    gruppoLabel is the name in force when the senator joined, so after a
+    rename (Forza Italia -> "... - PPE", Azione-IV -> "Italia Viva - Il
+    Centro") members who joined earlier keep the old label and one group
+    would split into two nodes. gruppoAttuale is the same for all of them;
+    gruppoAlias lists every name the group had, separated by "|".
+    """
+    query = """
+    SELECT DISTINCT ?gruppo ?titolo ?breve ?inizio WHERE {
+      ?ades <http://dati.senato.it/osr/legislatura> {legislature} ;
+            <http://dati.senato.it/osr/gruppo> ?gruppo .
+      ?gruppo <http://dati.senato.it/osr/denominazione> ?den .
+      ?den <http://dati.senato.it/osr/titolo> ?titolo ;
+           <http://dati.senato.it/osr/titoloBreve> ?breve ;
+           <http://dati.senato.it/osr/inizio> ?inizio .
+    }
+    """
+    try:
+        names = sparql_query(query.replace("{legislature}", str(legislature)))
+    except Exception as e:
+        print(f"  Group names query failed, keeping the names at join date: {e}")
+        return
+    by_group: dict[str, list[dict]] = {}
+    for n in names:
+        by_group.setdefault(n["gruppo"], []).append(n)
+    for r in rows:
+        dens = sorted(by_group.get(r["gruppoUri"], []), key=lambda n: n["inizio"])
+        if not dens:
+            continue
+        r["gruppoAttuale"] = dens[-1]["titolo"]
+        r["gruppoAttualeBreve"] = dens[-1]["breve"]
+        r["gruppoAlias"] = "|".join(dict.fromkeys(n["titolo"] for n in dens))
+    print(f"  Current names for {len(by_group)} groups")
 
 
 def download_senator_committees(legislature: int = 19) -> list[dict] | None:
@@ -277,7 +316,8 @@ def main(legislature: int = 19) -> None:
         write_csv(
             os.path.join(DATA_DIR, f"{csv_prefix(legislature)}_gruppi.csv"),
             groups,
-            ["senatore", "gruppoLabel", "gruppoBreve", "gruppoStart", "gruppoEnd"],
+            ["senatore", "gruppoLabel", "gruppoBreve", "gruppoStart", "gruppoEnd",
+             "gruppoUri", "gruppoAttuale", "gruppoAttualeBreve", "gruppoAlias"],
         )
     else:
         print("FAILED: senatori_xix_gruppi.csv")

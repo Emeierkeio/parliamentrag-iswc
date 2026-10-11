@@ -288,6 +288,24 @@ SIGLA_FALLBACKS = {
 # DatabaseBuilder
 # ---------------------------------------------------------------------------
 
+def _close_superseded_memberships(df, person_col: str, start_col: str, end_col: str):
+    """Close an open membership the day before the same person's next one.
+
+    dati.senato.it leaves some adhesions without an end even though a later
+    one exists (Germanà, Lega: open from 2022-11-08 and again from
+    2025-02-25), which would give the person two current groups.
+    """
+    df = df.copy()
+    for _, rows in df.groupby(person_col):
+        ordered = rows.sort_values(start_col)
+        idx = list(ordered.index)
+        for cur, nxt in zip(idx, idx[1:]):
+            if pd.isna(df.at[cur, end_col]) or str(df.at[cur, end_col]).strip() == "":
+                next_start = pd.to_datetime(str(df.at[nxt, start_col])[:8], format="%Y%m%d")
+                df.at[cur, end_col] = (next_start - pd.Timedelta(days=1)).strftime("%Y%m%d")
+    return df
+
+
 class DatabaseBuilder:
     """Writes parsed parliamentary data into Neo4j with English-only schema.
 
@@ -1201,17 +1219,30 @@ class DatabaseBuilder:
             print(f"  Skipping senator groups — {csv_path} not found")
             return
 
-        grp_df = pd.read_csv(csv_path)
+        grp_df = _close_superseded_memberships(
+            pd.read_csv(csv_path, dtype=str), "senatore", "gruppoStart", "gruppoEnd"
+        )
         resolve, _ = self._senator_id_resolver(data_path)
 
         with_end: list[dict] = []
         without_end: list[dict] = []
+        aliases: dict[str, set[str]] = {}
 
         for _, r in grp_df.iterrows():
-            name = str(r.get("gruppoLabel", "")).strip()
-            if not name:
+            # Latest name of the group when the CSV has it (download_senators_csv
+            # adds it), so a renamed group stays one node; else the name at join.
+            current = r.get("gruppoAttuale")
+            if isinstance(current, str) and current.strip():
+                name = current.strip()
+                acronym = str(r.get("gruppoAttualeBreve") or "").strip() or None
+                aliases.setdefault(name, set()).update(
+                    a for a in str(r.get("gruppoAlias") or "").split("|") if a and a != name
+                )
+            else:
+                name = str(r.get("gruppoLabel") or "").strip()
+                acronym = str(r.get("gruppoBreve") or "").strip() or None
+            if not name or name == "nan":
                 continue
-            acronym = str(r.get("gruppoBreve", "")).strip() or None
 
             start_date = parse_date_to_neo4j(r.get("gruppoStart"))
             end_date = parse_date_to_neo4j(r.get("gruppoEnd"))
@@ -1237,6 +1268,13 @@ class DatabaseBuilder:
                 self._batch_write(neo_session, self._upsert_group_membership_with_end, with_end)
             if without_end:
                 self._batch_write(neo_session, self._upsert_group_membership_no_end, without_end)
+            if aliases:
+                neo_session.run("""
+                    UNWIND $rows AS row
+                    MATCH (g:ParliamentaryGroup {name: row.name})
+                    SET g.aliases = [a IN coalesce(g.aliases, []) WHERE NOT a IN row.aliases]
+                                    + row.aliases
+                """, rows=[{"name": n, "aliases": sorted(a)} for n, a in aliases.items() if a])
         print("Senator ParliamentaryGroup nodes and MEMBER_OF_GROUP relationships loaded.")
 
     def load_senator_committees(self, data_path: str, legislature: int = 19) -> None:
