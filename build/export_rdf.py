@@ -73,7 +73,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 BASE_DEFAULT = "https://w3id.org/parliamentrag/"
 OCD = Namespace("http://dati.camera.it/ocd/")
 
-EXCLUDED_PROP_RE = re.compile(r"embedding", re.IGNORECASE)
+# Filtered inside the query (see node_rows), not client-side: the vectors are
+# ~1536 floats per node and streaming them over the SSH tunnel only to drop them
+# made the export take minutes per label and drop the connection.
+EXCLUDED_PROP = "embedding"
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -103,6 +106,15 @@ class RdfExporter:
         with self.driver.session() as session:
             yield from session.run(cypher)
 
+    def node_rows(self, label: str):
+        """Nodes of one label as {eid, labels, n}, with n's embedding props dropped server-side."""
+        cypher = (
+            f"MATCH (n:`{label}`) RETURN elementId(n) AS eid, labels(n) AS labels, "
+            f"[k IN keys(n) WHERE NOT toLower(k) CONTAINS '{EXCLUDED_PROP}' | [k, n[k]]] AS kv"
+        )
+        for rec in self.rows(cypher):
+            yield {"eid": rec["eid"], "labels": rec["labels"], "n": dict(rec["kv"])}
+
     @staticmethod
     def to_literal(value):
         # neo4j.time.Date/DateTime expose isoformat(); plain types map directly
@@ -131,9 +143,7 @@ class RdfExporter:
 
     def export_people(self):
         PRO = self.PRO
-        for rec in self.rows(
-            "MATCH (n:Person) RETURN elementId(n) AS eid, labels(n) AS labels, n"
-        ):
+        for rec in self.node_rows("Person"):
             props = dict(rec["n"])
             node_id = props["id"]
             uri = URIRef(node_id) if node_id.startswith("http") else self.mint("person", node_id)
@@ -160,9 +170,7 @@ class RdfExporter:
 
     def export_organizations(self):
         PRO = self.PRO
-        for rec in self.rows(
-            "MATCH (n:ParliamentaryGroup) RETURN elementId(n) AS eid, n"
-        ):
+        for rec in self.node_rows("ParliamentaryGroup"):
             props = dict(rec["n"])
             uri = self.mint("group", slugify(props.get("acronym") or props["name"]))
             self.uri_by_eid[rec["eid"]] = uri
@@ -172,7 +180,7 @@ class RdfExporter:
             if props.get("acronym"):
                 self.g.add((uri, SKOS.altLabel, Literal(props["acronym"])))
 
-        for rec in self.rows("MATCH (n:Committee) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("Committee"):
             props = dict(rec["n"])
             uri = self.mint("committee", slugify(props["name"]))
             self.uri_by_eid[rec["eid"]] = uri
@@ -180,7 +188,7 @@ class RdfExporter:
             self.g.add((uri, RDF.type, OCD.organo))
             self.g.add((uri, SKOS.prefLabel, Literal(props["name"], lang="it")))
 
-        for rec in self.rows("MATCH (n:MistoComponent) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("MistoComponent"):
             props = dict(rec["n"])
             uri = URIRef(props["uri"])
             self.uri_by_eid[rec["eid"]] = uri
@@ -189,7 +197,7 @@ class RdfExporter:
             if props.get("short_name"):
                 self.g.add((uri, SKOS.altLabel, Literal(props["short_name"])))
 
-        for rec in self.rows("MATCH (n:Government) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("Government"):
             props = dict(rec["n"])
             uri = self.mint("government", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
@@ -198,7 +206,7 @@ class RdfExporter:
             self.add_props(uri, props, {"start_date": PRO.startDate})
 
     def export_acts_and_subjects(self):
-        for rec in self.rows("MATCH (n:ParliamentaryAct) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("ParliamentaryAct"):
             props = dict(rec["n"])
             source_uri = props.get("uri", "")
             if source_uri.startswith("http"):
@@ -212,7 +220,7 @@ class RdfExporter:
                 "type": DCTERMS.type,
             })
 
-        for rec in self.rows("MATCH (n:EurovocConcept) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("EurovocConcept"):
             props = dict(rec["n"])
             uri = URIRef(props["uri"])
             self.uri_by_eid[rec["eid"]] = uri
@@ -222,7 +230,7 @@ class RdfExporter:
 
     def export_proceedings(self):
         PRO = self.PRO
-        for rec in self.rows("MATCH (n:Session) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("Session"):
             props = dict(rec["n"])
             uri = self.mint("session", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
@@ -234,14 +242,14 @@ class RdfExporter:
                 "legislature": PRO.legislature,
             })
 
-        for rec in self.rows("MATCH (n:Debate) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("Debate"):
             props = dict(rec["n"])
             uri = self.mint("debate", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
             self.g.add((uri, RDF.type, PRO.Debate))
             self.add_props(uri, props, {"title": DCTERMS.title, "order": PRO.order})
 
-        for rec in self.rows("MATCH (n:Phase) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("Phase"):
             props = dict(rec["n"])
             uri = self.mint("phase", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
@@ -252,7 +260,7 @@ class RdfExporter:
                 "phaseType": PRO.phaseType,
             })
 
-        for rec in self.rows("MATCH (n:Speech) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("Speech"):
             props = dict(rec["n"])
             uri = self.mint("speech", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
@@ -260,7 +268,7 @@ class RdfExporter:
             if self.include_text and props.get("text"):
                 self.g.add((uri, PRO.text, Literal(props["text"], lang="it")))
 
-        for rec in self.rows("MATCH (n:Vote) RETURN elementId(n) AS eid, n"):
+        for rec in self.node_rows("Vote"):
             props = dict(rec["n"])
             uri = self.mint("vote", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
@@ -293,7 +301,7 @@ class RdfExporter:
                     Literal("Camera dei deputati (source data); ParliamentRAG (derived graph)", lang="en")))
 
         meta = None
-        for rec in self.rows("MATCH (n:SchemaMeta) RETURN n"):
+        for rec in self.node_rows("SchemaMeta"):
             meta = dict(rec["n"])
         if not meta:
             return

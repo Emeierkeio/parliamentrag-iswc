@@ -27,12 +27,14 @@ What this script does
 4. Sets the publication_date of the draft to today.
 5. Leaves the draft UNPUBLISHED and prints its URL: you review it in the
    browser and press Publish yourself — a published DOI is permanent.
+   With --publish it publishes the draft right away instead (used by the
+   unattended `make zenodo-release`, which sanity-checks the dumps first).
 
 Auth: ZENODO_TOKEN in the repo-root .env (personal token with scopes
 deposit:write + deposit:actions, from zenodo.org/account/settings/applications).
 
 Usage:
-    python build/zenodo_update.py [--dry-run] [--skip-votes]
+    python build/zenodo_update.py [--dry-run] [--skip-votes] [--publish]
 """
 import argparse
 import os
@@ -61,6 +63,8 @@ def main():
                         help="show what would happen without touching Zenodo")
     parser.add_argument("--skip-votes", action="store_true",
                         help="do not upload parliamentrag_votes.nt (3.8 GB)")
+    parser.add_argument("--publish", action="store_true",
+                        help="publish the draft after upload (permanent DOI)")
     args = parser.parse_args()
 
     load_dotenv(REPO_ROOT / ".env")
@@ -134,8 +138,14 @@ def main():
     #    so it tracks the Zenodo publish and not make update-data.
     _stamp_data_page(today)
 
-    # 6. Never publish programmatically: a published DOI cannot be undone.
-    print(f"\nDraft ready — review and press Publish here:\n  {draft['links']['html']}")
+    # 6. Publish only on explicit request: a published DOI cannot be undone.
+    if not args.publish:
+        print(f"\nDraft ready — review and press Publish here:\n  {draft['links']['html']}")
+        return
+    r = requests.post(f"{draft['links']['self']}/actions/publish", params=auth)
+    r.raise_for_status()
+    published = r.json()
+    print(f"\nPublished: DOI {published['doi']}\n  https://doi.org/{published['doi']}")
 
 
 def _stamp_data_page(iso_date: str) -> None:
