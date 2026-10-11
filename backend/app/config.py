@@ -295,10 +295,13 @@ class ConfigLoader:
         if not group_name:
             return "opposizione"
 
+        from .models.evidence import normalize_party_name
+
         def normalize(name: str) -> str:
             return name.upper().replace(" - ", "-").replace("- ", "-").replace(" -", "-")
 
-        group_norm = normalize(group_name)
+        # Senate group names map onto the same party as the Camera ones
+        group_norm = normalize(normalize_party_name(group_name))
         coalitions = self.coalitions
         for coalition, groups in coalitions.items():
             for g in groups:
@@ -307,11 +310,14 @@ class ConfigLoader:
         return "opposizione"
 
     def get_all_parties(self) -> List[str]:
-        """Get list of all parliamentary groups."""
-        coalitions = self.coalitions
+        """Groups expected in an answer: every coalition member, except groups
+        of a chamber whose data is not loaded (see chambers in default.yaml)."""
+        cfg = self.load_config()
+        chambers = set(cfg.get("chambers", ["camera"]))
+        only_in = cfg.get("chamber_only_groups", {}) or {}
         all_parties = []
-        for groups in coalitions.values():
-            all_parties.extend(groups)
+        for groups in self.coalitions.values():
+            all_parties.extend(g for g in groups if only_in.get(g, "camera") in chambers)
         return all_parties
 
 

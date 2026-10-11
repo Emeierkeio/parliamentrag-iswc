@@ -227,12 +227,22 @@ coalitions:
     - "Alleanza Verdi e Sinistra"
     - "Azione - Popolari Europeisti Riformatori - Renew Europe"
     - "Italia Viva - Casa Riformista"
+    # Senate only. On the confidence votes of the XIX its senators voted 132
+    # times against, 66 abstained (mostly SVP) and 9 in favour (staging, 2026-10-11).
+    - "Per le Autonomie (SVP-PATT, Campobase)"
 
   # The Gruppo Misto cannot be assigned to either side: it contains political
   # components of opposing orientation (+Europa vs Futuro Nazionale Vannacci).
   # It gets its own section in the summary and is excluded from the binary balance.
   misto:
     - "Misto"
+
+# Chambers whose sittings the graph holds. A group that exists in one chamber
+# only is expected in answers ("tutti i gruppi") only when that chamber is
+# loaded; add "senato" when the Senate reaches production.
+chambers: ["camera"]
+chamber_only_groups:
+  "Per le Autonomie (SVP-PATT, Campobase)": "senato"
 
 # Citation extraction settings
 citation:

@@ -53,7 +53,10 @@ class CoalitionLogic:
         def normalize(name: str) -> str:
             return name.upper().replace(" - ", "-").replace("- ", "-").replace(" -", "-")
 
-        group_norm = normalize(group_name)
+        from ...models.evidence import normalize_party_name
+
+        # Senate group names map onto the same party as the Camera ones
+        group_norm = normalize(normalize_party_name(group_name))
 
         for g in coalitions.get("maggioranza", []):
             if normalize(g) == group_norm:

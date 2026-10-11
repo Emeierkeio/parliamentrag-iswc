@@ -34,7 +34,22 @@ PARTY_DISPLAY_NAMES: dict[str, str] = {
     "NOI MODERATI (NOI CON L'ITALIA, CORAGGIO ITALIA, UDC, ITALIA AL CENTRO)-MAIE": "Noi Moderati (Noi con l'Italia, Coraggio Italia, UDC e Italia al Centro) - MAIE - Centro Popolare",
     "MISTO": "Misto",
     "GOVERNO": "Governo",
+    # Senate groups (dati.senato.it names, current denomination). Same party as
+    # the Camera group, so "tutti i gruppi" counts it once across chambers;
+    # FdI, PD, M5S, FI-PPE already match once case is ignored.
+    "LEGA SALVINI PREMIER - PARTITO SARDO D'AZIONE": "Lega - Salvini Premier",
+    "ITALIA VIVA - CASA RIFORMISTA": "Italia Viva - Casa Riformista",
+    "CIVICI D'ITALIA-UDC-NOI MODERATI (NOI CON L'ITALIA, CORAGGIO ITALIA, ITALIA AL CENTRO)-MAIE-CENTRO POPOLARE": "Noi Moderati (Noi con l'Italia, Coraggio Italia, UDC e Italia al Centro) - MAIE - Centro Popolare",
+    "PER LE AUTONOMIE (SVP-PATT, CAMPOBASE)": "Per le Autonomie (SVP-PATT, Campobase)",
 }
+
+
+def _party_key(name: str) -> str:
+    return " ".join(name.upper().replace(" - ", "-").replace("- ", "-").replace(" -", "-").split())
+
+
+_PARTY_BY_KEY: dict[str, str] = {_party_key(k): v for k, v in PARTY_DISPLAY_NAMES.items()}
+_PARTY_BY_KEY.update({_party_key(v): v for v in PARTY_DISPLAY_NAMES.values()})
 
 
 def normalize_speaker_name(first_name: str, last_name: str) -> str:
@@ -44,8 +59,11 @@ def normalize_speaker_name(first_name: str, last_name: str) -> str:
 
 
 def normalize_party_name(raw_party: str) -> str:
-    """Map DB party name (UPPERCASE) to readable display name."""
-    return PARTY_DISPLAY_NAMES.get(raw_party, raw_party.title() if raw_party else "Misto")
+    """Map a DB group name (Camera UPPERCASE, Senate mixed case) or a display
+    name to the display name of its party."""
+    if not raw_party:
+        return "Misto"
+    return _PARTY_BY_KEY.get(_party_key(raw_party), raw_party.title())
 
 
 class IdeologyScore(BaseModel):
