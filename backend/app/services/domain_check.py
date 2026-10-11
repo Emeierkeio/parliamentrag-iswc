@@ -24,7 +24,7 @@ _LANGS = {
 }
 
 _PROMPT = """Sei il filtro d'ingresso di un sistema di ricerca sui dibattiti \
-della Camera dei Deputati italiana (XIX legislatura, dal 2022 a oggi).
+{assembly} (XIX legislatura, dal 2022 a oggi).
 Classifica la query in uno di TRE stati: "in_domain", "out_of_domain", \
 "ambiguous".
 
@@ -40,14 +40,14 @@ questioni internazionali (guerre, trattati, Unione europea), e QUALSIASI \
 settore — sport, cinema, cibo, turismo, spettacolo — se la domanda riguarda \
 leggi, finanziamenti, regolamentazione o posizioni politiche su quel settore.
 Criterio generale: se il tema può essere oggetto di una legge, di un \
-indennizzo o di un dibattito alla Camera (es. vittime di errori giudiziari, \
+indennizzo o di un dibattito {at_assembly} (es. vittime di errori giudiziari, \
 risarcimenti, tutele), è in dominio.
 ambiguous: la query è troppo generica o polisemica per decidere (es. una \
 sola parola con più letture possibili). NON forzarla in_domain: dichiarala \
 ambigua e proponi letture parlamentari plausibili nelle suggestions.
 
 Se out_of_domain o ambiguous, proponi SEMPRE 2-3 temi vicini alla query che \
-la Camera ha plausibilmente discusso, scritti in {lang}. I temi proposti \
+{assembly_subject} ha plausibilmente discusso, scritti in {lang}. I temi proposti \
 devono essere REALI: correggi la premessa sbagliata della query invece di \
 ripeterla (per "conflitto in Belgio", che non esiste, proponi temi su difesa \
 europea o missioni internazionali, NON temi che contengono "Belgio").
@@ -57,6 +57,18 @@ Rispondi SOLO con JSON: \
 <USER_QUERY>
 {query}
 </USER_QUERY>"""
+
+
+def _assembly_words() -> dict:
+    """Prompt wording for the chambers the graph holds; with the Camera alone
+    the prompt is the one the domain check was tuned on."""
+    from .retrieval.scope import loaded_chambers
+
+    if "senato" in loaded_chambers():
+        return {"assembly": "del Parlamento italiano (Camera dei Deputati e Senato)",
+                "at_assembly": "in Parlamento", "assembly_subject": "il Parlamento"}
+    return {"assembly": "della Camera dei Deputati italiana",
+            "at_assembly": "alla Camera", "assembly_subject": "la Camera"}
 
 
 async def check_domain(query: str, locale: str = "it") -> dict:
@@ -75,7 +87,7 @@ async def check_domain(query: str, locale: str = "it") -> dict:
             model="gpt-5.6-luna",
             messages=[{
                 "role": "user",
-                "content": _PROMPT.format(lang=lang, query=query),
+                "content": _PROMPT.format(lang=lang, query=query, **_assembly_words()),
             }],
             max_completion_tokens=150,
             response_format={"type": "json_object"},
