@@ -134,8 +134,9 @@ class AuthorityScorer:
             score = component.compute(speaker_data, query_embedding, reference_date)
             component_scores[name] = score
 
+        weights = self._weights_for(speaker_data)
         total_score = sum(
-            self.weights[name] * score
+            weights[name] * score
             for name, score in component_scores.items()
         )
         total_score = max(0.0, min(1.0, total_score))
@@ -252,7 +253,7 @@ class AuthorityScorer:
 
             total_score = max(
                 0.0,
-                min(1.0, sum(self.weights[n] * s for n, s in component_scores.items())),
+                min(1.0, sum(self._weights_for(speaker_data)[n] * s for n, s in component_scores.items())),
             )
 
             name_str = (
@@ -305,6 +306,17 @@ class AuthorityScorer:
         )
 
         return results
+
+    def _weights_for(self, speaker_data: Dict[str, Any]) -> Dict[str, float]:
+        """Component weights for one speaker: when the education is not
+        published at all (senators), its weight goes to the other components
+        in proportion, so the missing source does not count as a zero."""
+        if not speaker_data.get("education_unpublished") or "education" not in self.weights:
+            return self.weights
+        rest = {k: w for k, w in self.weights.items() if k != "education"}
+        total = sum(rest.values()) or 1.0
+        scale = sum(self.weights.values()) / total
+        return {**{k: w * scale for k, w in rest.items()}, "education": 0.0}
 
     def _fetch_speaker_data(
         self,
@@ -417,6 +429,10 @@ class AuthorityScorer:
                d.last_name AS last_name,
                d.profession_embedding AS profession_embedding,
                d.education_embedding AS education_embedding,
+               // dati.senato.it publishes no education: for senators it is
+               // missing at the source, not a missing qualification
+               (d.education IS NULL AND d.education_embedding IS NULL
+                AND any(m IN coalesce(d.mandates, []) WHERE m STARTS WITH 'senato_')) AS education_unpublished,
                group_memberships,
                committee_memberships,
                institutional_roles,

@@ -1201,8 +1201,9 @@ class DatabaseBuilder:
                 "firstName": r.get("nome"),
                 "lastName": r.get("cognome"),
                 "gender": r.get("gender"),
+                # dati.senato.it publishes the profession but no education
                 "education": None,
-                "profession": None,
+                "profession": r.get("professione") if pd.notna(r.get("professione")) else None,
                 "photo": r.get("foto"),
                 # The frontend links deputy_card as is: for senators it is the
                 # senato.it permalink of the profile, not the bare id.
@@ -1291,7 +1292,44 @@ class DatabaseBuilder:
             print(f"  Skipping senator committees — {csv_path} not found")
             return
         resolve, _ = self._senator_id_resolver(data_path)
-        self._load_committee_rows(pd.read_csv(csv_path), "senatore", "senato", legislature, resolve)
+        com_df = pd.read_csv(csv_path)
+        self._load_committee_rows(com_df, "senatore", "senato", legislature, resolve)
+        if "carica" in com_df.columns:
+            self._load_senate_committee_offices(com_df, legislature, resolve)
+
+    # Senate osr:carica -> the officerRole values the authority scorer reads
+    # (the Camera ones, from sparql_ingester).
+    SENATE_OFFICES = {"Presidente": "PRESIDENTE", "Vicepresidente": "VICEPRESIDENTE",
+                      "Segretario": "SEGRETARIO"}
+
+    def _load_senate_committee_offices(self, com_df, legislature: int, resolve) -> None:
+        """Committee offices on the MEMBER_OF_COMMITTEE edge of the same
+        adhesion: the Senate publishes one adhesion per office held."""
+        names = {clean_generic_label(x) for x in com_df["organoLabel"]} - {None}
+        bicameral = self._bicameral_committee_names(names, "senato")
+        rows = []
+        for _, r in com_df.iterrows():
+            office = self.SENATE_OFFICES.get(str(r.get("carica") or "").strip())
+            name = clean_generic_label(r.get("organoLabel"))
+            if not office or not name:
+                continue
+            rows.append({
+                "nodeId": resolve(r["senatore"]),
+                "name": bicameral.get(name, name),
+                "start": parse_date_to_neo4j(r.get("membroStart")),
+                "end": parse_date_to_neo4j(r.get("membroEnd")),
+                "office": office,
+            })
+        with self._driver.session() as neo_session:
+            n = neo_session.run("""
+                UNWIND $rows AS row
+                MATCH (p:Person {id: row.nodeId})-[m:MEMBER_OF_COMMITTEE {start_date: row.start}]->(c:Committee {name: row.name})
+                WHERE m.chamber = 'senato' AND m.legislature = $leg
+                SET m.officerRole = row.office, m.officerRoleStart = row.start,
+                    m.officerRoleEnd = row.end
+                RETURN count(m) AS n
+            """, rows=rows, leg=legislature).single()["n"]
+        print(f"Senate committee offices: {n} of {len(rows)} set.")
 
     def load_government_members(self) -> None:
         """Create GovernmentMember nodes and link them to ParliamentaryGroups.

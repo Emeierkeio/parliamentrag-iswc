@@ -22,9 +22,20 @@ logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 logger = logging.getLogger("PreCalculateEmbeddings")
 
 def main():
+    # Arguments win over the environment: without them the .env loaded above
+    # points at the production tunnel, and --neo4j-uri used to be ignored
+    # silently (2026-10-11: a run meant for staging wrote to production).
+    import argparse
+    ap = argparse.ArgumentParser(description="Fill missing embeddings")
+    ap.add_argument("--neo4j-uri")
+    ap.add_argument("--neo4j-user")
+    ap.add_argument("--neo4j-password")
+    args, _ = ap.parse_known_args()
+
     logger.info("=== INIZIO PRE-CALCOLO EMBEDDINGS UNIFICATO ===")
 
-    neo4j = get_neo4j_client()
+    neo4j = get_neo4j_client(args.neo4j_uri, args.neo4j_user, args.neo4j_password)
+    logger.info("Neo4j: %s", args.neo4j_uri or os.environ.get("NEO4J_URI"))
     embedder = EmbeddingService()
 
     # ---------------------------------------------------------

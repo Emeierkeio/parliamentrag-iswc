@@ -94,7 +94,7 @@ def download_senators(legislature: int = 19) -> list[dict] | None:
     """Download senator biographical data for XIX legislature."""
     print("Downloading senators...")
     query = """
-    SELECT DISTINCT ?senatore ?label ?gender ?foto ?mandatoStart ?mandatoEnd
+    SELECT DISTINCT ?senatore ?label ?gender ?foto ?mandatoStart ?mandatoEnd ?professione
     WHERE {
       ?senatore a <http://xmlns.com/foaf/0.1/Person> .
       ?senatore <http://dati.senato.it/osr/mandato> ?mandato .
@@ -104,6 +104,8 @@ def download_senators(legislature: int = 19) -> list[dict] | None:
 
       OPTIONAL { ?senatore <http://xmlns.com/foaf/0.1/gender> ?gender }
       OPTIONAL { ?senatore <http://xmlns.com/foaf/0.1/depiction> ?foto }
+      OPTIONAL { ?senatore <http://dati.senato.it/osr/professione> ?prof .
+                 ?prof <http://www.w3.org/2000/01/rdf-schema#label> ?professione }
       OPTIONAL { ?mandato <http://dati.senato.it/osr/inizio> ?mandatoStart }
       OPTIONAL { ?mandato <http://dati.senato.it/osr/fine> ?mandatoEnd }
     }
@@ -260,13 +262,21 @@ def _add_current_group_names(rows: list[dict], legislature: int) -> None:
 
 
 def download_senator_committees(legislature: int = 19) -> list[dict] | None:
-    """Download committee memberships for XIX legislature senators.
+    """Download committee memberships for the senators of a legislature.
 
-    Uses osr:titolo (single per commissione) to avoid titoloBreve duplicates.
+    A committee has one denomination per period, each with its own title
+    (the 2022 reform renumbered them: "7ª" became "6ª"), so title and subject
+    come from the denomination in force when the membership started; reading
+    osr:titolo of the committee put each membership under every historical
+    title (470 phantom memberships in the XIX, 2026-10-11). The subject is
+    appended to bare titles ("1ª Commissione permanente (Affari
+    Costituzionali)"), as in the Camera names, because the authority scorer
+    matches the committee name against the query.
     """
     print("Downloading senator committee memberships...")
     query = """
-    SELECT DISTINCT ?senatore ?organoLabel ?membroStart ?membroEnd
+    SELECT DISTINCT ?senatore ?commissione ?membroStart ?membroEnd ?carica
+                    ?denTitolo ?materia ?comTitolo
     WHERE {
       ?senatore a <http://xmlns.com/foaf/0.1/Person> .
       ?senatore <http://dati.senato.it/osr/mandato> ?mandato .
@@ -276,21 +286,50 @@ def download_senator_committees(legislature: int = 19) -> list[dict] | None:
       ?senatore <http://dati.senato.it/osr/afferisce> ?afferenza .
       ?afferenza <http://dati.senato.it/osr/legislatura> {legislature} .
       ?afferenza <http://dati.senato.it/osr/commissione> ?commissione .
-      ?commissione <http://dati.senato.it/osr/titolo> ?organoLabel .
       OPTIONAL { ?afferenza <http://dati.senato.it/osr/inizio> ?membroStart }
       OPTIONAL { ?afferenza <http://dati.senato.it/osr/fine> ?membroEnd }
+      OPTIONAL { ?afferenza <http://dati.senato.it/osr/carica> ?carica }
+      OPTIONAL {
+        ?commissione <http://dati.senato.it/osr/denominazione> ?den .
+        ?den <http://dati.senato.it/osr/titolo> ?denTitolo ;
+             <http://dati.senato.it/osr/inizio> ?denInizio .
+        OPTIONAL { ?den <http://dati.senato.it/osr/titoloBreve> ?materia }
+        OPTIONAL { ?den <http://dati.senato.it/osr/fine> ?denFine }
+        FILTER(?denInizio <= ?membroStart && (!bound(?denFine) || ?denFine >= ?membroStart))
+      }
+      OPTIONAL { ?commissione <http://dati.senato.it/osr/titolo> ?comTitolo }
     }
     ORDER BY ?senatore ?membroStart
     """
     try:
         results = sparql_query(query.replace("{legislature}", str(legislature)))
         print(f"  Got {len(results)} rows")
+        by_membership: dict[tuple, dict] = {}
         for r in results:
-            if r.get("membroStart"):
-                r["membroStart"] = _iso_to_yyyymmdd(r["membroStart"])
-            if r.get("membroEnd"):
-                r["membroEnd"] = _iso_to_yyyymmdd(r["membroEnd"])
-        return results
+            key = (r["senatore"], r["commissione"], r.get("membroStart", ""))
+            title = (r.get("denTitolo") or "").strip()
+            materia = (r.get("materia") or "").strip()
+            # Without a dated denomination, fall back to one committee title
+            label = title or (r.get("comTitolo") or "").strip()
+            if title and materia and materia.lower() not in title.lower():
+                label = f"{title} ({materia})"
+            prev = by_membership.get(key)
+            # Prefer a row resolved through the dated denomination
+            if prev is None or (title and not prev["_dated"]):
+                by_membership[key] = {
+                    "senatore": r["senatore"],
+                    "organoLabel": label,
+                    "membroStart": _iso_to_yyyymmdd(r["membroStart"]) if r.get("membroStart") else "",
+                    "membroEnd": _iso_to_yyyymmdd(r["membroEnd"]) if r.get("membroEnd") else "",
+                    "carica": r.get("carica", ""),
+                    "_dated": bool(title),
+                }
+        out = []
+        for row in by_membership.values():
+            row.pop("_dated")
+            out.append(row)
+        print(f"  {len(out)} memberships")
+        return out
     except Exception as e:
         print(f"  SPARQL query failed: {e}")
         return None
@@ -316,7 +355,7 @@ def main(legislature: int = 19) -> None:
             os.path.join(DATA_DIR, f"{csv_prefix(legislature)}.csv"),
             senators,
             ["senatore", "nome", "cognome", "gender", "foto",
-             "schedaCamera", "mandatoStart", "mandatoEnd"],
+             "schedaCamera", "mandatoStart", "mandatoEnd", "professione"],
         )
     else:
         print("FAILED: senatori_xix.csv")
@@ -343,7 +382,7 @@ def main(legislature: int = 19) -> None:
         write_csv(
             os.path.join(DATA_DIR, f"{csv_prefix(legislature)}_commissioni.csv"),
             committees,
-            ["senatore", "organoLabel", "membroStart", "membroEnd"],
+            ["senatore", "organoLabel", "membroStart", "membroEnd", "carica"],
         )
     else:
         print("FAILED: senatori_xix_commissioni.csv")
