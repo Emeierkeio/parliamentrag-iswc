@@ -832,11 +832,19 @@ if __name__ == "__main__":
         help="Ingest only individual senator IndividualVote nodes per sitting (mutually exclusive with --aggregate-only)",
     )
     parser.add_argument(
+        "--delay",
+        type=float,
+        default=_POLITENESS_DELAY,
+        help="Seconds between SPARQL requests (1.5 got the IP blocked after "
+             "~14 minutes on 2026-10-11)",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Aggregate mode: re-fetch sittings that already have votes",
     )
     args = parser.parse_args()
+    _POLITENESS_DELAY = args.delay
 
     from neo4j import GraphDatabase  # type: ignore[import]
 
