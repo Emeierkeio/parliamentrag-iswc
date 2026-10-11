@@ -158,9 +158,12 @@ _POLITENESS_DELAY = 1.5
 # (40 URIs got a 403, 2026-10-11).
 INDIVIDUAL_CHUNK = 45
 # Sittings packed into one individual-vote request (URL size, as above).
-INDIVIDUAL_SITTINGS = 15
+INDIVIDUAL_SITTINGS = 7
 # Sittings per aggregate request: same URL size limit, ~150 votazioni each at most.
-SITTING_CHUNK = 20
+SITTING_CHUNK = 8
+# The WAF answers 403 to longer GET URLs: 1,792 chars passed and 2,244 did not
+# (2026-10-11). Each 403 also counts towards the IP block.
+MAX_URL_CHARS = 1900
 # Recent sittings are re-checked: the endpoint publishes votes with a delay.
 RECHECK_DAYS = 30
 

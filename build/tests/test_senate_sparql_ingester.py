@@ -371,7 +371,8 @@ class TestPackRanges:
     def test_small_sittings_packed_up_to_limit(self):
         from senate_sparql_ingester import _pack_ranges, INDIVIDUAL_SITTINGS
         chunks = _pack_ranges([self._p(n, 1) for n in range(1, 31)])
-        assert [len(c) for c in chunks] == [INDIVIDUAL_SITTINGS, INDIVIDUAL_SITTINGS]
+        assert [len(c) for c in chunks[:-1]] == [INDIVIDUAL_SITTINGS] * (len(chunks) - 1)
+        assert sum(len(c) for c in chunks) == 30
 
 
 class TestAggregateIngest:
@@ -394,10 +395,12 @@ class TestAggregateIngest:
         ing._mark_sittings_checked.assert_called_once_with(19, [26, 27, 28, 29, 30])
 
     def test_sittings_batched(self):
+        import math
+        from senate_sparql_ingester import SITTING_CHUNK
         ing = self._ingester(range(1, 46), checked=())
         ing._get_senate_votes_for_sedute = MagicMock(return_value=[])
         ing.ingest_aggregate_votes(19)
-        assert ing._get_senate_votes_for_sedute.call_count == 3
+        assert ing._get_senate_votes_for_sedute.call_count == math.ceil(45 / SITTING_CHUNK)
 
     def test_failed_chunk_not_marked_checked(self):
         from senate_sparql_ingester import SenateRequestFailed
@@ -420,3 +423,25 @@ class TestAggregateIngest:
         row = ing._write_senate_votes.call_args.args[0][0]
         assert row["id"] == "senato_leg19_sed300_v002"
         assert row["outcome"] == "approved" and row["finalVote"] is True
+
+
+class TestUrlSize:
+    """Worst-case requests stay under the WAF's GET URL limit."""
+
+    def _url_len(self, query):
+        import urllib.parse
+        return len(urllib.parse.urlencode({"query": query, "format": "application/sparql-results+json"}))
+
+    def test_requests_fit_the_waf_limit(self):
+        import senate_sparql_ingester as m
+        captured = []
+        ing = SenateVoteIngester(None)
+        with patch.object(m, "_senato_sparql_get", side_effect=lambda q, **k: captured.append(q) or []):
+            ing._get_senate_votes_for_sedute(
+                [f"http://dati.senato.it/sedutaassemblea/{24000 + i}" for i in range(m.SITTING_CHUNK)]
+            )
+            ing._get_senate_senator_links_bulk(
+                [(f"http://dati.senato.it/sedutaassemblea/{24000 + i}", 100, 145)
+                 for i in range(m.INDIVIDUAL_SITTINGS)]
+            )
+        assert all(self._url_len(q) <= m.MAX_URL_CHARS for q in captured), [self._url_len(q) for q in captured]
