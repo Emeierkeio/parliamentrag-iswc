@@ -9,7 +9,8 @@
 #
 # dati.senato.it blocca l'IP dopo circa 400 richieste, a qualunque ritmo
 # (11/10/2026): a regime un giro ne fa poche decine (sedute nuove + ultimi
-# 30 giorni, ~10 per i DDL). Exit 3 = il Senato ha cominciato a rifiutare le
+# 30 giorni, ~10 per i DDL). Gli atti di controllo arrivano da aic.camera.it
+# (27 pagine), non dal Senato. Exit 3 = il Senato ha cominciato a rifiutare le
 # richieste: il resto si recupera al giro dopo.
 set -u -o pipefail
 
@@ -48,6 +49,10 @@ step "resoconti nuovi, senatori, gruppi, commissioni" \
 	--neo4j-uri "$URI" --neo4j-user "$USER_VAL" --neo4j-password "$PASS_VAL"
 step "voti aggregati (sedute nuove e ultimi 30 giorni)" votes --aggregate-only
 step "voti individuali (votazioni che non li hanno ancora)" votes --individual-only
+step "interrogazioni, mozioni, ordini del giorno (aic.camera.it)" \
+	"$PY" build/download_senate_aic.py --legislature 19
+step "atti di controllo e indirizzo → grafo" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/ingest_senate_aic.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
 step "disegni di legge e firmatari" "$PY" build/download_senate_ddl.py --legislature 19
 step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/link_senate_acts.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19

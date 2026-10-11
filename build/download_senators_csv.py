@@ -94,7 +94,7 @@ def download_senators(legislature: int = 19) -> list[dict] | None:
     """Download senator biographical data for XIX legislature."""
     print("Downloading senators...")
     query = """
-    SELECT DISTINCT ?senatore ?label ?gender ?foto ?mandatoStart ?mandatoEnd ?professione
+    SELECT DISTINCT ?senatore ?label ?firstName ?lastName ?gender ?foto ?mandatoStart ?mandatoEnd ?professione
     WHERE {
       ?senatore a <http://xmlns.com/foaf/0.1/Person> .
       ?senatore <http://dati.senato.it/osr/mandato> ?mandato .
@@ -103,6 +103,8 @@ def download_senators(legislature: int = 19) -> list[dict] | None:
       ?senatore <http://www.w3.org/2000/01/rdf-schema#label> ?label .
 
       OPTIONAL { ?senatore <http://xmlns.com/foaf/0.1/gender> ?gender }
+      OPTIONAL { ?senatore <http://xmlns.com/foaf/0.1/firstName> ?firstName }
+      OPTIONAL { ?senatore <http://xmlns.com/foaf/0.1/lastName> ?lastName }
       OPTIONAL { ?senatore <http://xmlns.com/foaf/0.1/depiction> ?foto }
       OPTIONAL { ?senatore <http://dati.senato.it/osr/professione> ?prof .
                  ?prof <http://www.w3.org/2000/01/rdf-schema#label> ?professione }
@@ -135,7 +137,11 @@ def download_senators(legislature: int = 19) -> list[dict] | None:
             r["schedaCamera"] = uri.rsplit("/", 1)[-1] if "/senatore/" in uri else ""
             # Split full name into nome/cognome
             label = r.get("label", "")
-            nome, cognome = _split_name(label)
+            # foaf names first: splitting the label at the last space turned
+            # "Peppe De Cristofaro" into ("Peppe De", "Cristofaro")
+            nome, cognome = (r.get("firstName"), r.get("lastName"))
+            if not (nome and cognome):
+                nome, cognome = _split_name(label)
             r["nome"] = nome
             r["cognome"] = cognome
             # Convert ISO dates to YYYYMMDD for csv_loader compatibility
