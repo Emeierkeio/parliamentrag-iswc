@@ -114,12 +114,12 @@ class TestOutcomeMapping:
     def test_non_ha_votato_maps_to_absent(self):
         assert OUTCOME_MAP["Non ha votato"] == "absent"
 
-    def test_ha_votato_falls_through_to_absent(self):
-        # Votazioni segrete: l'espressione non è pubblica, il fallback è "absent".
-        assert OUTCOME_MAP.get("Ha votato", "absent") == "absent"
+    def test_ha_votato_is_secret_not_absent(self):
+        # Secret ballots publish participation only: the deputy did vote
+        assert OUTCOME_MAP["Ha votato"] == "secret"
 
-    def test_all_four_outcomes_present(self):
-        assert len(OUTCOME_MAP) == 4
+    def test_all_five_outcomes_present(self):
+        assert set(OUTCOME_MAP.values()) == {"favor", "against", "abstain", "absent", "secret"}
 
 
 # ---------------------------------------------------------------------------
