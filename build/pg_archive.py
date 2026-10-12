@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""
+Text archive on Postgres + pgvector: chunks of the speeches with their
+embedding and the filter columns copied on the row, so that a filtered vector
+search is one query (PLAN_data_platform.md, section 9.3; decision of
+2026-10-12: the Senate XIX text goes here instead of Neo4j).
+
+  python build/pg_archive.py schema --pg postgresql://...
+  python build/pg_archive.py load --pg postgresql://... --neo4j-uri bolt://localhost:7692 \
+      --assembly senato --term 19
+
+load copies the chunks of one assembly and term from Neo4j (text, embedding,
+speech, sitting, speaker and the group the speaker belonged to on that day).
+Idempotent: rows are upserted by chunk id.
+"""
+
+import argparse
+import logging
+import os
+import sys
+import time
+
+import psycopg
+
+logger = logging.getLogger(__name__)
+
+SCHEMA = """
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS chunk (
+    id            text PRIMARY KEY,
+    assembly      text NOT NULL,          -- 'camera' | 'senato' | ...
+    term          integer NOT NULL,       -- legislature
+    session_id    text NOT NULL,
+    session_date  date NOT NULL,
+    debate_id     text,
+    speech_id     text NOT NULL,
+    chunk_index   integer,
+    speaker_id    text,
+    group_name    text,                   -- group of the speaker on session_date
+    in_government boolean NOT NULL DEFAULT false,
+    text          text NOT NULL,
+    embedding     halfvec(1536) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS chunk_scope_date ON chunk (assembly, term, session_date);
+CREATE INDEX IF NOT EXISTS chunk_speech ON chunk (speech_id);
+CREATE INDEX IF NOT EXISTS chunk_speaker ON chunk (speaker_id);
+"""
+
+HNSW = """
+CREATE INDEX IF NOT EXISTS chunk_embedding_hnsw
+    ON chunk USING hnsw (embedding halfvec_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+"""
+
+EXPORT = """
+MATCH (s:Session {chamber: $assembly, legislature: $term})
+WHERE s.number IN $numbers
+MATCH (s)-[:HAS_DEBATE]->(d:Debate)-[:HAS_PHASE]->(:Phase)-[:CONTAINS_SPEECH]->(sp:Speech)
+      -[:HAS_CHUNK]->(c:Chunk)
+WHERE c.embedding IS NOT NULL
+OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(p)
+OPTIONAL MATCH (p)-[m:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
+WHERE m.start_date <= s.date AND (m.end_date IS NULL OR m.end_date >= s.date)
+  AND coalesce(m.chamber, 'camera') = $assembly
+WITH s, d, sp, c, p, head(collect(g.name)) AS group_name
+RETURN c.id AS id, s.id AS session_id, s.date AS session_date, d.id AS debate_id,
+       sp.id AS speech_id, c.index AS chunk_index, p.id AS speaker_id, group_name,
+       coalesce(sp.speaker_in_government, p:GovernmentMember AND NOT p:Deputy, false) AS in_government,
+       c.text AS text, c.embedding AS embedding
+"""
+
+
+def cmd_schema(pg: str) -> None:
+    with psycopg.connect(pg, autocommit=True) as conn:
+        conn.execute(SCHEMA)
+    logger.info("schema ready")
+
+
+def _vector_text(values) -> str:
+    return "[" + ",".join(f"{v:.6g}" for v in values) + "]"
+
+
+def cmd_load(pg: str, neo4j_uri: str, user: str, password: str,
+             assembly: str, term: int, sessions_per_batch: int) -> None:
+    from neo4j import GraphDatabase
+
+    driver = GraphDatabase.driver(neo4j_uri, auth=(user, password))
+    with driver.session() as s:
+        numbers = sorted(r["n"] for r in s.run(
+            "MATCH (x:Session {chamber: $a, legislature: $t}) RETURN x.number AS n",
+            a=assembly, t=term))
+    logger.info("%s %d: %d sittings", assembly, term, len(numbers))
+
+    total = 0
+    start = time.time()
+    with psycopg.connect(pg) as conn:
+        for i in range(0, len(numbers), sessions_per_batch):
+            batch = numbers[i:i + sessions_per_batch]
+            with driver.session() as s:
+                rows = s.run(EXPORT, assembly=assembly, term=term, numbers=batch).data()
+            with conn.cursor() as cur:
+                cur.execute("CREATE TEMP TABLE IF NOT EXISTS chunk_in (LIKE chunk) ON COMMIT DELETE ROWS")
+                with cur.copy(
+                    "COPY chunk_in (id, assembly, term, session_id, session_date, debate_id, "
+                    "speech_id, chunk_index, speaker_id, group_name, in_government, text, embedding) "
+                    "FROM STDIN"
+                ) as copy:
+                    for r in rows:
+                        copy.write_row((
+                            r["id"], assembly, term, r["session_id"],
+                            r["session_date"].to_native(), r["debate_id"], r["speech_id"],
+                            r["chunk_index"], r["speaker_id"], r["group_name"],
+                            bool(r["in_government"]), r["text"], _vector_text(r["embedding"]),
+                        ))
+                cur.execute("""
+                    INSERT INTO chunk SELECT * FROM chunk_in
+                    ON CONFLICT (id) DO UPDATE SET
+                        session_date = EXCLUDED.session_date, speaker_id = EXCLUDED.speaker_id,
+                        group_name = EXCLUDED.group_name, in_government = EXCLUDED.in_government,
+                        text = EXCLUDED.text, embedding = EXCLUDED.embedding
+                """)
+            conn.commit()
+            total += len(rows)
+            logger.info("  sittings %d-%d: %d chunks (%d total, %.0fs)",
+                        batch[0], batch[-1], len(rows), total, time.time() - start)
+        logger.info("building HNSW index...")
+        t = time.time()
+        conn.execute(HNSW)
+        conn.commit()
+        logger.info("HNSW index built in %.0fs", time.time() - t)
+    driver.close()
+
+
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
+                        datefmt="%H:%M:%S")
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    ap.add_argument("command", choices=["schema", "load"])
+    ap.add_argument("--pg", required=True, help="Postgres connection string")
+    ap.add_argument("--neo4j-uri")
+    ap.add_argument("--neo4j-user", default="neo4j")
+    ap.add_argument("--neo4j-password", default=os.environ.get("NEO4J_PASSWORD"))
+    ap.add_argument("--assembly", default="senato")
+    ap.add_argument("--term", type=int, default=19)
+    ap.add_argument("--sessions-per-batch", type=int, default=10)
+    args = ap.parse_args()
+    if args.command == "schema":
+        cmd_schema(args.pg)
+    else:
+        if not args.neo4j_uri:
+            ap.error("load needs --neo4j-uri")
+        cmd_schema(args.pg)
+        cmd_load(args.pg, args.neo4j_uri, args.neo4j_user, args.neo4j_password,
+                 args.assembly, args.term, args.sessions_per_batch)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
