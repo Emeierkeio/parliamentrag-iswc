@@ -102,6 +102,40 @@ class TextArchive:
         hits.sort(key=lambda h: h["similarity"], reverse=True)
         return [h for h in hits if h["similarity"] >= threshold]
 
+    def text_search(
+        self,
+        q: str,
+        pair: ScopePair,
+        limit: int,
+        speaker_id: Optional[str] = None,
+        date_start: Optional[str] = None,
+        date_end: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Chunks of one scope whose text contains q (case-insensitive), most
+        recent first: [{"id", "similarity": None}]. An empty q lists the
+        speaker's chunks. Same contract as the graph's keyword search, which
+        cannot see archived text."""
+        where = ["assembly = %s", "term = %s"]
+        params: List[Any] = [pair[0], pair[1]]
+        if q:
+            escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where.append("text ILIKE %s")
+            params.append(f"%{escaped}%")
+        if speaker_id:
+            where.append("speaker_id = %s")
+            params.append(speaker_id)
+        if date_start:
+            where.append("session_date >= %s")
+            params.append(date_start)
+        if date_end:
+            where.append("session_date <= %s")
+            params.append(date_end)
+        sql = (f"SELECT id FROM chunk WHERE {' AND '.join(where)} "
+               "ORDER BY session_date DESC, id LIMIT %s")
+        with self.pool.connection() as conn:
+            rows = conn.execute(sql, [*params, limit]).fetchall()
+        return [{"id": r[0], "similarity": None} for r in rows]
+
     def chunks(self, ids: Iterable[str]) -> Dict[str, Dict[str, Any]]:
         """{chunk_id: {"text", "embedding", "speech_id"}} for the ids in the archive."""
         ids = list({i for i in ids if i})

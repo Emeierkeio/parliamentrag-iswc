@@ -3,13 +3,14 @@
 # dependencies = ["mcp>=1.2.0,<2", "httpx>=0.27", "pillow>=10"]
 # ///
 """
-ParliamentRAG MCP server — Italian Chamber of Deputies data as Claude tools.
+ParliamentRAG MCP server — Italian Parliament data (Chamber of Deputies and
+Senate) as Claude tools.
 
 Exposes the read-only public API of www.parliamentrag.it: semantic search over
 floor speeches and parliamentary acts, sitting-by-sitting proceedings, roll-call
-votes with per-deputy outcomes, and the exact text of voted amendments/articles.
-All data comes from official sources (dati.camera.it, stenographic records) for
-the 19th legislature. Contents are in Italian.
+votes with per-member outcomes, and the exact text of voted amendments/articles.
+All data comes from official sources (dati.camera.it, dati.senato.it,
+stenographic records) for the 19th legislature. Contents are in Italian.
 
 Run:  uv run mcp/server.py          (stdio transport, no install needed)
 """
@@ -57,8 +58,10 @@ mcp = FastMCP(
     "ParliamentRAG",
     website_url="https://www.parliamentrag.it",
     instructions=(
-        "Tools over official Italian Chamber of Deputies data (19th legislature, "
-        "via parliamentrag.it). Data is in Italian. Every speech and vote links "
+        "Tools over official Italian Parliament data, Chamber of Deputies and "
+        "Senate (19th legislature, via parliamentrag.it). Tools take a `chamber` "
+        "argument where it matters: \"camera\", \"senato\" or \"both\"; votes are "
+        "never summed across the two houses. Data is in Italian. Every speech and vote links "
         "back to the official record: cite those links when reporting facts. "
         "When you report the results of a specific roll-call vote, also call "
         "get_vote_hemicycle for that vote_id: it returns the numeric breakdown, "
@@ -67,14 +70,14 @@ mcp = FastMCP(
         "On hosts with MCP Apps (claude.ai, ChatGPT, Claude Desktop) the "
         "chart and the verification report appear to the user in a view under "
         "the tool call: do not redraw them as artifacts. "
-        "Always answer in the language of the conversation (English, French, "
-        "Italian, ...): translate summaries and labels, but keep verbatim "
+        "Always answer in the language of the conversation (Italian, English, "
+        "...): translate summaries and labels, but keep verbatim "
         "quotes in the original Italian. "
         "The backend may cold-start: if a call times out, retry once. "
         "ParliamentRAG makes three guarantees on answers about Parliament: all "
         "groups are heard, the voices quoted are authoritative on the topic, "
         "and every quote is exact, with a link to the record. Whenever your "
-        "answer reports or quotes what deputies said in the Chamber, put quotes "
+        "answer reports or quotes what deputies or senators said, put quotes "
         "in «…» with the speaker's name nearby, then call verify_answer on the "
         "final answer and the user's question. Do not rewrite the answer to "
         "make the checks pass: show the outcome. End the answer with the three "
@@ -157,7 +160,7 @@ def _trim(text: Optional[str], limit: int = 600) -> Optional[str]:
 # Messo nei risultati degli strumenti che restituiscono interventi: il modello
 # legge i risultati con più attenzione delle istruzioni del server.
 _VERIFY_NEXT = (
-    "Before you reply about what deputies said: quote them verbatim in «…» with "
+    "Before you reply about what deputies or senators said: quote them verbatim in «…» with "
     "the speaker's name nearby, call verify_answer on your final answer and the "
     "user's question, and end the reply with its verdict lines. Do not rewrite "
     "the answer to make the checks pass."
@@ -172,10 +175,12 @@ async def search_parliament(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     max_results: int = 10,
+    chamber: str = "both",
 ) -> dict:
     """Search Italian parliamentary records: floor speeches and parliamentary
-    acts (bills, motions, written questions) of the Chamber of Deputies,
-    19th legislature (Oct 2022 - today).
+    acts (bills, motions, written questions) of the Chamber of Deputies and
+    the Senate, 19th legislature (Oct 2022 - today). Each result says its
+    `chamber`.
 
     Uses hybrid search (full-text + semantic), so Italian queries work best
     ("salario minimo", "intelligenza artificiale", company names, people).
@@ -187,10 +192,13 @@ async def search_parliament(
         start_date: Optional YYYY-MM-DD lower bound.
         end_date: Optional YYYY-MM-DD upper bound.
         max_results: How many results to return (1-30).
+        chamber: "both" (default), "camera" (Chamber of Deputies) or
+            "senato" (Senate).
     """
     data = await _get(
         "/search/results",
         {
+            "chamber": chamber if chamber in ("camera", "senato", "both") else "both",
             "q": query,
             "search_type": "hybrid",
             "doc_type": doc_type,
@@ -228,7 +236,7 @@ def _verdict(r: dict) -> list[str]:
     if not a["available"]:
         authority = "authority on the topic could not be computed"
     elif not voices:
-        authority = "no deputy or member of the Government quoted or named"
+        authority = "no deputy, senator or member of the Government quoted or named"
     else:
         def why(v: dict) -> str:
             if v.get("role") == "governo":
@@ -244,7 +252,7 @@ def _verdict(r: dict) -> list[str]:
         quotes = "no quotes of four or more words to check"
     else:
         problems = [x for x in q["items"] if x["status"] != "exact" or not x.get("attributed")]
-        quotes = f"{q['exact']}/{q['total']} verbatim in the Chamber record"
+        quotes = f"{q['exact']}/{q['total']} verbatim in the parliamentary record"
         if problems:
             labels = {"modified": "altered", "omissions": "words cut", "not_found": "not in the record"}
             quotes += " — " + "; ".join(
@@ -262,31 +270,43 @@ def _verdict(r: dict) -> list[str]:
 
 
 @mcp.tool(annotations=_ro("Check an answer against the three guarantees"), meta=_ui(_VERIFY_UI))
-async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
-    """Check an answer about the Chamber of Deputies against ParliamentRAG's
+async def verify_answer(
+    answer: str, question: Optional[str] = None, chamber: str = "both"
+) -> dict:
+    """Check an answer about the Italian Parliament against ParliamentRAG's
     three guarantees, deterministically and without a language model:
 
     1. All groups: every parliamentary group in office, every Mixed Group
-       component with deputies and the Government is named or quoted.
-    2. Authoritative voices: every deputy or member of the Government quoted
+       component and the Government is named or quoted, for the houses in
+       `chamber`.
+    2. Authoritative voices: every deputy, senator or member of the
+       Government quoted
        exactly or named (full name, or surname without namesakes) speaks for
        the Government, is the rapporteur, or is among the top 5 of their
        group by authority on the question's topic.
     3. Exact quotes: every text in «…», “…” or "…" of 4+ words is a
-       continuous stretch of one floor speech of the 19th legislature, and
+       continuous stretch of one floor speech of the Chamber or the Senate
+       in the 19th legislature, and
        the speaker's surname appears near it.
 
-    Call it on the final answer whenever it reports what deputies said, and
+    Call it on the final answer whenever it reports what deputies or
+    senators said, and
     end the answer with the `verdict` lines (three checks and a closing line
     about ParliamentRAG), translated. It reports;
-    it does not ask you to change the answer. Only the Chamber of Deputies
-    is covered.
+    it does not ask you to change the answer.
 
     Args:
         answer: The full answer, quotes in «…» with the speaker's name nearby.
         question: The user's question; it sets the topic for authority.
+        chamber: "both" (default), "camera" or "senato": the houses the
+            answer is about.
     """
-    payload = {"answer": answer[:20000], "topic": (question or "")[:500] or None}
+    chambers = {"camera": ["camera"], "senato": ["senato"]}.get(chamber, ["camera", "senato"])
+    payload = {
+        "answer": answer[:20000],
+        "topic": (question or "")[:500] or None,
+        "scope": [{"chamber": c, "legislature": 19} for c in chambers],
+    }
     headers = {"User-Agent": "parliamentrag-mcp/0.1.0"}
     if FASCICOLI_API_KEY:
         url, headers["x-api-key"] = f"{FASCICOLI_API}/api/verify", FASCICOLI_API_KEY
@@ -336,7 +356,7 @@ async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
             "exact": "verbatim in the record",
             "omissions": "pieces are in the record but words between them were cut",
             "modified": "not verbatim; closest_passage is what was actually said",
-            "not_found": "not in any Chamber floor speech of the 19th legislature",
+            "not_found": "not in any floor speech of the Chamber or the Senate in the 19th legislature",
         },
         "verify_page": "https://www.parliamentrag.it/verifica",
     }
@@ -349,8 +369,10 @@ async def list_sessions(
     search: Optional[str] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
+    chamber: str = "both",
 ) -> dict:
-    """List plenary sittings of the Chamber of Deputies, most recent first,
+    """List plenary sittings of the Chamber of Deputies and the Senate (each
+    says its `chamber`), most recent first,
     each with an AI recap (Italian), its debates and counts of speeches/votes.
 
     Args:
@@ -358,10 +380,12 @@ async def list_sessions(
         before: ISO date cursor for pagination (returns sittings before it).
         search: Optional keyword filter on debate titles/recaps.
         from_date / to_date: Optional YYYY-MM-DD bounds.
+        chamber: "both" (default), "camera" or "senato".
     """
     data = await _get(
         "/timeline",
         {
+            "chamber": chamber if chamber in ("camera", "senato", "both") else "both",
             "limit": max(1, min(limit, 30)),
             "before": before,
             "search": search,
@@ -373,6 +397,7 @@ async def list_sessions(
     for s in data.get("sessions", []):
         sessions.append({
             "id": s["id"],
+            "chamber": s.get("chamber") or "camera",
             "number": s["number"],
             "date": s["date"],
             "recap": _trim(s.get("recap"), 800),
@@ -427,7 +452,8 @@ async def get_vote_details(
 ) -> dict:
     """Full detail of one roll-call vote: aggregates, per-group breakdown,
     linked act (with official page and full-text PDF), secret-ballot flag,
-    and optionally the ~400 individual per-deputy votes.
+    and optionally the individual votes (~400 deputies or ~200 senators;
+    `chamber` says which house voted).
 
     After presenting these results, call get_vote_hemicycle with the same
     vote_id to show the seating chart as well (unless the ballot was secret).
@@ -437,8 +463,8 @@ async def get_vote_details(
 
     Args:
         vote_id: Vote id from get_session_votes.
-        include_individual_votes: Return the full per-deputy list (large).
-        deputy: Return only individual votes of deputies whose name contains
+        include_individual_votes: Return the full per-member list (large).
+        deputy: Return only individual votes of members whose name contains
             this string (case-insensitive). Overrides include_individual_votes.
         group: Return only individual votes of this parliamentary group
             (substring match). Overrides include_individual_votes.
@@ -545,9 +571,9 @@ async def get_debate(debate_id: str) -> dict:
 @mcp.tool(annotations=_ro("Vote hemicycle: numbers + chart"), meta=_ui(_HEMICYCLE_UI))
 async def get_vote_hemicycle(vote_id: str, format: str = "png"):
     """Hemicycle chart of a roll-call vote, together with the numbers behind
-    it: one dot per deputy, coloured by outcome (green=in favour, red=against,
+    it: one dot per deputy or senator, coloured by outcome (green=in favour, red=against,
     amber=abstained, grey=absent), grouped by parliamentary group as in the
-    ParliamentRAG UI. Dots show group totals, not the real seat of each deputy.
+    ParliamentRAG UI. Dots show group totals, not the real seat of each member.
 
     Returns multiple content blocks, so the information survives clients that
     drop images:
@@ -736,29 +762,30 @@ footer .credits{max-width:1152px;margin:20px auto 0;padding-top:16px;border-top:
 
 _MCP_URL_ANCHOR = '<a href="https://github.com/Emeierkeio/ParliamentRAG/blob/main/docs/mcp.md">github.com/Emeierkeio/ParliamentRAG</a>'
 _MCP_PROTO_ANCHOR = '<a href="https://modelcontextprotocol.io">Model Context Protocol</a>'
-_DATI_ANCHOR = '<a href="https://dati.camera.it">dati.camera.it</a>'
+_DATI_ANCHOR = ('<a href="https://dati.camera.it">dati.camera.it</a>, '
+                '<a href="https://dati.senato.it">dati.senato.it</a>')
 
 _L10N: dict[str, dict[str, str]] = {
     "it": {
-        "institution": "Camera dei Deputati &middot; XIX Legislatura",
+        "institution": "Parlamento italiano &middot; XIX Legislatura",
         "cta": "Accedi alla consultazione",
         "iswc": "Accettato &middot; In-Use Track",
         "intro": f"Questo indirizzo è un server {_MCP_PROTO_ANCHOR}. Aperto nel browser "
                  "mostra solo questa pagina; aggiunto a un assistente AI gli dà accesso "
-                 "ai dati ufficiali della Camera dei Deputati (XIX legislatura): votazioni "
+                 "ai dati ufficiali di Camera e Senato (XIX legislatura): votazioni "
                  "nominali, interventi in Aula, testi degli emendamenti votati. Sola "
                  "lettura, senza registrazione, gratuito.",
         "caps_h": "Cosa sa fare",
         "cap1": "Ricerca negli interventi in Aula e negli atti parlamentari",
         "cap2": "Sedute con riassunto, dibattiti e votazioni",
-        "cap3": "Dettaglio di ogni voto nominale: aggregati, voti per gruppo e per singolo deputato",
+        "cap3": "Dettaglio di ogni voto nominale: aggregati, voti per gruppo e per singolo parlamentare",
         "cap4": "Testo esatto dell'emendamento o articolo votato, dall'Allegato A del resoconto",
         "cap5": "Grafico dell'emiciclo di un voto, come immagine nella chat",
         "example": "Esempio: &laquo;Come hanno votato i deputati del PD sul voto finale "
                    "del DDL 2961?&raquo;. La risposta arriva dai resoconti ufficiali, "
                    "con i numeri reali e i link alle fonti.",
-        "source": f"I dati vengono da {_DATI_ANCHOR} e dai resoconti stenografici della "
-                  "Camera. Progetto indipendente, non affiliato alla Camera dei Deputati. "
+        "source": f"I dati vengono da {_DATI_ANCHOR} e dai resoconti stenografici di "
+                  "Camera e Senato. Progetto indipendente, non affiliato al Parlamento. "
                   f"Istruzioni complete e codice: {_MCP_URL_ANCHOR}.",
         "connect_h": "Come collegarlo",
         "endpoint_line": "L'endpoint da aggiungere ai connettori del tuo assistente:",
@@ -773,26 +800,26 @@ _L10N: dict[str, dict[str, str]] = {
         "thesis": "Un progetto di Mirko Tritella",
     },
     "en": {
-        "institution": "Italian Chamber of Deputies &middot; 19th Legislature",
+        "institution": "Italian Parliament &middot; 19th Legislature",
         "cta": "Start consulting",
         "iswc": "Accepted &middot; In-Use Track",
         "intro": f"This address is a {_MCP_PROTO_ANCHOR} server. Opened in a browser it "
                  "only shows this page; added to an AI assistant it gives it access to "
-                 "the official data of the Italian Chamber of Deputies (19th "
+                 "the official data of the Italian Chamber of Deputies and Senate (19th "
                  "legislature): roll-call votes, floor speeches, the texts of voted "
                  "amendments. Read-only, no sign-up, free.",
         "caps_h": "What it can do",
         "cap1": "Search across floor speeches and parliamentary acts",
         "cap2": "Sittings with summary, debates and votes",
-        "cap3": "Detail of every roll-call vote: totals, votes by group and by individual deputy",
+        "cap3": "Detail of every roll-call vote: totals, votes by group and by individual member",
         "cap4": "The exact text of the voted amendment or article, from annex A of the official report",
         "cap5": "The hemicycle chart of a vote, as an image in the chat",
         "example": "Example: &ldquo;How did PD deputies vote on the final vote on bill "
                    "2961?&rdquo;. The answer comes from the official records, with the "
                    "real numbers and links to the sources.",
-        "source": f"The data comes from {_DATI_ANCHOR} and the Chamber's verbatim "
-                  "reports. Independent project, not affiliated with the Chamber of "
-                  f"Deputies. Full instructions and code: {_MCP_URL_ANCHOR}.",
+        "source": f"The data comes from {_DATI_ANCHOR} and the verbatim reports of "
+                  "the Chamber and the Senate. Independent project, not affiliated with "
+                  f"the Italian Parliament. Full instructions and code: {_MCP_URL_ANCHOR}.",
         "connect_h": "How to connect it",
         "endpoint_line": "The endpoint to add to your assistant's connectors:",
         "settings": "Settings", "connectors": "Connectors",
@@ -804,142 +831,6 @@ _L10N: dict[str, dict[str, str]] = {
         "paper_inuse": "Research paper", "paper_demo": "Demo paper",
         "footer_data": "Open data (RDF)",
         "thesis": "A project by Mirko Tritella",
-    },
-    "es": {
-        "institution": "Cámara de Diputados de Italia &middot; XIX Legislatura",
-        "cta": "Acceda a la consulta",
-        "iswc": "Aceptado &middot; In-Use Track",
-        "intro": f"Esta dirección es un servidor {_MCP_PROTO_ANCHOR}. Abierta en el "
-                 "navegador solo muestra esta página; añadida a un asistente de IA le "
-                 "da acceso a los datos oficiales de la Cámara de Diputados de Italia "
-                 "(XIX legislatura): votaciones nominales, intervenciones en el pleno, "
-                 "textos de las enmiendas votadas. Solo lectura, sin registro, gratuito.",
-        "caps_h": "Qué sabe hacer",
-        "cap1": "Búsqueda en las intervenciones del pleno y en los actos parlamentarios",
-        "cap2": "Sesiones con resumen, debates y votaciones",
-        "cap3": "Detalle de cada votación nominal: totales, votos por grupo y por diputado",
-        "cap4": "El texto exacto de la enmienda o del artículo votado, del anexo A del acta",
-        "cap5": "El gráfico del hemiciclo de una votación, como imagen en el chat",
-        "example": "Ejemplo: &laquo;¿Cómo votaron los diputados del PD en la votación "
-                   "final del proyecto de ley 2961?&raquo;. La respuesta llega de las "
-                   "actas oficiales, con los números reales y los enlaces a las fuentes.",
-        "source": f"Los datos provienen de {_DATI_ANCHOR} y de las actas taquigráficas "
-                  "de la Cámara. Proyecto independiente, no afiliado a la Cámara de "
-                  f"Diputados. Instrucciones completas y código: {_MCP_URL_ANCHOR}.",
-        "connect_h": "Cómo conectarlo",
-        "endpoint_line": "El endpoint que hay que añadir a los conectores de tu asistente:",
-        "settings": "Configuración", "connectors": "Conectores",
-        "add_custom": "Añadir conector personalizado",
-        "apps_conn": "Apps y conectores", "dev_mode": "modo desarrollador",
-        "create": "Crear", "desktop_app": "app de escritorio",
-        "add_conn": "Añadir conector", "add_mcp": "Añadir conector MCP",
-        "with": "con", "in": "en", "server_with": "servidor con",
-        "paper_inuse": "Artículo de investigación", "paper_demo": "Artículo demo",
-        "footer_data": "Datos abiertos (RDF)",
-        "thesis": "Un proyecto de Mirko Tritella",
-    },
-    "fr": {
-        "institution": "Chambre des députés italienne &middot; XIXe législature",
-        "cta": "Accéder à la consultation",
-        "iswc": "Accepté &middot; In-Use Track",
-        "intro": f"Cette adresse est un serveur {_MCP_PROTO_ANCHOR}. Ouverte dans un "
-                 "navigateur, elle n'affiche que cette page ; ajoutée à un assistant "
-                 "IA, elle lui donne accès aux données officielles de la Chambre des "
-                 "députés italienne (XIXe législature) : votes nominaux, interventions "
-                 "en séance, textes des amendements votés. Lecture seule, sans "
-                 "inscription, gratuit.",
-        "caps_h": "Ce qu'il sait faire",
-        "cap1": "Recherche dans les interventions en séance et les actes parlementaires",
-        "cap2": "Séances avec résumé, débats et votes",
-        "cap3": "Détail de chaque vote nominal : totaux, votes par groupe et par député",
-        "cap4": "Le texte exact de l'amendement ou de l'article voté, tiré de l'annexe A du compte rendu",
-        "cap5": "Le graphique de l'hémicycle d'un vote, en image dans la conversation",
-        "example": "Exemple : &laquo; Comment les députés du PD ont-ils voté lors du "
-                   "vote final sur le projet de loi 2961 ? &raquo;. La réponse vient des "
-                   "comptes rendus officiels, avec les vrais chiffres et les liens vers "
-                   "les sources.",
-        "source": f"Les données proviennent de {_DATI_ANCHOR} et des comptes rendus "
-                  "sténographiques de la Chambre. Projet indépendant, sans lien avec la "
-                  f"Chambre des députés. Instructions complètes et code : {_MCP_URL_ANCHOR}.",
-        "connect_h": "Comment le connecter",
-        "endpoint_line": "L'endpoint à ajouter aux connecteurs de votre assistant :",
-        "settings": "Paramètres", "connectors": "Connecteurs",
-        "add_custom": "Ajouter un connecteur personnalisé",
-        "apps_conn": "Applications et connecteurs", "dev_mode": "mode développeur",
-        "create": "Créer", "desktop_app": "application de bureau",
-        "add_conn": "Ajouter un connecteur", "add_mcp": "Ajouter un connecteur MCP",
-        "with": "avec", "in": "dans", "server_with": "serveur avec",
-        "paper_inuse": "Article de recherche", "paper_demo": "Article démo",
-        "footer_data": "Données ouvertes (RDF)",
-        "thesis": "Un projet de Mirko Tritella",
-    },
-    "de": {
-        "institution": "Italienische Abgeordnetenkammer &middot; XIX. Legislaturperiode",
-        "cta": "Zur Konsultation",
-        "iswc": "Angenommen &middot; In-Use Track",
-        "intro": f"Diese Adresse ist ein {_MCP_PROTO_ANCHOR}-Server. Im Browser zeigt "
-                 "sie nur diese Seite; einem KI-Assistenten hinzugefügt, gibt sie ihm "
-                 "Zugriff auf die offiziellen Daten der italienischen "
-                 "Abgeordnetenkammer (XIX. Legislaturperiode): namentliche "
-                 "Abstimmungen, Redebeiträge im Plenum, Texte der abgestimmten "
-                 "Änderungsanträge. Nur Lesezugriff, ohne Registrierung, kostenlos.",
-        "caps_h": "Was er kann",
-        "cap1": "Suche in Plenarreden und parlamentarischen Akten",
-        "cap2": "Sitzungen mit Zusammenfassung, Debatten und Abstimmungen",
-        "cap3": "Detail jeder namentlichen Abstimmung: Summen, Stimmen nach Fraktion und einzelnen Abgeordneten",
-        "cap4": "Der genaue Text des abgestimmten Änderungsantrags oder Artikels, aus Anlage A des Protokolls",
-        "cap5": "Die Halbkreis-Grafik einer Abstimmung, als Bild im Chat",
-        "example": "Beispiel: &bdquo;Wie haben die PD-Abgeordneten bei der "
-                   "Schlussabstimmung über Gesetzentwurf 2961 gestimmt?&ldquo;. Die Antwort kommt aus den "
-                   "offiziellen Protokollen, mit den echten Zahlen und Links zu den Quellen.",
-        "source": f"Die Daten stammen von {_DATI_ANCHOR} und aus den stenografischen "
-                  "Protokollen der Kammer. Unabhängiges Projekt, nicht mit der "
-                  "Abgeordnetenkammer verbunden. Vollständige Anleitung und Code: "
-                  f"{_MCP_URL_ANCHOR}.",
-        "connect_h": "So wird er verbunden",
-        "endpoint_line": "Der Endpoint für die Konnektoren deines Assistenten:",
-        "settings": "Einstellungen", "connectors": "Konnektoren",
-        "add_custom": "Eigenen Konnektor hinzufügen",
-        "apps_conn": "Apps &amp; Konnektoren", "dev_mode": "Entwicklermodus",
-        "create": "Erstellen", "desktop_app": "Desktop-App",
-        "add_conn": "Konnektor hinzufügen", "add_mcp": "MCP-Konnektor hinzufügen",
-        "with": "mit", "in": "in", "server_with": "Server mit",
-        "paper_inuse": "Forschungsartikel", "paper_demo": "Demo-Artikel",
-        "footer_data": "Offene Daten (RDF)",
-        "thesis": "Ein Projekt von Mirko Tritella",
-    },
-    "pt": {
-        "institution": "Câmara dos Deputados de Itália &middot; XIX Legislatura",
-        "cta": "Aceder à consulta",
-        "iswc": "Aceito &middot; In-Use Track",
-        "intro": f"Este endereço é um servidor {_MCP_PROTO_ANCHOR}. Aberto no navegador "
-                 "mostra apenas esta página; adicionado a um assistente de IA, dá-lhe "
-                 "acesso aos dados oficiais da Câmara dos Deputados de Itália (XIX "
-                 "legislatura): votações nominais, intervenções no plenário, textos "
-                 "das emendas votadas. Somente leitura, sem registo, gratuito.",
-        "caps_h": "O que ele faz",
-        "cap1": "Pesquisa nas intervenções do plenário e nos atos parlamentares",
-        "cap2": "Sessões com resumo, debates e votações",
-        "cap3": "Detalhe de cada votação nominal: totais, votos por grupo e por deputado",
-        "cap4": "O texto exato da emenda ou do artigo votado, do anexo A da ata",
-        "cap5": "O gráfico do hemiciclo de uma votação, como imagem no chat",
-        "example": "Exemplo: &laquo;Como votaram os deputados do PD na votação final "
-                   "do projeto de lei 2961?&raquo;. A resposta vem das atas oficiais, "
-                   "com os números reais e as ligações às fontes.",
-        "source": f"Os dados vêm de {_DATI_ANCHOR} e das atas estenográficas da "
-                  "Câmara. Projeto independente, não afiliado à Câmara dos Deputados. "
-                  f"Instruções completas e código: {_MCP_URL_ANCHOR}.",
-        "connect_h": "Como conectá-lo",
-        "endpoint_line": "O endpoint a adicionar aos conectores do teu assistente:",
-        "settings": "Definições", "connectors": "Conectores",
-        "add_custom": "Adicionar conector personalizado",
-        "apps_conn": "Apps e conectores", "dev_mode": "modo de programador",
-        "create": "Criar", "desktop_app": "app de desktop",
-        "add_conn": "Adicionar conector", "add_mcp": "Adicionar conector MCP",
-        "with": "com", "in": "em", "server_with": "servidor com",
-        "paper_inuse": "Artigo de pesquisa", "paper_demo": "Artigo demo",
-        "footer_data": "Dados abertos (RDF)",
-        "thesis": "Um projeto de Mirko Tritella",
     },
 }
 
@@ -1066,6 +957,9 @@ def _hemicycle_captions(d: dict, participants: list[dict]) -> tuple[str, str, st
     sub = (f"Favorevoli {d.get('in_favor')} · Contrari {d.get('against')} · "
            f"Astenuti {d.get('abstained')} · voti individuali: {len(participants)}")
     note = _HEMI_DISCLAIMER
+    if d.get("chamber") == "senato":
+        title = "Senato · " + title
+        note = note.replace("deputati", "senatori")
     cc = _counts_consistency(d)
     if cc and cc.get("consistent") is False:
         note += (" Attenzione: la somma dei conteggi per gruppo non coincide "

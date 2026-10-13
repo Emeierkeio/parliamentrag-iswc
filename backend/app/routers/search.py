@@ -7,8 +7,8 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Query, HTTPException
 
-from ..services.archive import fill_rows
-from ..services.retrieval.scope import default_scope, loaded_chambers, scope_param, session_clause
+from ..services.archive import fill_rows, get_archive
+from ..services.retrieval.scope import CURRENT_LEGISLATURE, loaded_chambers
 from ..services.neo4j_client import Neo4jClient
 from ..config import get_settings
 from ..key_pool import make_client
@@ -75,10 +75,122 @@ def _ensure_act_vector_index():
         _act_index_ensured = True  # Don't retry on failure
 
 
-# Act search serves the Camera pages and the MCP server, whose tools speak of
-# the Chamber of Deputies: Senate bills and control acts stay out.
-CAMERA_ACT = ("NOT (a.uri STARTS WITH 'http://dati.senato.it/' "
-              "OR a.uri STARTS WITH 'senato:')")
+SENATE_ACT = "(a.uri STARTS WITH 'http://dati.senato.it/' OR a.uri STARTS WITH 'senato:')"
+SPEECH_CHAMBER = "coalesce(s.chamber, 'camera') IN $chambers"
+
+
+def _resolve_chambers(chamber: Optional[str]) -> tuple:
+    """Chambers a search covers: Camera by default (the Camera pages and
+    older clients), one chamber, or every loaded chamber for "both"."""
+    if chamber in (None, "", "camera"):
+        return ("camera",)
+    if chamber == "senato":
+        return ("senato",)
+    return loaded_chambers()
+
+
+def _act_clause(chambers: tuple) -> str:
+    if set(chambers) == {"camera"}:
+        return f"NOT {SENATE_ACT}"
+    if set(chambers) == {"senato"}:
+        return SENATE_ACT
+    return "true"
+
+
+def _graph_chambers(chambers: tuple) -> List[str]:
+    """Chambers whose speech text and vectors are in the graph; the others
+    are searched in the text archive."""
+    archive = get_archive()
+    return [c for c in chambers
+            if not (archive and archive.covers((c, CURRENT_LEGISLATURE)))]
+
+
+_ARCHIVE_HITS = """
+UNWIND $hits AS hit
+MATCH (c:Chunk {{id: hit.id}})<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(d)
+WHERE (d:Deputy OR d:GovernmentMember)
+MATCH (i)<-[:CONTAINS_SPEECH]-(f:Phase)<-[:HAS_PHASE]-(dib:Debate)<-[:HAS_DEBATE]-(s:Session)
+OPTIONAL MATCH (d)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
+WHERE mg.start_date <= s.date AND (mg.end_date IS NULL OR mg.end_date >= s.date)
+  AND coalesce(mg.chamber, s.chamber, 'camera') = coalesce(s.chamber, 'camera')
+WITH c, i, d, s, dib, g, hit.similarity AS score, hit.rank AS rank
+WHERE true {group_filter}
+RETURN c.id AS chunk_id, coalesce(s.chamber, 'camera') AS chamber, c.text AS text,
+       i.id AS speech_id, toString(s.date) AS date, s.number AS session_number,
+       dib.title AS debate_title, d.first_name AS first_name, d.last_name AS last_name,
+       CASE WHEN 'GovernmentMember' IN labels(d) THEN 'Governo'
+            ELSE coalesce(g.name, 'MISTO') END AS group_name,
+       score
+ORDER BY rank
+"""
+
+
+def _search_speeches_archive(
+    client: Neo4jClient,
+    chambers: tuple,
+    limit: int,
+    q: Optional[str] = None,
+    embedding: Optional[List[float]] = None,
+    threshold: float = 0.5,
+    deputy_id: Optional[str] = None,
+    group: Optional[List[str]] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Speech search for the chambers whose text is in the archive (the
+    Senate): keyword or vector hits from Postgres, speaker, group and sitting
+    from the graph. Empty when the archive covers none of the chambers."""
+    archive = get_archive()
+    if archive is None:
+        return []
+    pairs = [(c, CURRENT_LEGISLATURE) for c in chambers
+             if archive.covers((c, CURRENT_LEGISLATURE))]
+    records: List[Dict[str, Any]] = []
+    for pair in pairs:
+        if embedding is not None:
+            # The vector search has no speaker or group filter: take a wider
+            # pool when the graph side will filter it.
+            k = limit * 4 if (deputy_id or group) else limit
+            hits = archive.search(embedding, pair, k, threshold, start_date, end_date)
+            match_type = "semantic"
+        else:
+            hits = archive.text_search(q or "", pair, limit, speaker_id=deputy_id,
+                                       date_start=start_date, date_end=end_date)
+            match_type = "text"
+        for rank, h in enumerate(hits):
+            h["rank"] = rank
+        params: Dict[str, Any] = {"hits": hits}
+        group_filter = ""
+        if group:
+            group_filter += " AND g.name IN $groups"
+            params["groups"] = group
+        if deputy_id:
+            group_filter += " AND d.id = $deputy_id"
+            params["deputy_id"] = deputy_id
+        rows = client.query(_ARCHIVE_HITS.format(group_filter=group_filter), params)
+        fill_rows(rows, chunk_fields={"chunk_id": {"text": "text"}})
+        for r in rows[:limit]:
+            records.append({
+                "type": "speech",
+                "id": r["chunk_id"],
+                "chamber": r["chamber"],
+                "text": r["text"][:500] if r.get("text") else "",
+                "date": r["date"],
+                "session_number": r["session_number"],
+                "debate_title": r["debate_title"] or "",
+                "first_name": r["first_name"] or "",
+                "last_name": r["last_name"] or "",
+                "group": r["group_name"] or "MISTO",
+                "act_type": None,
+                "act_title": None,
+                "act_number": None,
+                "destinatario": None,
+                "eurovoc": None,
+                "score": round(r["score"], 4) if r.get("score") is not None else None,
+                "match_type": match_type,
+                "is_exact": match_type == "text",
+            })
+    return records
 
 
 def _search_speeches_text(
@@ -89,9 +201,15 @@ def _search_speeches_text(
     group: Optional[List[str]] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    chambers: tuple = ("camera",),
 ) -> List[Dict[str, Any]]:
     """Text search on Speech chunks; with an empty query it lists the
     author's speeches (first chunk only, or every chunk would be a row)."""
+    records = _search_speeches_archive(client, chambers, limit, q=q, deputy_id=deputy_id,
+                                       group=group, start_date=start_date, end_date=end_date)
+    graph_chambers = _graph_chambers(chambers)
+    if not graph_chambers:
+        return records
     where_clauses = []
     params: Dict[str, Any] = {"limit": limit}
     if q:
@@ -113,13 +231,10 @@ def _search_speeches_text(
         where_clauses.append("s.date <= date($end_date)")
         params["end_date"] = end_date
 
-    where_clauses.append(session_clause())
-    params["scope"] = scope_param(default_scope())
+    where_clauses.append(SPEECH_CHAMBER)
+    params["chambers"] = graph_chambers
     where_clause = " AND ".join(where_clauses)
 
-    # Keyword search reads c.text, which archived chunks (Senate) do not have
-    # in the graph: it finds Camera speeches only. Browse (empty query) lists
-    # both and takes the archived text from the archive.
     cypher = f"""
     MATCH (c:Chunk)<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(d)
     WHERE (d:Deputy OR d:GovernmentMember)
@@ -144,9 +259,7 @@ def _search_speeches_text(
     """
 
     with client.session() as session:
-        result = fill_rows(session.run(cypher, **params).data(),
-                           chunk_fields={"chunk_id": {"text": "text"}})
-        records = []
+        result = session.run(cypher, **params).data()
         for record in result:
             records.append({
                 "type": "speech",
@@ -179,10 +292,11 @@ def _search_acts_text(
     group: Optional[List[str]] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    chambers: tuple = ("camera",),
 ) -> List[Dict[str, Any]]:
     """Text search on ParliamentaryAct title and description; with an
     empty query it lists the author's acts."""
-    where_clauses = [CAMERA_ACT]
+    where_clauses = [_act_clause(chambers)]
     params: Dict[str, Any] = {"limit": limit}
     if q:
         where_clauses.append(
@@ -279,14 +393,22 @@ def _search_speeches_semantic(
     group: Optional[List[str]] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    chambers: tuple = ("camera",),
 ) -> List[Dict[str, Any]]:
     """Semantic search on Speech chunks using vector index."""
-    extra_where = []
+    archived = _search_speeches_archive(client, chambers, limit, embedding=embedding,
+                                        threshold=threshold, deputy_id=deputy_id, group=group,
+                                        start_date=start_date, end_date=end_date)
+    graph_chambers = _graph_chambers(chambers)
+    if not graph_chambers:
+        return archived
+    extra_where = [SPEECH_CHAMBER]
     params: Dict[str, Any] = {
         "top_k": limit * 2,
         "embedding": embedding,
         "threshold": threshold,
         "limit": limit,
+        "chambers": graph_chambers,
     }
 
     if deputy_id:
@@ -316,6 +438,7 @@ def _search_speeches_semantic(
     WITH c, i, d, s, dib, g, score
     WHERE true {filter_clause}
     RETURN c.id AS chunk_id,
+           coalesce(s.chamber, 'camera') AS chamber,
            c.text AS text,
            i.id AS speech_id,
            toString(s.date) AS date,
@@ -331,11 +454,12 @@ def _search_speeches_semantic(
 
     results = client.query(cypher, params)
 
-    records = []
+    records = archived
     for r in results:
         records.append({
             "type": "speech",
             "id": r["chunk_id"],
+            "chamber": r["chamber"],
             "text": r["text"][:500] if r.get("text") else "",
             "date": r["date"],
             "session_number": r["session_number"],
@@ -364,6 +488,7 @@ def _search_acts_semantic(
     group: Optional[List[str]] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    chambers: tuple = ("camera",),
 ) -> List[Dict[str, Any]]:
     """Semantic search on ParliamentaryAct using vector index."""
     _ensure_act_vector_index()
@@ -409,7 +534,7 @@ def _search_acts_semantic(
     cypher = f"""
     CALL db.index.vector.queryNodes('act_description_embedding_index', $top_k, $embedding)
     YIELD node AS a, score
-    WHERE score >= $threshold AND {CAMERA_ACT}
+    WHERE score >= $threshold AND {_act_clause(chambers)}
     {signatory_match}
     {group_match}
     WITH a, d, g, score
@@ -479,6 +604,8 @@ async def search_results(
     sort_by: str = Query("relevance", description="Sort order: relevance, date_desc, date_asc"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Results per page"),
+    chamber: Optional[str] = Query(None, pattern="^(camera|senato|both)$",
+                                   description="camera (default), senato or both"),
 ) -> Dict[str, Any]:
     """
     Search parliamentary records (Speech chunks + ParliamentaryAct).
@@ -504,6 +631,7 @@ async def search_results(
 
     # Fetch enough results to allow proper pagination
     fetch_limit = 500
+    chambers = _resolve_chambers(chamber)
 
     try:
         search_speeches = doc_type in ("all", "speech")
@@ -511,30 +639,30 @@ async def search_results(
 
         if search_type in ("text", "hybrid"):
             if search_speeches:
-                speech_text = _search_speeches_text(client, q, fetch_limit, deputy_id, group, start_date, end_date)
+                speech_text = _search_speeches_text(client, q, fetch_limit, deputy_id, group, start_date, end_date, chambers=chambers)
                 all_results.extend(speech_text)
             if search_acts:
-                act_text = _search_acts_text(client, q, fetch_limit, deputy_id, group, start_date, end_date)
+                act_text = _search_acts_text(client, q, fetch_limit, deputy_id, group, start_date, end_date, chambers=chambers)
                 all_results.extend(act_text)
 
         if search_type in ("semantic", "hybrid"):
             try:
                 embedding = _generate_embedding(q)
                 if search_speeches:
-                    speech_sem = _search_speeches_semantic(client, embedding, fetch_limit, deputy_id=deputy_id, group=group, start_date=start_date, end_date=end_date)
+                    speech_sem = _search_speeches_semantic(client, embedding, fetch_limit, deputy_id=deputy_id, group=group, start_date=start_date, end_date=end_date, chambers=chambers)
                     all_results.extend(speech_sem)
                 if search_acts:
-                    act_sem = _search_acts_semantic(client, embedding, fetch_limit, deputy_id=deputy_id, group=group, start_date=start_date, end_date=end_date)
+                    act_sem = _search_acts_semantic(client, embedding, fetch_limit, deputy_id=deputy_id, group=group, start_date=start_date, end_date=end_date, chambers=chambers)
                     all_results.extend(act_sem)
             except Exception as e:
                 logger.error(f"Semantic search failed: {e}")
                 # Fall back to text-only if semantic fails
                 if search_type == "semantic":
                     if search_speeches:
-                        speech_text = _search_speeches_text(client, q, fetch_limit, deputy_id, group, start_date, end_date)
+                        speech_text = _search_speeches_text(client, q, fetch_limit, deputy_id, group, start_date, end_date, chambers=chambers)
                         all_results.extend(speech_text)
                     if search_acts:
-                        act_text = _search_acts_text(client, q, fetch_limit, deputy_id, group, start_date, end_date)
+                        act_text = _search_acts_text(client, q, fetch_limit, deputy_id, group, start_date, end_date, chambers=chambers)
                         all_results.extend(act_text)
 
         # Deduplicate by id, merging text (exact) and semantic hits for the same item:
