@@ -47,9 +47,9 @@ OUTCOME_MAP: dict[str, str] = {
     "Contrario": "against",
     "Astensione": "abstain",
     "Non ha votato": "absent",
-    # "Ha votato" (palese nelle votazioni segrete: espressione non pubblica)
-    # cade volutamente nel fallback "absent": la UI mostra l'avviso di voto
-    # segreto quando non esistono record favor/against.
+    # Secret ballots publish participation only: the deputy voted, how is not
+    # public. Mapping it to "absent" counted 391 voters of PDL 2822-B as absent.
+    "Ha votato": "secret",
 }
 
 BATCH_SIZE = 500          # Neo4j write batch size

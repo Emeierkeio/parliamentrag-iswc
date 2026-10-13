@@ -75,13 +75,17 @@ class VoteParticipant(BaseModel):
 
 
 class VotePartyBreakdown(BaseModel):
-    """Aggregated favor/against/abstain/absent counts for one parliamentary group."""
+    """Aggregated favor/against/abstain/absent counts for one parliamentary group.
+
+    secret counts members who took part in a secret ballot (how they voted is
+    not public)."""
 
     party: str
     favor: int
     against: int
     abstain: int = 0
     absent: int
+    secret: int = 0
 
 
 class VoteActRef(BaseModel):

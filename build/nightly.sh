@@ -15,7 +15,9 @@ flock -n 9 || { echo "$(date -Is) another run is in progress, skipping"; exit 0;
 git fetch --quiet origin main && git reset --quiet --hard origin/main \
 	|| echo "$(date -Is) git update failed, running the current checkout"
 
-DEMO_NEO4J="${DEMO_NEO4J:-bolt://localhost:7687}" LOCAL_SYNC=0 bash build/update_data.sh
+# The centro site checkout must be on main with push rights (deploy key with write access).
+DEMO_NEO4J="${DEMO_NEO4J:-bolt://localhost:7687}" CENTRO_DIR="${CENTRO_DIR:-/opt/parliamentrag-centro}" LOCAL_SYNC=0 \
+	bash build/update_data.sh
 status=$?
 
 find build/logs -name 'update-data-*.log' -mtime +30 -delete 2>/dev/null

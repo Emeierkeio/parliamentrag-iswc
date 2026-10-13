@@ -24,7 +24,15 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp import Image as FastMCPImage
 from mcp.types import ToolAnnotations
 
+from ui_views import HEMICYCLE_VIEW, VERIFY_VIEW
+
 API_BASE = os.environ.get("PARLIAMENTRAG_API", "https://www.parliamentrag.it/api")
+# Verificatore delle tre garanzie: sul backend di Fascicoli con la chiave del
+# server MCP; senza chiave (uso locale via stdio) passa dalla route pubblica
+# del sito, che ha un limite per IP.
+FASCICOLI_API = os.environ.get("FASCICOLI_API_URL", "https://api-production-a731.up.railway.app")
+FASCICOLI_API_KEY = os.environ.get("FASCICOLI_API_KEY")
+PUBLIC_VERIFY_URL = os.environ.get("PUBLIC_VERIFY_URL", "https://www.parliamentrag.it/api/verifica")
 # Base pubblica del server MCP stesso: usata per costruire gli URL stabili
 # delle immagini (/vote/{id}/hemicycle.png) restituiti dentro i tool result.
 MCP_PUBLIC_BASE = os.environ.get("MCP_PUBLIC_BASE", "https://mcp.parliamentrag.it")
@@ -56,14 +64,23 @@ mcp = FastMCP(
         "get_vote_hemicycle for that vote_id: it returns the numeric breakdown, "
         "a stable public image URL you should cite, and the chart itself. For "
         "secret ballots it returns an explanation instead of a chart. "
-        "If your client does not display tool-result images inline but can "
-        "render artifacts or HTML (e.g. claude.ai web), call it with "
-        "format='svg' and render the returned SVG markup as an artifact, "
-        "verbatim and complete, so the user actually sees the chart. "
+        "On hosts with MCP Apps (claude.ai, ChatGPT, Claude Desktop) the "
+        "chart and the verification report appear to the user in a view under "
+        "the tool call: do not redraw them as artifacts. "
         "Always answer in the language of the conversation (English, French, "
         "Italian, ...): translate summaries and labels, but keep verbatim "
         "quotes in the original Italian. "
-        "The backend may cold-start: if a call times out, retry once."
+        "The backend may cold-start: if a call times out, retry once. "
+        "ParliamentRAG makes three guarantees on answers about Parliament: all "
+        "groups are heard, the voices quoted are authoritative on the topic, "
+        "and every quote is exact, with a link to the record. Whenever your "
+        "answer reports or quotes what deputies said in the Chamber, put quotes "
+        "in «…» with the speaker's name nearby, then call verify_answer on the "
+        "final answer and the user's question. Do not rewrite the answer to "
+        "make the checks pass: show the outcome. End the answer with the three "
+        "lines of `verdict` from the result, translated into the language of "
+        "the conversation, keeping the ✅/❌ marks and the facts as given, and "
+        "the closing line about ParliamentRAG with its link.\n"
     ),
     **({"icons": _ICONS} if _ICONS else {}),
 )
@@ -83,6 +100,31 @@ def _ro(title: str) -> ToolAnnotations:
         idempotentHint=True,
         openWorldHint=True,
     )
+
+
+# Viste MCP Apps: l'host (claude.ai, ChatGPT, Claude Desktop) le mostra sotto
+# la chiamata dello strumento. Gli host senza MCP Apps usano il testo.
+_UI_MIME = "text/html;profile=mcp-app"
+_VERIFY_UI = "ui://parliamentrag/verify.html"
+_HEMICYCLE_UI = "ui://parliamentrag/hemicycle.html"
+
+
+def _ui(uri: str) -> dict:
+    # Chiave annidata della specifica 2026-01-26 e chiave piatta delle bozze
+    # precedenti, ancora letta da alcuni host.
+    return {"ui": {"resourceUri": uri}, "ui/resourceUri": uri}
+
+
+@mcp.resource(_VERIFY_UI, name="verify_view", title="Verifica delle tre garanzie",
+              mime_type=_UI_MIME, meta={"ui": {"prefersBorder": True}})
+def _verify_view() -> str:
+    return VERIFY_VIEW
+
+
+@mcp.resource(_HEMICYCLE_UI, name="hemicycle_view", title="Emiciclo di una votazione",
+              mime_type=_UI_MIME, meta={"ui": {"prefersBorder": True}})
+def _hemicycle_view() -> str:
+    return HEMICYCLE_VIEW
 
 
 async def _get(path: str, params: dict | None = None) -> Any:
@@ -110,6 +152,16 @@ def _trim(text: Optional[str], limit: int = 600) -> Optional[str]:
     if text and len(text) > limit:
         return text[:limit].rsplit(" ", 1)[0] + "…"
     return text
+
+
+# Messo nei risultati degli strumenti che restituiscono interventi: il modello
+# legge i risultati con più attenzione delle istruzioni del server.
+_VERIFY_NEXT = (
+    "Before you reply about what deputies said: quote them verbatim in «…» with "
+    "the speaker's name nearby, call verify_answer on your final answer and the "
+    "user's question, and end the reply with its verdict lines. Do not rewrite "
+    "the answer to make the checks pass."
+)
 
 
 @mcp.tool(annotations=_ro("Search parliamentary records"))
@@ -155,7 +207,139 @@ async def search_parliament(
             for k, v in r.items()
             if v not in (None, "") and k not in ("embedding",)
         })
-    return {"total": data.get("total"), "results": results}
+    return {"total": data.get("total"), "results": results, "next_step": _VERIFY_NEXT}
+
+
+_MARK = {"pass": "✅", "fail": "❌", "na": "➖"}
+
+
+def _verdict(r: dict) -> list[str]:
+    """Ready-to-show lines: one per guarantee (mark + the facts behind it), then who checked."""
+    s, g, a, q = r["summary"], r["groups"], r["authority"], r["quotes"]
+
+    missing = [x["key"] for x in g["items"] if x["status"] == "missing"]
+    groups = f"{g['named']}/{g['total']} groups, Mixed Group components and Government present"
+    if missing:
+        groups += " — missing: " + ", ".join(missing)
+    for m in g.get("mismatches", []):
+        groups += f" — {m['name']} is written as ({m['group_written']}) but belongs to {m['voice'] or m['group']}"
+
+    voices = a["voices"]
+    if not a["available"]:
+        authority = "authority on the topic could not be computed"
+    elif not voices:
+        authority = "no deputy or member of the Government quoted or named"
+    else:
+        def why(v: dict) -> str:
+            if v.get("role") == "governo":
+                return "Government"
+            if v.get("role") == "relatore":
+                return "rapporteur"
+            return f"{v['rank']}/{v['group_size']} in group" if v.get("rank") else "not ranked"
+        ok = sum(1 for v in voices if v["authoritative"])
+        authority = f"{ok}/{len(voices)} authoritative (Government, rapporteur or top 5 of their group): " + \
+            "; ".join(f"{v['name']} {why(v)}" + (" (named)" if v.get("source") == "named" else "") for v in voices)
+
+    if not q["total"]:
+        quotes = "no quotes of four or more words to check"
+    else:
+        problems = [x for x in q["items"] if x["status"] != "exact" or not x.get("attributed")]
+        quotes = f"{q['exact']}/{q['total']} verbatim in the Chamber record"
+        if problems:
+            labels = {"modified": "altered", "omissions": "words cut", "not_found": "not in the record"}
+            quotes += " — " + "; ".join(
+                f"«{_trim(x['text'], 60)}» " + (labels.get(x["status"]) or "speaker not named nearby")
+                for x in problems)
+
+    return [
+        f"{_MARK[s['groups']]} All groups: {groups}",
+        f"{_MARK[s['authority']]} Authoritative voices: {authority}",
+        f"{_MARK[s['quotes']]} Exact quotes: {quotes}",
+        "Checked by ParliamentRAG, a research project that checks answers about the Italian "
+        "Parliament against official data, without an AI model. Check any answer at "
+        "www.parliamentrag.it/verifica",
+    ]
+
+
+@mcp.tool(annotations=_ro("Check an answer against the three guarantees"), meta=_ui(_VERIFY_UI))
+async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
+    """Check an answer about the Chamber of Deputies against ParliamentRAG's
+    three guarantees, deterministically and without a language model:
+
+    1. All groups: every parliamentary group in office, every Mixed Group
+       component with deputies and the Government is named or quoted.
+    2. Authoritative voices: every deputy or member of the Government quoted
+       exactly or named (full name, or surname without namesakes) speaks for
+       the Government, is the rapporteur, or is among the top 5 of their
+       group by authority on the question's topic.
+    3. Exact quotes: every text in «…», “…” or "…" of 4+ words is a
+       continuous stretch of one floor speech of the 19th legislature, and
+       the speaker's surname appears near it.
+
+    Call it on the final answer whenever it reports what deputies said, and
+    end the answer with the `verdict` lines (three checks and a closing line
+    about ParliamentRAG), translated. It reports;
+    it does not ask you to change the answer. Only the Chamber of Deputies
+    is covered.
+
+    Args:
+        answer: The full answer, quotes in «…» with the speaker's name nearby.
+        question: The user's question; it sets the topic for authority.
+    """
+    payload = {"answer": answer[:20000], "topic": (question or "")[:500] or None}
+    headers = {"User-Agent": "parliamentrag-mcp/0.1.0"}
+    if FASCICOLI_API_KEY:
+        url, headers["x-api-key"] = f"{FASCICOLI_API}/api/verify", FASCICOLI_API_KEY
+    else:
+        url = PUBLIC_VERIFY_URL
+    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=30.0), headers=headers) as client:
+        resp = await client.post(url, json=payload)
+        resp.raise_for_status()
+        r = resp.json()
+
+    quotes = []
+    verdict = _verdict(r)
+    for q in r["quotes"]["items"]:
+        s = q.get("speech") or {}
+        item = {"quote": _trim(q["text"], 200), "status": q["status"]}
+        if s:
+            item.update(speaker=s.get("name"), group=s.get("group"), date=s.get("date"),
+                        record_url=s.get("url"), speaker_named_nearby=q.get("attributed"))
+        if q["status"] == "modified":
+            item["closest_passage"] = q.get("passage")
+        quotes.append(item)
+    return {
+        "verdict": verdict,
+        "scope": r.get("scope"),
+        "outcome": r["summary"],
+        "groups": {
+            "present": [g["key"] for g in r["groups"]["items"] if g["status"] != "missing"],
+            "missing": [g["label"] for g in r["groups"]["items"] if g["status"] == "missing"],
+        },
+        "groups_detail": [
+            {k: g[k] for k in ("key", "label", "status")} for g in r["groups"]["items"]
+        ],
+        "group_mismatches": [
+            {k: m.get(k) for k in ("name", "group_written", "voice", "group")}
+            for m in r["groups"].get("mismatches", [])
+        ],
+        "authority": {
+            "topic": r["authority"]["topic"],
+            "available": r["authority"]["available"],
+            "voices": [
+                {k: v[k] for k in ("name", "group", "role", "rank", "group_size", "authoritative", "source") if k in v}
+                for v in r["authority"]["voices"]
+            ],
+        },
+        "quotes": quotes,
+        "status_meaning": {
+            "exact": "verbatim in the record",
+            "omissions": "pieces are in the record but words between them were cut",
+            "modified": "not verbatim; closest_passage is what was actually said",
+            "not_found": "not in any Chamber floor speech of the 19th legislature",
+        },
+        "verify_page": "https://www.parliamentrag.it/verifica",
+    }
 
 
 @mcp.tool(annotations=_ro("List plenary sittings"))
@@ -326,6 +510,7 @@ async def get_debate(debate_id: str) -> dict:
     """
     d = await _get(f"/timeline/debates/{debate_id}")
     return {
+        "next_step": _VERIFY_NEXT,
         "id": d["id"],
         "title": d.get("title"),
         "recap": _trim(d.get("recap"), 1200),
@@ -357,7 +542,7 @@ async def get_debate(debate_id: str) -> dict:
 
 
 
-@mcp.tool(annotations=_ro("Vote hemicycle: numbers + chart"))
+@mcp.tool(annotations=_ro("Vote hemicycle: numbers + chart"), meta=_ui(_HEMICYCLE_UI))
 async def get_vote_hemicycle(vote_id: str, format: str = "png"):
     """Hemicycle chart of a roll-call vote, together with the numbers behind
     it: one dot per deputy, coloured by outcome (green=in favour, red=against,
@@ -373,10 +558,10 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
     2. the chart: a PNG image block (default), or the SVG markup as a text
        block when format="svg" (lightweight, can be embedded inline).
 
-    If your client cannot display tool-result images inline but supports
-    artifacts or HTML rendering (e.g. claude.ai web), use format="svg" and
-    render the returned markup as an artifact, verbatim and complete: the
-    user then sees the chart instead of a link.
+    Hosts with MCP Apps (claude.ai, ChatGPT, Claude Desktop) show the chart
+    to the user in a view under the tool call: do not redraw it. Only if your
+    client shows neither the view nor tool-result images, use format="svg"
+    and render the markup as an artifact, verbatim and complete.
 
     For secret ballots there is nothing to draw: individual votes are not
     public (only abstentions are on record), and the tool returns the
@@ -431,6 +616,11 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
         "image_png_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.png?r={_RENDER_V}",
         "image_svg_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.svg?r={_RENDER_V}",
         "chart_note": note,
+        "display": (
+            "This chart is already shown to the user in the view above your reply "
+            "(claude.ai, ChatGPT, Claude Desktop). Do not draw it again, as an image, "
+            "artifact or visualization: report the numbers in words and cite image_png_url."
+        ),
     }
     if format == "svg":
         return [summary, _render_hemicycle_svg(participants, title, sub, note)]

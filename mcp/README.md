@@ -23,6 +23,7 @@ Aggiungi `https://mcp.parliamentrag.it/mcp` ai connettori del tuo assistente
 | `get_voted_text` | Testo integrale dell'emendamento/articolo votato, dall'Allegato A del resoconto |
 | `get_debate` | Dettaglio dibattito: riassunto, atti discussi, oratori |
 | `get_vote_hemicycle` | L'emiciclo della votazione come immagine: un punto per deputato, colori per esito, mostrato direttamente nella chat |
+| `verify_answer` | Controlla una risposta sulle tre garanzie (tutti i gruppi, voci autorevoli, citazioni esatte), in modo deterministico, su tutti gli interventi in Aula della XIX legislatura |
 
 ## Installazione
 

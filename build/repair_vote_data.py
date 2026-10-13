@@ -11,6 +11,11 @@ Riparazioni indipendenti, attivabili singolarmente:
                   (deputato, votazione) con dc:type "Astensione" e setta
                   outcome='abstain' sui nodi corrispondenti.
 
+  --secret        Nelle votazioni segrete dati.camera.it pubblica solo la
+                  partecipazione (dc:type "Ha votato"), che la vecchia
+                  OUTCOME_MAP salvava come "absent": rilegge da SPARQL quelle
+                  coppie e setta outcome='secret' (52 votazioni XIX, 2026-10-12).
+
   --subjects      Backfill di subject/description/finalVote/confidenceVote e
                   della relazione (Vote)-[:ON_ACT]->(ParliamentaryAct) per
                   tutte le votazioni leg 19. Le votazioni delle sedute 1-349
@@ -139,6 +144,56 @@ LIMIT {limit}
     missing = len(id_list) - updated
     logger.info("Astensioni riparate: %d aggiornate, %d senza nodo in DB "
                 "(deputati mai matchati in ingest: atteso)", updated, missing)
+
+
+def repair_secret_ballots(driver) -> None:
+    logger.info("Fetch partecipazioni a voti segreti leg 19 da SPARQL...")
+    where = """
+  ?voto a ocd:voto ;
+        dc:type "Ha votato" ;
+        ocd:rif_votazione ?votazione ;
+        ocd:rif_deputato ?deputato .
+  ?votazione ocd:rif_leg <""" + LEG_URI + "> ."
+    expected = _count(where, key_var="voto")
+    rows = _paged("""
+PREFIX ocd: <http://dati.camera.it/ocd/>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+SELECT DISTINCT ?voto ?deputato ?votazione WHERE {{""" + where + """
+  {key_filter}
+}}
+ORDER BY STR(?voto)
+LIMIT {limit}
+""", key_var="voto")
+    if len(rows) < expected:
+        raise RuntimeError(
+            f"Fetch voti segreti incompleto: {len(rows)}/{expected} righe — "
+            "pagina SPARQL fallita, nessuna scrittura eseguita."
+        )
+
+    ids = set()
+    for row in rows:
+        dep = _DEPUTATO_URI_RE.search(row.get("deputato", {}).get("value", ""))
+        sed, vot = parse_votazione_uri(row.get("votazione", {}).get("value", ""))
+        if dep and sed is not None:
+            ids.add(f"iv_camera_{dep.group(1)}_{sed}_{vot}")
+    logger.info("Voti segreti: %d righe SPARQL -> %d id univoci", len(rows), len(ids))
+
+    id_list = sorted(ids)
+    updated = 0
+    with driver.session() as session:
+        for i in range(0, len(id_list), NEO4J_BATCH):
+            rec = session.run(
+                """
+                UNWIND $ids AS ivId
+                MATCH (iv:IndividualVote {id: ivId})
+                SET iv.outcome = 'secret'
+                RETURN count(iv) AS n
+                """,
+                ids=id_list[i:i + NEO4J_BATCH],
+            ).single()
+            updated += rec["n"] if rec else 0
+    logger.info("Voti segreti riparati: %d aggiornati, %d senza nodo in DB",
+                updated, len(id_list) - updated)
 
 
 def repair_subjects(driver) -> None:
@@ -312,16 +367,19 @@ def main() -> None:
     parser.add_argument("--neo4j-user", default="neo4j")
     parser.add_argument("--neo4j-password", default=os.environ.get("NEO4J_PASSWORD", ""))
     parser.add_argument("--abstentions", action="store_true")
+    parser.add_argument("--secret", action="store_true")
     parser.add_argument("--subjects", action="store_true")
     parser.add_argument("--government", action="store_true")
     args = parser.parse_args()
 
-    run_all = not (args.abstentions or args.subjects or args.government)
+    run_all = not (args.abstentions or args.secret or args.subjects or args.government)
     driver = GraphDatabase.driver(args.neo4j_uri, auth=(args.neo4j_user, args.neo4j_password))
     try:
         driver.verify_connectivity()
         if args.abstentions or run_all:
             repair_abstentions(driver)
+        if args.secret or run_all:
+            repair_secret_ballots(driver)
         if args.subjects or run_all:
             repair_subjects(driver)
         if args.government or run_all:

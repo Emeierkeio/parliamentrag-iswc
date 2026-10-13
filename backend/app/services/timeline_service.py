@@ -465,9 +465,10 @@ async def get_vote_detail(
 
     Individual votes live in the graph as:
       (Person)-[:VOTED]->(IndividualVote {outcome})-[:ON_VOTE]->(Vote)
-    with outcome in {"favor", "against", "abstain", "absent"}. In secret
-    ballots the source data hides the expression ("Ha votato"), so every
-    record is "absent" and the frontend shows a dedicated notice instead.
+    with outcome in {"favor", "against", "abstain", "absent", "secret"}. In
+    secret ballots the source data publishes participation only ("Ha
+    votato"): those records are "secret", and the frontend shows a dedicated
+    notice instead of the seat map.
 
     Party attribution is date-aware via MEMBER_OF_GROUP; deputies in the
     Gruppo Misto are attributed to their political component
@@ -548,7 +549,7 @@ async def get_vote_detail(
     for p in participants:
         party = p.party or "—"
         bucket = counts.setdefault(
-            party, {"favor": 0, "against": 0, "abstain": 0, "absent": 0}
+            party, {"favor": 0, "against": 0, "abstain": 0, "absent": 0, "secret": 0}
         )
         # Unknown outcome values count as absent instead of silently vanishing
         # (pydantic would drop an unexpected key at model construction).
@@ -558,7 +559,7 @@ async def get_vote_detail(
             VotePartyBreakdown(party=party, **b)
             for party, b in counts.items()
         ),
-        key=lambda b: b.favor + b.against + b.abstain + b.absent,
+        key=lambda b: b.favor + b.against + b.abstain + b.absent + b.secret,
         reverse=True,
     )
 
