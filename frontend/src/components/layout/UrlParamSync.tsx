@@ -13,7 +13,7 @@ export function UrlParamSync() {
 
   useEffect(() => {
     const urlLang = searchParams.get("lang");
-    if (!urlLang || !["it", "en", "fr", "de", "es", "pt"].includes(urlLang)) return;
+    if (!urlLang || !["it", "en"].includes(urlLang)) return;
 
     const currentCookie = document.cookie
       .split("; ")
