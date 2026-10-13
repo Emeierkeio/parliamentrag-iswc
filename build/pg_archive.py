@@ -15,6 +15,16 @@ speech, sitting, speaker and the group the speaker belonged to on that day)
 and the text of their speeches. The backend reads both through
 backend/app/services/archive.py.
 Idempotent: rows are upserted by chunk id.
+
+  python build/pg_archive.py strip --pg postgresql://... --neo4j-uri bolt://... \
+      --assembly senato --term 19
+
+strip removes from Neo4j what the archive now holds: text and embedding of
+each chunk whose archived text is identical, and the text of each speech that
+is archived and already has its text_embedding (authority needs it). The
+nodes and relations stay. load skips stripped chunks (no embedding left), so
+the nightly sequence ingest -> embeddings -> load -> strip only moves the new
+sittings. --sessions limits load and strip to some sitting numbers.
 """
 
 import argparse
@@ -90,6 +100,30 @@ WHERE sp.text IS NOT NULL AND EXISTS { (sp)-[:HAS_CHUNK]->() }
 RETURN DISTINCT sp.id AS id, s.date AS session_date, sp.text AS text
 """
 
+NEO4J_TEXT = """
+MATCH (s:Session {chamber: $assembly, legislature: $term})
+WHERE s.number IN $numbers
+MATCH (s)-[:HAS_DEBATE]->(:Debate)-[:HAS_PHASE]->(:Phase)-[:CONTAINS_SPEECH]->(sp:Speech)
+OPTIONAL MATCH (sp)-[:HAS_CHUNK]->(c:Chunk)
+WHERE c.text IS NOT NULL OR c.embedding IS NOT NULL
+RETURN sp.id AS speech_id, sp.text AS speech_text,
+       sp.text_embedding IS NOT NULL AS has_speech_embedding,
+       collect([c.id, c.text]) AS chunks
+"""
+
+STRIP_CHUNKS = "UNWIND $ids AS cid MATCH (c:Chunk {id: cid}) REMOVE c.text, c.embedding"
+STRIP_SPEECHES = "UNWIND $ids AS sid MATCH (sp:Speech {id: sid}) REMOVE sp.text"
+
+
+def _session_numbers(driver, assembly: str, term: int, only=None) -> list:
+    with driver.session() as s:
+        numbers = sorted(r["n"] for r in s.run(
+            "MATCH (x:Session {chamber: $a, legislature: $t}) RETURN x.number AS n",
+            a=assembly, t=term))
+    if only:
+        numbers = [n for n in numbers if n in set(only)]
+    return numbers
+
 
 def cmd_schema(pg: str) -> None:
     with psycopg.connect(pg, autocommit=True) as conn:
@@ -102,14 +136,11 @@ def _vector_text(values) -> str:
 
 
 def cmd_load(pg: str, neo4j_uri: str, user: str, password: str,
-             assembly: str, term: int, sessions_per_batch: int) -> None:
+             assembly: str, term: int, sessions_per_batch: int, only=None) -> None:
     from neo4j import GraphDatabase
 
     driver = GraphDatabase.driver(neo4j_uri, auth=(user, password))
-    with driver.session() as s:
-        numbers = sorted(r["n"] for r in s.run(
-            "MATCH (x:Session {chamber: $a, legislature: $t}) RETURN x.number AS n",
-            a=assembly, t=term))
+    numbers = _session_numbers(driver, assembly, term, only)
     logger.info("%s %d: %d sittings", assembly, term, len(numbers))
 
     total = 0
@@ -166,11 +197,49 @@ def cmd_load(pg: str, neo4j_uri: str, user: str, password: str,
     driver.close()
 
 
+def cmd_strip(pg: str, neo4j_uri: str, user: str, password: str,
+              assembly: str, term: int, sessions_per_batch: int, only=None) -> None:
+    from neo4j import GraphDatabase
+
+    driver = GraphDatabase.driver(neo4j_uri, auth=(user, password))
+    numbers = _session_numbers(driver, assembly, term, only)
+    n_chunks = n_speeches = n_kept = 0
+    with psycopg.connect(pg) as conn:
+        for i in range(0, len(numbers), sessions_per_batch):
+            batch = numbers[i:i + sessions_per_batch]
+            with driver.session() as s:
+                rows = s.run(NEO4J_TEXT, assembly=assembly, term=term, numbers=batch).data()
+            chunk_text = {cid: text for r in rows for cid, text in r["chunks"] if cid}
+            archived_chunks = dict(conn.execute(
+                "SELECT id, text FROM chunk WHERE id = ANY(%s)", [list(chunk_text)]).fetchall())
+            archived_speeches = dict(conn.execute(
+                "SELECT id, text FROM speech WHERE id = ANY(%s)",
+                [[r["speech_id"] for r in rows if r["speech_text"] is not None]]).fetchall())
+            # A chunk goes only if the archive has the same text; a speech only
+            # if the archive has it and its text_embedding is already computed.
+            chunk_ids = [cid for cid, text in chunk_text.items()
+                         if cid in archived_chunks and (text is None or archived_chunks[cid] == text)]
+            speech_ids = [r["speech_id"] for r in rows
+                          if r["speech_text"] is not None and r["has_speech_embedding"]
+                          and archived_speeches.get(r["speech_id"]) == r["speech_text"]]
+            n_kept += len(chunk_text) - len(chunk_ids)
+            with driver.session() as s:
+                if chunk_ids:
+                    s.run(STRIP_CHUNKS, ids=chunk_ids).consume()
+                if speech_ids:
+                    s.run(STRIP_SPEECHES, ids=speech_ids).consume()
+            n_chunks += len(chunk_ids)
+            n_speeches += len(speech_ids)
+    logger.info("stripped %d chunks and %d speeches; %d chunks kept (not archived or different)",
+                n_chunks, n_speeches, n_kept)
+    driver.close()
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
                         datefmt="%H:%M:%S")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    ap.add_argument("command", choices=["schema", "load"])
+    ap.add_argument("command", choices=["schema", "load", "strip"])
     ap.add_argument("--pg", required=True, help="Postgres connection string")
     ap.add_argument("--neo4j-uri")
     ap.add_argument("--neo4j-user", default="neo4j")
@@ -178,15 +247,20 @@ def main() -> int:
     ap.add_argument("--assembly", default="senato")
     ap.add_argument("--term", type=int, default=19)
     ap.add_argument("--sessions-per-batch", type=int, default=10)
+    ap.add_argument("--sessions", type=int, nargs="+", help="only these sitting numbers")
     args = ap.parse_args()
     if args.command == "schema":
         cmd_schema(args.pg)
-    else:
-        if not args.neo4j_uri:
-            ap.error("load needs --neo4j-uri")
+        return 0
+    if not args.neo4j_uri:
+        ap.error(f"{args.command} needs --neo4j-uri")
+    common = (args.pg, args.neo4j_uri, args.neo4j_user, args.neo4j_password,
+              args.assembly, args.term, args.sessions_per_batch, args.sessions)
+    if args.command == "load":
         cmd_schema(args.pg)
-        cmd_load(args.pg, args.neo4j_uri, args.neo4j_user, args.neo4j_password,
-                 args.assembly, args.term, args.sessions_per_batch)
+        cmd_load(*common)
+    else:
+        cmd_strip(*common)
     return 0
 
 

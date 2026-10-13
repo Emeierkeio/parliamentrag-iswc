@@ -12,6 +12,10 @@
 # 30 giorni, ~10 per i DDL). Gli atti di controllo arrivano da aic.camera.it
 # (27 pagine), non dal Senato. Exit 3 = il Senato ha cominciato a rifiutare le
 # richieste: il resto si recupera al giro dopo.
+#
+# Con ARCHIVE_URL (ambiente o .env) il testo e i vettori delle sedute nuove
+# passano nell'archivio Postgres e poi escono dal grafo (decisione 12/10/2026,
+# build/pg_archive.py). Senza, il testo resta in Neo4j come sullo staging.
 set -u -o pipefail
 
 cd "$(dirname "$0")/.."
@@ -23,6 +27,7 @@ PY="$BACKEND_DIR/venv/bin/python"
 USER_VAL=$(grep '^NEO4J_USER=' .env | cut -d= -f2-)
 PASS_VAL=$(grep '^NEO4J_PASSWORD=' .env | cut -d= -f2-)
 USER_VAL="${USER_VAL:-neo4j}"
+ARCHIVE_VAL="${ARCHIVE_URL:-$(grep '^ARCHIVE_URL=' .env | cut -d= -f2-)}"
 
 rc_all=0
 step() { # label cmd...
@@ -56,5 +61,17 @@ step "atti di controllo e indirizzo → grafo" env NEO4J_PASSWORD="$PASS_VAL" \
 step "disegni di legge e firmatari" "$PY" build/download_senate_ddl.py --legislature 19
 step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/link_senate_acts.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
+
+archive() { # load | strip
+	env NEO4J_PASSWORD="$PASS_VAL" "$PY" build/pg_archive.py "$1" --pg "$ARCHIVE_VAL" \
+		--neo4j-uri "$URI" --neo4j-user "$USER_VAL" --assembly senato --term 19
+}
+if [ -n "$ARCHIVE_VAL" ]; then
+	# load prende solo i chunk che hanno ancora il vettore nel grafo, strip
+	# toglie solo ciò che l'archivio ha identico: se un passo prima è fallito,
+	# il testo resta nel grafo e passa al giro dopo.
+	step "testo e vettori → archivio Postgres" archive load
+	step "testo e vettori archiviati tolti dal grafo" archive strip
+fi
 
 exit "$rc_all"

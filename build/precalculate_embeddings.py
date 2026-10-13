@@ -168,7 +168,7 @@ def main():
 
     # Check totali per info
     try:
-        total_chunks = neo4j.query_single("MATCH (c:Chunk) RETURN count(c) as cnt")['cnt']
+        total_chunks = neo4j.query_single("MATCH (c:Chunk) WHERE c.text IS NOT NULL RETURN count(c) as cnt")['cnt']
         done_chunks = neo4j.query_single("MATCH (c:Chunk) WHERE c.embedding IS NOT NULL RETURN count(c) as cnt")['cnt']
         logger.info(f"Stato Chunks: {done_chunks}/{total_chunks} completati.")
     except Exception as e:
@@ -178,7 +178,7 @@ def main():
         # Recupera chunk senza embedding
         query_chunk = """
             MATCH (c:Chunk)
-            WHERE c.embedding IS NULL
+            WHERE c.embedding IS NULL AND c.text IS NOT NULL
             RETURN c.id as id, c.text as text
             LIMIT $limit
         """

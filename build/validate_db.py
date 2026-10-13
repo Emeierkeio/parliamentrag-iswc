@@ -186,6 +186,7 @@ class Validator:
         print("\n[5] Invariante substring chunk (C8) — campione 5000")
         rows = self.q("""
             MATCH (c:Chunk)<-[:HAS_CHUNK]-(sp:Speech)
+            WHERE c.text IS NOT NULL AND sp.text IS NOT NULL
             WITH c, sp, rand() AS rnd ORDER BY rnd LIMIT 5000
             RETURN sum(CASE WHEN sp.text CONTAINS c.text THEN 0 ELSE 1 END) AS bad,
                    count(*) AS tot

@@ -171,7 +171,7 @@ class CitabilityClassifier:
         with self._driver.session() as s:
             rows = s.run(
                 "MATCH (c:Chunk) WHERE (c.citability_v IS NULL OR c.citability_v < $v) "
-                "AND NOT c.id IN $skip "
+                "AND c.text IS NOT NULL AND NOT c.id IN $skip "
                 "RETURN c.id AS id, c.text AS text LIMIT $n",
                 v=CITABILITY_V,
                 skip=list(skip_ids),
@@ -342,8 +342,8 @@ class CitabilityClassifier:
         pending = self.count_pending()
         with self._driver.session() as s:
             avg_len = s.run(
-                "MATCH (c:Chunk) WHERE c.citability_v IS NULL OR c.citability_v < $v "
-                "RETURN avg(size(c.text)) AS a",
+                "MATCH (c:Chunk) WHERE (c.citability_v IS NULL OR c.citability_v < $v) "
+                "AND c.text IS NOT NULL RETURN avg(size(c.text)) AS a",
                 v=CITABILITY_V,
             ).single()["a"] or 0
         # input: chunk text + prompt overhead; output: ~60 tokens per chunk

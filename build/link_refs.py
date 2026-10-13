@@ -209,7 +209,7 @@ def main():
         last_id = ""
         while True:
             rows = session.run(
-                "MATCH (c:Chunk) WHERE c.id > $last "
+                "MATCH (c:Chunk) WHERE c.id > $last AND c.text IS NOT NULL "
                 "RETURN c.id AS id, c.text AS text, c.personRefs AS personRefs "
                 "ORDER BY c.id LIMIT $limit",
                 last=last_id, limit=args.batch_size,

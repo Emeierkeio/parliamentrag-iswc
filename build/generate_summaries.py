@@ -26,8 +26,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 import time
+from pathlib import Path
 from typing import Optional
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+from app.services.archive import fill_rows  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -498,7 +503,10 @@ RETURN sp.text AS text,
 ORDER BY p.id, sp.id
 """
         with self._driver.session() as neo_session:
-            result = neo_session.run(cypher, debate_id=debate_id)
+            # Text of archived speeches (Senate) is in the Postgres archive
+            # when ARCHIVE_URL is set, not in Neo4j.
+            result = fill_rows(neo_session.run(cypher, debate_id=debate_id).data(),
+                               speech_fields={"speechId": "text"})
             return [
                 {
                     "text": r["text"] or "",
