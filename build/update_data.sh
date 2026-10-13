@@ -327,9 +327,10 @@ run "Emendamenti → JSONL unico" "$PY" build/parse_emendamenti.py \
 	|| warn "parse emendamenti fallito"
 
 # ── Senato XIX ───────────────────────────────────────────────────────────────
-# Solo su un DB che contiene già il Senato (oggi lo staging): finché il Senato
-# non è in produzione SENATO_NEO4J resta vuoto e il passo si salta.
-: "${SENATO_NEO4J:=}"
+# Solo su un DB che contiene già il Senato: SENATO_NEO4J (ambiente o .env) è
+# quel DB; vuoto, il passo si salta. Con ARCHIVE_URL nel .env il testo del
+# Senato va nell'archivio Postgres (update_senato.sh).
+: "${SENATO_NEO4J:=$(grep '^SENATO_NEO4J=' .env | cut -d= -f2-)}"
 if [ -z "$SENATO_NEO4J" ]; then
 	note "Senato: SENATO_NEO4J non impostato — saltato."
 else
