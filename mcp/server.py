@@ -73,14 +73,12 @@ mcp = FastMCP(
         "ParliamentRAG makes three guarantees on answers about Parliament: all "
         "groups are heard, the voices quoted are authoritative on the topic, "
         "and every quote is exact, with a link to the record. Whenever your "
-        "answer reports or quotes what deputies said in the Chamber, write the "
-        "draft with quotes in «…», each followed by the speaker's name, then "
-        "call verify_answer on the draft and the user's question before "
-        "replying. Fix what fails (remove or correct inexact quotes, add the "
-        "missing groups or say they did not speak on the topic, prefer the "
-        "authoritative voices) and end the answer with one line on the "
-        "outcome of the three checks. If a guarantee cannot be met, say so "
-        "rather than quoting someone who does not meet it."
+        "answer reports or quotes what deputies said in the Chamber, put quotes "
+        "in «…» with the speaker's name nearby, then call verify_answer on the "
+        "final answer and the user's question. Do not rewrite the answer to "
+        "make the checks pass: show the outcome. End the answer with the three "
+        "lines of `verdict` from the result, translated into the language of "
+        "the conversation, keeping the ✅/❌ marks and the facts as given.\n"
     ),
     **({"icons": _ICONS} if _ICONS else {}),
 )
@@ -175,6 +173,52 @@ async def search_parliament(
     return {"total": data.get("total"), "results": results}
 
 
+_MARK = {"pass": "✅", "fail": "❌", "na": "➖"}
+
+
+def _verdict(r: dict) -> list[str]:
+    """Three ready-to-show lines, one per guarantee: mark + the facts behind it."""
+    s, g, a, q = r["summary"], r["groups"], r["authority"], r["quotes"]
+
+    missing = [x["key"] for x in g["items"] if x["status"] == "missing"]
+    groups = f"{g['named']}/{g['total']} groups, Mixed Group components and Government present"
+    if missing:
+        groups += " — missing: " + ", ".join(missing)
+
+    voices = a["voices"]
+    if not a["available"]:
+        authority = "authority on the topic could not be computed"
+    elif not voices:
+        authority = "no exact quote to assess"
+    else:
+        def why(v: dict) -> str:
+            if v.get("role") == "governo":
+                return "Government"
+            if v.get("role") == "relatore":
+                return "rapporteur"
+            return f"{v['rank']}/{v['group_size']} in group" if v.get("rank") else "not ranked"
+        ok = sum(1 for v in voices if v["authoritative"])
+        authority = f"{ok}/{len(voices)} authoritative (Government, rapporteur or top 5 of their group): " + \
+            "; ".join(f"{v['name']} {why(v)}" for v in voices)
+
+    if not q["total"]:
+        quotes = "no quotes of four or more words to check"
+    else:
+        problems = [x for x in q["items"] if x["status"] != "exact" or not x.get("attributed")]
+        quotes = f"{q['exact']}/{q['total']} verbatim in the Chamber record"
+        if problems:
+            labels = {"modified": "altered", "omissions": "words cut", "not_found": "not in the record"}
+            quotes += " — " + "; ".join(
+                f"«{_trim(x['text'], 60)}» " + (labels.get(x["status"]) or "speaker not named nearby")
+                for x in problems)
+
+    return [
+        f"{_MARK[s['groups']]} All groups: {groups}",
+        f"{_MARK[s['authority']]} Authoritative voices: {authority}",
+        f"{_MARK[s['quotes']]} Exact quotes: {quotes}",
+    ]
+
+
 @mcp.tool(annotations=_ro("Check an answer against the three guarantees"))
 async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
     """Check an answer about the Chamber of Deputies against ParliamentRAG's
@@ -189,11 +233,13 @@ async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
        continuous stretch of one floor speech of the 19th legislature, and
        the speaker's surname appears near it.
 
-    Call it on your draft before answering whenever the answer reports what
-    deputies said. Only the Chamber of Deputies is covered.
+    Call it on the final answer whenever it reports what deputies said, and
+    end the answer with the three `verdict` lines, translated. It reports;
+    it does not ask you to change the answer. Only the Chamber of Deputies
+    is covered.
 
     Args:
-        answer: The full draft answer, quotes in «…» followed by the speaker.
+        answer: The full answer, quotes in «…» with the speaker's name nearby.
         question: The user's question; it sets the topic for authority.
     """
     payload = {"answer": answer[:20000], "topic": (question or "")[:500] or None}
@@ -208,6 +254,7 @@ async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
         r = resp.json()
 
     quotes = []
+    verdict = _verdict(r)
     for q in r["quotes"]["items"]:
         s = q.get("speech") or {}
         item = {"quote": _trim(q["text"], 200), "status": q["status"]}
@@ -218,6 +265,7 @@ async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
             item["closest_passage"] = q.get("passage")
         quotes.append(item)
     return {
+        "verdict": verdict,
         "scope": r.get("scope"),
         "outcome": r["summary"],
         "groups": {
