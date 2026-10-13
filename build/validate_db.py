@@ -23,7 +23,10 @@ WARN = "\033[93mWARN\033[0m"
 
 # Pattern URI dei dataset LOD sorgente (C10)
 URI_PATTERNS = {
-    "ParliamentaryAct": ("uri", ("http://dati.camera.it/", "placeholder:")),
+    # Senate bills by their dati.senato.it URI; Senate control acts (from
+    # aic.camera.it) by <assembly>:<term>:<type>:<key>, PLAN_data_platform 9.3.
+    "ParliamentaryAct": ("uri", ("http://dati.camera.it/", "placeholder:",
+                                 "http://dati.senato.it/ddl/", "senato:")),
     "EurovocConcept": ("uri", ("http://eurovoc.europa.eu/",)),
 }
 

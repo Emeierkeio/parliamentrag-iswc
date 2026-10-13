@@ -1727,7 +1727,21 @@ class DatabaseBuilder:
                 REMOVE m.chamber
                 RETURN count(m) AS c
             """).single()["c"])
-        print(f"Group links marked as party affiliation: {n}")
+            # A minister who also holds a seat (the senator-ministers once the
+            # Senate is loaded) would otherwise have two open groups, and every
+            # retrieval row of theirs would come out twice.
+            dropped = neo_session.execute_write(lambda tx: tx.run("""
+                MATCH (p:Person)-[m:MEMBER_OF_GROUP {affiliation: true}]->()
+                WHERE EXISTS {
+                    MATCH (p)-[seat:MEMBER_OF_GROUP]->()
+                    WHERE seat.chamber IS NOT NULL AND seat.legislature = m.legislature
+                      AND seat.start_date <= coalesce(m.end_date, date('9999-12-31'))
+                      AND coalesce(seat.end_date, date('9999-12-31')) >= m.start_date
+                }
+                DELETE m
+                RETURN count(*) AS c
+            """).single()["c"])
+        print(f"Group links marked as party affiliation: {n}, dropped where a seat covers them: {dropped}")
         return n
 
     def close_memberships_at_mandate_end(self, data_path: str, legislature: int) -> int:
