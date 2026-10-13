@@ -527,7 +527,7 @@ export function useChat(options: UseChatOptions = {}) {
                 }
 
                 // Extract citation links from generated text for cross-check
-                const textCitLinks = (accumulatedContent.match(/\]\((leg1[89]_[^)]+)\)/g) || [])
+                const textCitLinks = (accumulatedContent.match(/\]\(((?:sen_)?leg1[89]_[^)]+)\)/g) || [])
                   .map((m: string) => m.slice(2, -1));
                 const sidebarIds = new Set(citations.map(c => c.chunk_id));
                 const unmatchedLinks = textCitLinks.filter((id: string) => !sidebarIds.has(id));

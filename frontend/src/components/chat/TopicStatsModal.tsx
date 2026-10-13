@@ -91,6 +91,7 @@ function buildSessionUrl(sessionNumber: number): string {
 
 function buildSpeechUrl(speechId: string): string | null {
   if (!speechId) return null;
+  if (speechId.startsWith("sen_")) return "https://www.senato.it/lavori/assemblea/resoconti-elenco-cronologico";
   const match = speechId.match(/leg\d+_sed(\d+)_(.+)/);
   if (!match) return null;
   const [, sedutaStr, rest] = match;
@@ -372,7 +373,9 @@ export function TopicStatsModal({
             <ScrollArea className="flex-1 h-0 [&_[data-radix-scroll-area-viewport]>div]:!block">
               <div className="px-6 py-4 space-y-2 w-full">
                 {stats.sessions_detail.map((session, i) => {
-                  const sessionUrl = buildSessionUrl(session.session_number);
+                  const sessionUrl = (session as { chamber?: string }).chamber === "senato"
+                    ? "https://www.senato.it/lavori/assemblea/resoconti-elenco-cronologico"
+                    : buildSessionUrl(session.session_number);
                   return (
                     <a
                       key={`${session.session_number}-${i}`}

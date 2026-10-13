@@ -26,6 +26,9 @@ import type { Citation } from "@/types";
 
 function getCameraUrl(id: string | undefined): string | null {
   if (!id) return null;
+  // Senate speeches (sen_leg19_...): a single sitting record needs an internal
+  // senato.it document id, so the link opens the list of sittings.
+  if (id.startsWith("sen_")) return "https://www.senato.it/lavori/assemblea/resoconti-elenco-cronologico";
   // Match legXX_sedY_... where Y is the seduta number
   // Example: leg19_sed2_tit00040
   // Example: leg19_sed3_tit00080.int00060

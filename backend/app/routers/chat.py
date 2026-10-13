@@ -543,7 +543,7 @@ async def process_chat_background(
                             return match.group(1)
                         return match.group(0)
                     final_text = _re.sub(
-                        r'\[([^\]]+)\]\((leg1[89]_[^)]+)\)',
+                        r'\[([^\]]+)\]\(((?:sen_)?leg1[89]_[^)]+)\)',
                         _strip_missing,
                         final_text
                     )
@@ -555,7 +555,7 @@ async def process_chat_background(
                         return match.group(1)
                     return match.group(0)
                 final_text = _re.sub(
-                    r'\[([^\]]+)\]\((leg1[89]_[^)]+)\)',
+                    r'\[([^\]]+)\]\(((?:sen_)?leg1[89]_[^)]+)\)',
                     _strip_extra,
                     final_text
                 )
@@ -576,7 +576,7 @@ async def process_chat_background(
 
         # Build the complete citation list, recovering IDs that appear in the
         # text but were not tracked by the generation stage.
-        text_evidence_ids = set(_re.findall(r'\]\((leg1[89]_[^)]+)\)', final_text))
+        text_evidence_ids = set(_re.findall(r'\]\(((?:sen_)?leg1[89]_[^)]+)\)', final_text))
         evidence_map_for_cit = {e.get("evidence_id"): e for e in evidence_dicts}
         evidence_map_for_cit.update(extra_evidence_map)
 

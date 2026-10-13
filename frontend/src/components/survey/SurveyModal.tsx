@@ -1225,7 +1225,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
     // Normalise line endings; remove technical refs
     const lines = text
       .replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-      .replace(/\(leg\d+_[^)]+\)/g, "")
+      .replace(/\((?:sen_)?leg\d+_[^)]+\)/g, "")
       .replace(/^[-*]\s+/gm, "• ")
       .split("\n");
 

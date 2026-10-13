@@ -526,7 +526,8 @@ export function MessageBubble({ message, className, chatId, answerTrace, answerS
                     href.includes("chunk_") ||
                     href.startsWith("cit_") ||
                     href.startsWith("leg19_") ||
-                    href.startsWith("leg18_")
+                    href.startsWith("leg18_") ||
+                    href.startsWith("sen_leg")
                   );
 
                   if (isCitationLink) {

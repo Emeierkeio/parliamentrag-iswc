@@ -654,7 +654,7 @@ async def process_query_streaming(
                             return match.group(1)
                         return match.group(0)
                     final_text = _re.sub(
-                        r'\[([^\]]+)\]\((leg1[89]_[^)]+)\)',
+                        r'\[([^\]]+)\]\(((?:sen_)?leg1[89]_[^)]+)\)',
                         _strip_missing,
                         final_text
                     )
@@ -666,7 +666,7 @@ async def process_query_streaming(
                         return match.group(1)
                     return match.group(0)
                 final_text = _re.sub(
-                    r'\[([^\]]+)\]\((leg1[89]_[^)]+)\)',
+                    r'\[([^\]]+)\]\(((?:sen_)?leg1[89]_[^)]+)\)',
                     _strip_extra,
                     final_text
                 )
@@ -674,7 +674,7 @@ async def process_query_streaming(
             logger.debug("[QUERY:CITATIONS] No extra citation IDs to resolve")
 
         # Build complete citation_details
-        text_evidence_ids = set(_re.findall(r'\]\((leg1[89]_[^)]+)\)', final_text))
+        text_evidence_ids = set(_re.findall(r'\]\(((?:sen_)?leg1[89]_[^)]+)\)', final_text))
         evidence_map_for_cit = {e.get("evidence_id"): e for e in evidence_dicts}
         evidence_map_for_cit.update(extra_evidence_map)
         logger.debug(f"[QUERY:CITATIONS] text_links={len(text_evidence_ids)}, evidence_map={len(evidence_map_for_cit)} (original={len(evidence_dicts)}, extra={len(extra_evidence_map)})")

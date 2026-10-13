@@ -493,7 +493,7 @@ class GenerationPipeline:
         valid_evidence_ids = set(evidence_map.keys())
         all_text_ids = set(
             m[1] for m in re.findall(
-                r'\[([^\]]+)\]\((leg1[89]_[^)]+)\)', final_text
+                r'\[([^\]]+)\]\(((?:sen_)?leg1[89]_[^)]+)\)', final_text
             )
         )
         extra_citation_ids = list(all_text_ids - valid_evidence_ids)
@@ -513,7 +513,7 @@ class GenerationPipeline:
             c.get("evidence_id") for c in final_result.get("citations", [])
         }
         untracked_links = re.findall(
-            r'\[([^\]]+)\]\((leg1[89]_[^)]+)\)', final_text
+            r'\[([^\]]+)\]\(((?:sen_)?leg1[89]_[^)]+)\)', final_text
         )
         for display_text, eid in untracked_links:
             if eid not in tracked_ids and eid in evidence_map:
@@ -745,20 +745,24 @@ class GenerationPipeline:
             reverse=True,
         )
 
-        # Sessions: one entry per unique session number
-        seen_sessions: Dict[int, Dict[str, Any]] = {}
+        # Sessions: one entry per sitting. Numbers repeat across chambers
+        # (Senate 463 is not Camera 463), so the sitting id is the key.
+        seen_sessions: Dict[str, Dict[str, Any]] = {}
         for e in evidence_list:
             sn = e.get("session_number")
-            if not sn or sn in seen_sessions:
+            key = e.get("doc_id") or str(sn)
+            if not sn or key in seen_sessions:
                 continue
-            seen_sessions[sn] = {
+            seen_sessions[key] = {
                 "session_number": sn,
+                "session_id": e.get("doc_id", ""),
+                "chamber": "senato" if str(e.get("doc_id", "")).startswith("sen_") else "camera",
                 "date": str(e.get("date", "")),
                 "debate_title": e.get("debate_title", ""),
             }
         sessions_detail = sorted(
             seen_sessions.values(),
-            key=lambda x: x["session_number"],
+            key=lambda x: (x["chamber"], x["session_number"]),
         )
 
         return {
@@ -973,12 +977,12 @@ class GenerationPipeline:
         other ](id), extending leftward to the fragment opening (« or
         sentence boundary).
         """
-        link_re = re.compile(r'\[«[^»]{1,600}»\]\((leg1[89]_[^)\s]+)\)')
+        link_re = re.compile(r'\[«[^»]{1,600}»\]\(((?:sen_)?leg1[89]_[^)\s]+)\)')
         first_span: Dict[str, tuple] = {}
         for m in link_re.finditer(text):
             first_span.setdefault(m.group(1), (m.start(), m.end()))
 
-        tail_re = re.compile(r'»?\]\((leg1[89]_[^)\s]+)\)')
+        tail_re = re.compile(r'»?\]\(((?:sen_)?leg1[89]_[^)\s]+)\)')
         removals = []
         for m in tail_re.finditer(text):
             eid = m.group(1)

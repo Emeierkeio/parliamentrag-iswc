@@ -14,7 +14,7 @@ from ..key_pool import make_async_client
 logger = logging.getLogger(__name__)
 
 # Citation-link targets ](leg19_...) — the IDs the frontend resolves.
-_LINK_TARGET = re.compile(r'\]\((leg1[89]_[^)\s]+)\)')
+_LINK_TARGET = re.compile(r'\]\(((?:sen_)?leg1[89]_[^)\s]+)\)')
 _PLACEHOLDER = re.compile(r'__CIT_(\d+)__')
 
 
