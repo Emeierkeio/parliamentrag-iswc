@@ -1,9 +1,9 @@
 # ParliamentRAG MCP server
 
-Porta i dati della Camera dei Deputati (XIX legislatura) dentro Claude e
-qualunque client [MCP](https://modelcontextprotocol.io): ricerca ibrida su
-interventi e atti, sedute con riassunti, votazioni con i voti dei singoli
-deputati, testo esatto degli emendamenti votati.
+Porta i dati del Parlamento italiano (Camera e Senato, XIX legislatura)
+dentro Claude e qualunque client [MCP](https://modelcontextprotocol.io):
+ricerca ibrida su interventi e atti, sedute con riassunti, votazioni con i
+voti dei singoli parlamentari, testo esatto degli emendamenti votati.
 
 Il server interroga l'API pubblica di [parliamentrag.it](https://www.parliamentrag.it)
 in sola lettura: nessuna credenziale, nessun database locale.
@@ -16,14 +16,19 @@ Aggiungi `https://mcp.parliamentrag.it/mcp` ai connettori del tuo assistente
 
 | Tool | Cosa fa |
 |---|---|
-| `search_parliament` | Ricerca ibrida (full-text + semantica) su interventi in Aula e atti parlamentari |
-| `list_sessions` | Sedute con riassunto AI, dibattiti e conteggi, paginate |
+| `search_parliament` | Ricerca ibrida (full-text + semantica) su interventi in Aula e atti parlamentari. Ogni risultato indica il ramo (`chamber`) |
+| `list_sessions` | Sedute di Camera e Senato con riassunto AI, dibattiti e conteggi, paginate |
 | `get_session_votes` | Tutte le votazioni di una seduta |
-| `get_vote_details` | Dettaglio votazione: aggregati, breakdown per gruppo, atto collegato (scheda + PDF), voti individuali filtrabili per deputato/gruppo, flag scrutinio segreto |
+| `get_vote_details` | Dettaglio votazione: aggregati, breakdown per gruppo, atto collegato (scheda + PDF), voti individuali filtrabili per parlamentare/gruppo, flag scrutinio segreto |
 | `get_voted_text` | Testo integrale dell'emendamento/articolo votato, dall'Allegato A del resoconto |
 | `get_debate` | Dettaglio dibattito: riassunto, atti discussi, oratori |
-| `get_vote_hemicycle` | L'emiciclo della votazione come immagine: un punto per deputato, colori per esito, mostrato direttamente nella chat |
-| `verify_answer` | Controlla una risposta sulle tre garanzie (tutti i gruppi, voci autorevoli, citazioni esatte), in modo deterministico, su tutti gli interventi in Aula della XIX legislatura |
+| `get_vote_hemicycle` | L'emiciclo della votazione come immagine: un punto per deputato o senatore, colori per esito, mostrato direttamente nella chat |
+| `verify_answer` | Controlla una risposta sulle tre garanzie (tutti i gruppi, voci autorevoli, citazioni esatte), in modo deterministico, su tutti gli interventi in Aula di Camera e Senato della XIX legislatura |
+
+`search_parliament`, `list_sessions` e `verify_answer` accettano l'argomento
+`chamber`: `"camera"`, `"senato"` oppure `"both"` (predefinito, entrambi i
+rami). Per `verify_answer` indica di quale ramo parla la risposta da
+controllare.
 
 ## Installazione
 

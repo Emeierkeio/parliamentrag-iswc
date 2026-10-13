@@ -20,12 +20,15 @@
 
 **Balanced, verifiable answers about Italian parliamentary debate, grounded in what was actually said and by whom.**
 
-ParliamentRAG is an authority-aware, multi-view Retrieval-Augmented Generation system over the stenographic records of the Camera dei Deputati (XIX Legislature). Ask a policy question and get an answer that covers every parliamentary group, majority and opposition alike, with verbatim citations checked against the original transcripts.
+ParliamentRAG is an authority-aware, multi-view Retrieval-Augmented Generation system over the stenographic records of the Italian Parliament (Camera dei Deputati and Senato, XIX Legislature). Ask a policy question and get an answer that covers every parliamentary group, majority and opposition alike, with verbatim citations checked against the original transcripts.
 
 <!-- screenshot: chat view with expert cards, citations, and ideological compass -->
 
 - **178k+ text chunks** from **722 plenary sessions**, updated through 2026-10-07
 - **17.5k roll-call votes** with **7M individual vote records** linked to deputies
+
+The figures above count the Camera dei Deputati only: it is the corpus behind the ISWC 2026 paper, here updated to 2026-10-07. The Senate of the XIX Legislature is now loaded as well and is not included in them.
+
 - **Verified citations**: every quote is checked verbatim against its source chunk; unverifiable quotes are removed
 - **Topic-aware authority scoring**: the system picks the most credible speaker per party for the specific question asked
 - **6 languages** (IT / EN / FR / DE / ES / PT), editorial newspaper-style UI
@@ -95,9 +98,11 @@ Each question runs through a single streamed pipeline; the frontend renders prog
 The graph (schema v2) is built from **official open data**: stenographic XML
 reports (Akoma Ntoso) and the SPARQL endpoints of
 [dati.camera.it](https://dati.camera.it/) (deputies, groups, committees, acts,
-roles, votes), with EuroVoc subject links for parliamentary acts.
+roles, votes), with EuroVoc subject links for parliamentary acts. The Senate
+data come from [dati.senato.it](https://dati.senato.it/) (senators, groups,
+sittings, votes) and the Senate's stenographic reports.
 
-- **XIX Legislature, data as of 2026-10-07** (updated incrementally): 722 sessions · 47.7k speeches · 178k+ chunks · 36.8k acts · 17.5k roll calls with 7M individual votes
+- **XIX Legislature, data as of 2026-10-07** (updated incrementally): 722 sessions · 47.7k speeches · 178k+ chunks · 36.8k acts · 17.5k roll calls with 7M individual votes. These are Camera figures, as in the paper; the Senate is loaded too and not counted here
 - **Speaker model**: every speaker is a `Person` (labels `Deputy` / `GovernmentMember`), with date-aware group membership; deputies in the Gruppo Misto are attributed to their political component
 - **Native types throughout**: embeddings as float arrays in Neo4j vector indexes, dates as `date()` values; every `Chunk` is an exact substring of its `Speech` (verified invariant)
 - **Linked Data**: entity URIs conform to the source datasets (dati.camera.it/ocd/…, eurovoc.europa.eu/…) and are dereferenceable
@@ -205,8 +210,11 @@ All routes are mounted under `/api` (interactive docs at `/docs`).
 ParliamentRAG is also a [Model Context Protocol](https://modelcontextprotocol.io)
 server: assistants get direct, read-only access to the official records:
 hybrid search over speeches and acts, sittings with recaps, roll-call votes
-with per-deputy outcomes (filterable by deputy or group), the exact text of
-voted amendments, and hemicycle charts rendered as images in the conversation.
+with each deputy's or senator's vote (filterable by name or group), the exact
+text of voted amendments, and hemicycle charts rendered as images in the
+conversation. It covers both the Camera and the Senate: `search_parliament`,
+`list_sessions` and `verify_answer` take a `chamber` argument (`"camera"`,
+`"senato"` or `"both"`, the default).
 
 **Zero-install (claude.ai, ChatGPT and any remote-MCP client):** add the
 hosted endpoint to your assistant's connectors:
@@ -241,7 +249,7 @@ In the original study against Google NotebookLM (6 domain experts), the system s
 
 ## Data attribution
 
-Parliamentary data are sourced from the **Camera dei Deputati open data** program ([dati.camera.it](https://dati.camera.it/)), released under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); the derived RDF and Hugging Face datasets keep the same license. The texts of stenographic reports are official acts of the Italian State and as such are not subject to copyright (art. 5, L. 633/1941). Senate amendment texts come from the Senato della Repubblica Akoma Ntoso bulk data (CC BY 4.0) and from [dati.senato.it](https://dati.senato.it/) (CC BY 3.0). ParliamentRAG is an independent project and is not affiliated with or endorsed by the Camera dei Deputati or the Senato della Repubblica.
+Parliamentary data are sourced from the **Camera dei Deputati open data** program ([dati.camera.it](https://dati.camera.it/)), released under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), and from the **Senato della Repubblica open data** ([dati.senato.it](https://dati.senato.it/)), released under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/it/); the derived RDF and Hugging Face datasets are released under CC BY-SA 4.0. The texts of stenographic reports are official acts of the Italian State and as such are not subject to copyright (art. 5, L. 633/1941). Senate amendment texts come from the Senato della Repubblica Akoma Ntoso bulk data (CC BY 4.0) and from [dati.senato.it](https://dati.senato.it/) (CC BY 3.0). ParliamentRAG is an independent project and is not affiliated with or endorsed by the Camera dei Deputati or the Senato della Repubblica.
 
 ---
 
