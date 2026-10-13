@@ -25,6 +25,12 @@ from mcp.server.fastmcp import Image as FastMCPImage
 from mcp.types import ToolAnnotations
 
 API_BASE = os.environ.get("PARLIAMENTRAG_API", "https://www.parliamentrag.it/api")
+# Verificatore delle tre garanzie: sul backend di Fascicoli con la chiave del
+# server MCP; senza chiave (uso locale via stdio) passa dalla route pubblica
+# del sito, che ha un limite per IP.
+FASCICOLI_API = os.environ.get("FASCICOLI_API_URL", "https://api-production-a731.up.railway.app")
+FASCICOLI_API_KEY = os.environ.get("FASCICOLI_API_KEY")
+PUBLIC_VERIFY_URL = os.environ.get("PUBLIC_VERIFY_URL", "https://www.parliamentrag.it/api/verifica")
 # Base pubblica del server MCP stesso: usata per costruire gli URL stabili
 # delle immagini (/vote/{id}/hemicycle.png) restituiti dentro i tool result.
 MCP_PUBLIC_BASE = os.environ.get("MCP_PUBLIC_BASE", "https://mcp.parliamentrag.it")
@@ -63,7 +69,18 @@ mcp = FastMCP(
         "Always answer in the language of the conversation (English, French, "
         "Italian, ...): translate summaries and labels, but keep verbatim "
         "quotes in the original Italian. "
-        "The backend may cold-start: if a call times out, retry once."
+        "The backend may cold-start: if a call times out, retry once. "
+        "ParliamentRAG makes three guarantees on answers about Parliament: all "
+        "groups are heard, the voices quoted are authoritative on the topic, "
+        "and every quote is exact, with a link to the record. Whenever your "
+        "answer reports or quotes what deputies said in the Chamber, write the "
+        "draft with quotes in «…», each followed by the speaker's name, then "
+        "call verify_answer on the draft and the user's question before "
+        "replying. Fix what fails (remove or correct inexact quotes, add the "
+        "missing groups or say they did not speak on the topic, prefer the "
+        "authoritative voices) and end the answer with one line on the "
+        "outcome of the three checks. If a guarantee cannot be met, say so "
+        "rather than quoting someone who does not meet it."
     ),
     **({"icons": _ICONS} if _ICONS else {}),
 )
@@ -156,6 +173,74 @@ async def search_parliament(
             if v not in (None, "") and k not in ("embedding",)
         })
     return {"total": data.get("total"), "results": results}
+
+
+@mcp.tool(annotations=_ro("Check an answer against the three guarantees"))
+async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
+    """Check an answer about the Chamber of Deputies against ParliamentRAG's
+    three guarantees, deterministically and without a language model:
+
+    1. All groups: every parliamentary group in office, every Mixed Group
+       component with deputies and the Government is named or quoted.
+    2. Authoritative voices: every person quoted exactly speaks for the
+       Government, is the rapporteur, or is among the top 5 of their group
+       by authority on the question's topic.
+    3. Exact quotes: every text in «…», “…” or "…" of 4+ words is a
+       continuous stretch of one floor speech of the 19th legislature, and
+       the speaker's surname appears near it.
+
+    Call it on your draft before answering whenever the answer reports what
+    deputies said. Only the Chamber of Deputies is covered.
+
+    Args:
+        answer: The full draft answer, quotes in «…» followed by the speaker.
+        question: The user's question; it sets the topic for authority.
+    """
+    payload = {"answer": answer[:20000], "topic": (question or "")[:500] or None}
+    headers = {"User-Agent": "parliamentrag-mcp/0.1.0"}
+    if FASCICOLI_API_KEY:
+        url, headers["x-api-key"] = f"{FASCICOLI_API}/api/verify", FASCICOLI_API_KEY
+    else:
+        url = PUBLIC_VERIFY_URL
+    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=30.0), headers=headers) as client:
+        resp = await client.post(url, json=payload)
+        resp.raise_for_status()
+        r = resp.json()
+
+    quotes = []
+    for q in r["quotes"]["items"]:
+        s = q.get("speech") or {}
+        item = {"quote": _trim(q["text"], 200), "status": q["status"]}
+        if s:
+            item.update(speaker=s.get("name"), group=s.get("group"), date=s.get("date"),
+                        record_url=s.get("url"), speaker_named_nearby=q.get("attributed"))
+        if q["status"] == "modified":
+            item["closest_passage"] = q.get("passage")
+        quotes.append(item)
+    return {
+        "scope": r.get("scope"),
+        "outcome": r["summary"],
+        "groups": {
+            "present": [g["key"] for g in r["groups"]["items"] if g["status"] != "missing"],
+            "missing": [g["label"] for g in r["groups"]["items"] if g["status"] == "missing"],
+        },
+        "authority": {
+            "topic": r["authority"]["topic"],
+            "available": r["authority"]["available"],
+            "voices": [
+                {k: v[k] for k in ("name", "group", "role", "rank", "group_size", "authoritative") if k in v}
+                for v in r["authority"]["voices"]
+            ],
+        },
+        "quotes": quotes,
+        "status_meaning": {
+            "exact": "verbatim in the record",
+            "omissions": "pieces are in the record but words between them were cut",
+            "modified": "not verbatim; closest_passage is what was actually said",
+            "not_found": "not in any Chamber floor speech of the 19th legislature",
+        },
+        "verify_page": "https://www.parliamentrag.it/verifica",
+    }
 
 
 @mcp.tool(annotations=_ro("List plenary sittings"))
