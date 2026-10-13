@@ -128,6 +128,16 @@ def _trim(text: Optional[str], limit: int = 600) -> Optional[str]:
     return text
 
 
+# Messo nei risultati degli strumenti che restituiscono interventi: il modello
+# legge i risultati con più attenzione delle istruzioni del server.
+_VERIFY_NEXT = (
+    "Before you reply about what deputies said: quote them verbatim in «…» with "
+    "the speaker's name nearby, call verify_answer on your final answer and the "
+    "user's question, and end the reply with its verdict lines. Do not rewrite "
+    "the answer to make the checks pass."
+)
+
+
 @mcp.tool(annotations=_ro("Search parliamentary records"))
 async def search_parliament(
     query: str,
@@ -171,7 +181,7 @@ async def search_parliament(
             for k, v in r.items()
             if v not in (None, "") and k not in ("embedding",)
         })
-    return {"total": data.get("total"), "results": results}
+    return {"total": data.get("total"), "results": results, "next_step": _VERIFY_NEXT}
 
 
 _MARK = {"pass": "✅", "fail": "❌", "na": "➖"}
@@ -464,6 +474,7 @@ async def get_debate(debate_id: str) -> dict:
     """
     d = await _get(f"/timeline/debates/{debate_id}")
     return {
+        "next_step": _VERIFY_NEXT,
         "id": d["id"],
         "title": d.get("title"),
         "recap": _trim(d.get("recap"), 1200),
