@@ -1591,6 +1591,28 @@ class DatabaseBuilder:
         """
         merged = 0
         with self._driver.session() as neo_session:
+            # A senator who is also in the government has a node from the
+            # government composition (camera persona URI or legacy gov_* id)
+            # and one from the Senate, with no id in common: 13 of them in the
+            # XIX (Ciriani, Ostellari, Patuanelli, ...). Same first and last
+            # name, an office on the government side, one candidate on each
+            # side: the government node takes the senato_id and the loop below
+            # merges the two.
+            bridged = neo_session.execute_write(lambda tx: tx.run("""
+                MATCH (s:Senator), (g:Person)
+                WHERE g <> s AND g.senato_id IS NULL AND NOT g:Senator
+                  AND EXISTS { (g)-[:HOLDS_OFFICE]->() }
+                  AND toUpper(g.last_name) = toUpper(s.last_name)
+                  AND toUpper(g.first_name) = toUpper(s.first_name)
+                WITH s, collect(g) AS gs WHERE size(gs) = 1
+                WITH s, gs[0] AS g
+                WHERE COUNT { MATCH (o:Senator) WHERE toUpper(o.last_name) = toUpper(g.last_name)
+                              AND toUpper(o.first_name) = toUpper(g.first_name) } = 1
+                SET g.senato_id = s.senato_id
+                RETURN count(g) AS c
+            """).single()["c"])
+            if bridged:
+                print(f"Senators matched to their government node by name: {bridged}")
             for key in ("camera_id", "senato_id"):
                 groups = neo_session.execute_read(lambda tx, k=key: [r["ids"] for r in tx.run(f"""
                     MATCH (p:Person) WHERE p.{k} IS NOT NULL
@@ -1637,6 +1659,25 @@ class DatabaseBuilder:
                 RETURN sum(CASE WHEN m.final_in_legislature THEN 1 ELSE 0 END) AS c
             """).single()["c"])
         print(f"Group memberships open at the end of their legislature: {n}")
+        return n
+
+    def link_orphan_speeches(self) -> int:
+        """Link speeches still without SPOKEN_BY to the person their
+        transcript id names, when that person's node was created after the
+        speech (ministers added by sync_governments: Sangiuliano, Balboni,
+        Sgarbi, ...)."""
+        with self._driver.session() as neo_session:
+            n = neo_session.execute_write(lambda tx: tx.run("""
+                MATCH (sp:Speech) WHERE NOT (sp)-[:SPOKEN_BY]->() AND sp.deputatoId IS NOT NULL
+                WITH sp, CASE WHEN sp.deputatoId STARTS WITH 'http' THEN sp.deputatoId
+                              ELSE 'http://dati.camera.it/ocd/persona.rdf/p' + sp.deputatoId END AS uri
+                OPTIONAL MATCH (c:Person {camera_id: uri})
+                OPTIONAL MATCH (s:Person {senato_id: uri})
+                WITH sp, coalesce(c, s) AS p WHERE p IS NOT NULL
+                MERGE (sp)-[:SPOKEN_BY]->(p)
+                RETURN count(sp) AS c
+            """).single()["c"])
+        print(f"Orphan speeches linked by transcript id: {n}")
         return n
 
     def relink_mismatched_speakers(self) -> int:
