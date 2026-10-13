@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from ..services.archive import RETRIEVAL_ROW, fill_rows
 from ..services.neo4j_client import Neo4jClient
 from ..services.translation import translate_citation_batch, translate_response_text, translate_compass_axes
 from ..services.compass import IdeologyScorer
@@ -461,7 +462,7 @@ async def process_chat_background(
             try:
                 db_rows = await asyncio.get_running_loop().run_in_executor(
                     None,
-                    lambda: services["neo4j"].query(
+                    lambda: fill_rows(services["neo4j"].query(
                         """
                         UNWIND $chunk_ids AS cid
                         MATCH (c:Chunk {id: cid})<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(speaker)
@@ -483,7 +484,7 @@ async def process_chat_background(
                                coalesce(d.parent_debate_title, d.title) AS debate_title
                         """,
                         {"chunk_ids": extra_citation_ids}
-                    )
+                    ), **RETRIEVAL_ROW)
                 )
                 from ..models.evidence import (
                     normalize_speaker_name, normalize_party_name, compute_chunk_span,

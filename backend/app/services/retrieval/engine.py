@@ -15,7 +15,8 @@ import openai
 from ..neo4j_client import Neo4jClient
 from ...key_pool import make_client
 from ...tracing import stage
-from .dense_channel import DenseChannel
+from ..archive import RETRIEVAL_ROW, fill_rows, get_archive
+from .dense_channel import HITS_HEAD, VECTOR_HEAD, DenseChannel
 from .graph_channel import GraphChannel
 from .merger import ChannelMerger
 from .query_rewriter import QueryRewriter
@@ -354,9 +355,17 @@ class RetrievalEngine:
                    next.citability_class AS next_citability_class,
                    next.best_quote AS next_best_quote,
                    next.embedding AS next_embedding,
+                   i.id AS speech_id,
                    i.text AS speech_text
             """
-            neighbor_rows = self.client.query(cypher, {"chunk_ids": chunk_ids})
+            neighbor_rows = fill_rows(
+                self.client.query(cypher, {"chunk_ids": chunk_ids}),
+                chunk_fields={
+                    "prev_id": {"prev_text": "text", "prev_embedding": "embedding"},
+                    "next_id": {"next_text": "text", "next_embedding": "embedding"},
+                },
+                speech_fields={"speech_id": "speech_text"},
+            )
         except Exception as e:
             logger.error(f"Neighbor expansion query failed: {e}")
             return results
@@ -525,8 +534,10 @@ class RetrievalEngine:
             date_params["date_end"] = date_end
         scope = normalize_scope(scope)
         date_filter += " AND " + session_clause()
-        date_params["scope"] = scope_param(scope)
-        indexes = vector_indexes(self.client, scope, index_name)
+        archive = get_archive()
+        archived = [p for p in scope if archive and archive.covers(p)]
+        graph_scope = tuple(p for p in scope if p not in archived)
+        indexes = vector_indexes(self.client, graph_scope, index_name) if graph_scope else []
 
         fill_results = []
 
@@ -547,9 +558,7 @@ class RetrievalEngine:
                     party,
                     party.upper().replace(" - ", "-").replace("- ", "-").replace(" -", "-"))
 
-                cypher = f"""
-                CALL db.index.vector.queryNodes($index_name, $top_k, $query_embedding)
-                YIELD node AS c, score
+                body = f"""
                 WHERE score >= 0.15
                 MATCH (c)<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(speaker)
                 MATCH (i)<-[:CONTAINS_SPEECH]-(f:Phase)<-[:HAS_PHASE]-(d:Debate)<-[:HAS_DEBATE]-(s:Session)
@@ -591,18 +600,24 @@ class RetrievalEngine:
                 LIMIT $limit
                 """
 
+                params = {
+                    "top_k": 500,  # Search wider to find this party's chunks
+                    "query_embedding": query_embedding,
+                    "party_name": normalized_party,
+                    "limit": chunks_per_party,
+                    **date_params
+                }
                 results = []
                 for index in indexes:
-                    results.extend(self.client.query(cypher, {
-                        "index_name": index,
-                        "top_k": 500,  # Search wider to find this party's chunks
-                        "query_embedding": query_embedding,
-                        "party_name": normalized_party,
-                        "limit": chunks_per_party,
-                        **date_params
-                    }))
-                if len(indexes) > 1:
+                    results.extend(self.client.query(VECTOR_HEAD + body, {
+                        **params, "index_name": index, "scope": scope_param(graph_scope)}))
+                for pair in archived:
+                    hits = archive.search(query_embedding, pair, 500, 0.15, date_start, date_end)
+                    results.extend(self.client.query(HITS_HEAD + body, {
+                        **params, "hits": hits, "scope": scope_param((pair,))}))
+                if len(indexes) + len(archived) > 1:
                     results = sorted(results, key=lambda r: r["similarity"], reverse=True)[:chunks_per_party]
+                fill_rows(results, **RETRIEVAL_ROW)
 
                 if results:
                     processed = self.dense_channel._process_results(results)

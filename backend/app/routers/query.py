@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..services.archive import RETRIEVAL_ROW, fill_rows
 from ..services.neo4j_client import Neo4jClient
 from ..services.authority.coalition_logic import CoalitionLogic
 from ..services.deps import get_services
@@ -566,7 +567,7 @@ async def process_query_streaming(
             try:
                 db_rows = await asyncio.get_running_loop().run_in_executor(
                     None,
-                    lambda: services["neo4j"].query(
+                    lambda: fill_rows(services["neo4j"].query(
                         """
                         UNWIND $chunk_ids AS cid
                         MATCH (c:Chunk {id: cid})<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(speaker)
@@ -588,7 +589,7 @@ async def process_query_streaming(
                                coalesce(d.parent_debate_title, d.title) AS debate_title
                         """,
                         {"chunk_ids": extra_citation_ids}
-                    )
+                    ), **RETRIEVAL_ROW)
                 )
                 from ..models.evidence import (
                     normalize_speaker_name, normalize_party_name, compute_chunk_span,

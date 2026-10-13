@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Query, HTTPException
 
+from ..services.archive import fill_rows
 from ..services.neo4j_client import Neo4jClient
 from ..config import get_settings
 from ..key_pool import make_client
@@ -682,6 +683,7 @@ async def get_speech_detail(chunk_id: str) -> Dict[str, Any]:
         OPTIONAL MATCH (d)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
         WHERE mg.start_date <= s.date AND (mg.end_date IS NULL OR mg.end_date >= s.date)
         RETURN i.text AS full_text,
+               c.id AS chunk_id,
                c.text AS chunk_text,
                i.id AS speech_id,
                toString(s.date) AS date,
@@ -700,6 +702,11 @@ async def get_speech_detail(chunk_id: str) -> Dict[str, Any]:
 
             if not record:
                 raise HTTPException(status_code=404, detail=f"Speech chunk {chunk_id} not found")
+            record = fill_rows(
+                [dict(record)],
+                chunk_fields={"chunk_id": {"chunk_text": "text"}},
+                speech_fields={"speech_id": "full_text"},
+            )[0]
 
             return {
                 "type": "speech",

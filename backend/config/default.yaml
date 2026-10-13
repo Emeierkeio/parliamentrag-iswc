@@ -244,6 +244,12 @@ chambers: ["camera"]
 chamber_only_groups:
   "Per le Autonomie (SVP-PATT, Campobase)": "senato"
 
+# Scopes whose speech text and chunk embeddings live in the Postgres archive
+# (decision 2026-10-12; tables in build/pg_archive.py) instead of Neo4j.
+# Active only with ARCHIVE_URL set; ARCHIVE_SCOPES="senato_19" overrides this.
+archive:
+  scopes: []
+
 # Citation extraction settings
 citation:
   # Display format only. The verbatim-substring verification is a pipeline

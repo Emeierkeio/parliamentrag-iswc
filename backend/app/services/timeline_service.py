@@ -37,6 +37,7 @@ from ..models.timeline import (
     VoteParticipant,
     VotePartyBreakdown,
 )
+from .archive import fill_rows
 from .neo4j_client import Neo4jClient
 
 
@@ -817,6 +818,7 @@ async def get_speaker_summary(
         """,
         {"debate_id": debate_id, "speaker_id": speaker_id},
     )
+    fill_rows(speech_rows, speech_fields={"id": "text"})
     speeches = [
         SpeechText(
             id=r["id"],

@@ -19,6 +19,7 @@ from ...models.evidence import (
 )
 from ...config import get_config
 
+from ..archive import RETRIEVAL_ROW, fill_rows
 from .scope import DEFAULT_SCOPE, Scope, scope_param, session_clause
 
 logger = logging.getLogger(__name__)
@@ -303,7 +304,7 @@ class GraphChannel:
         LIMIT $candidate_limit
         """
 
-        results = self.client.query(cypher, params)
+        results = fill_rows(self.client.query(cypher, params), **RETRIEVAL_ROW)
         processed = self._process_results(results)
 
         # Filter chunks by semantic similarity to the query.

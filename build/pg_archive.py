@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Text archive on Postgres + pgvector: chunks of the speeches with their
-embedding and the filter columns copied on the row, so that a filtered vector
+embedding and the filter columns copied on the row, plus the full text of
+every speech, so that a filtered vector
 search is one query (PLAN_data_platform.md, section 9.3; decision of
 2026-10-12: the Senate XIX text goes here instead of Neo4j).
 
@@ -10,7 +11,9 @@ search is one query (PLAN_data_platform.md, section 9.3; decision of
       --assembly senato --term 19
 
 load copies the chunks of one assembly and term from Neo4j (text, embedding,
-speech, sitting, speaker and the group the speaker belonged to on that day).
+speech, sitting, speaker and the group the speaker belonged to on that day)
+and the text of their speeches. The backend reads both through
+backend/app/services/archive.py.
 Idempotent: rows are upserted by chunk id.
 """
 
@@ -46,6 +49,14 @@ CREATE TABLE IF NOT EXISTS chunk (
 CREATE INDEX IF NOT EXISTS chunk_scope_date ON chunk (assembly, term, session_date);
 CREATE INDEX IF NOT EXISTS chunk_speech ON chunk (speech_id);
 CREATE INDEX IF NOT EXISTS chunk_speaker ON chunk (speaker_id);
+
+CREATE TABLE IF NOT EXISTS speech (
+    id            text PRIMARY KEY,
+    assembly      text NOT NULL,
+    term          integer NOT NULL,
+    session_date  date NOT NULL,
+    text          text NOT NULL
+);
 """
 
 HNSW = """
@@ -69,6 +80,14 @@ RETURN c.id AS id, s.id AS session_id, s.date AS session_date, d.id AS debate_id
        sp.id AS speech_id, c.index AS chunk_index, p.id AS speaker_id, group_name,
        coalesce(sp.speaker_in_government, p:GovernmentMember AND NOT p:Deputy, false) AS in_government,
        c.text AS text, c.embedding AS embedding
+"""
+
+SPEECHES = """
+MATCH (s:Session {chamber: $assembly, legislature: $term})
+WHERE s.number IN $numbers
+MATCH (s)-[:HAS_DEBATE]->(:Debate)-[:HAS_PHASE]->(:Phase)-[:CONTAINS_SPEECH]->(sp:Speech)
+WHERE sp.text IS NOT NULL AND EXISTS { (sp)-[:HAS_CHUNK]->() }
+RETURN DISTINCT sp.id AS id, s.date AS session_date, sp.text AS text
 """
 
 
@@ -100,6 +119,7 @@ def cmd_load(pg: str, neo4j_uri: str, user: str, password: str,
             batch = numbers[i:i + sessions_per_batch]
             with driver.session() as s:
                 rows = s.run(EXPORT, assembly=assembly, term=term, numbers=batch).data()
+                speeches = s.run(SPEECHES, assembly=assembly, term=term, numbers=batch).data()
             with conn.cursor() as cur:
                 cur.execute("CREATE TEMP TABLE IF NOT EXISTS chunk_in (LIKE chunk) ON COMMIT DELETE ROWS")
                 with cur.copy(
@@ -120,7 +140,20 @@ def cmd_load(pg: str, neo4j_uri: str, user: str, password: str,
                         session_date = EXCLUDED.session_date, speaker_id = EXCLUDED.speaker_id,
                         group_name = EXCLUDED.group_name, in_government = EXCLUDED.in_government,
                         text = EXCLUDED.text, embedding = EXCLUDED.embedding
+                    WHERE (chunk.session_date, chunk.speaker_id, chunk.group_name,
+                           chunk.in_government, chunk.text, chunk.embedding)
+                          IS DISTINCT FROM
+                          (EXCLUDED.session_date, EXCLUDED.speaker_id, EXCLUDED.group_name,
+                           EXCLUDED.in_government, EXCLUDED.text, EXCLUDED.embedding)
                 """)
+                cur.executemany(
+                    "INSERT INTO speech (id, assembly, term, session_date, text) "
+                    "VALUES (%s, %s, %s, %s, %s) "
+                    "ON CONFLICT (id) DO UPDATE SET session_date = EXCLUDED.session_date, "
+                    "text = EXCLUDED.text WHERE (speech.session_date, speech.text) "
+                    "IS DISTINCT FROM (EXCLUDED.session_date, EXCLUDED.text)",
+                    [(r["id"], assembly, term, r["session_date"].to_native(), r["text"])
+                     for r in speeches])
             conn.commit()
             total += len(rows)
             logger.info("  sittings %d-%d: %d chunks (%d total, %.0fs)",

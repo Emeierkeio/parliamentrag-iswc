@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Path
 from pydantic import BaseModel
 
+from ..services.archive import RETRIEVAL_ROW, fill_rows
 from ..services.neo4j_client import Neo4jClient
 from ..models.evidence import (
     compute_chunk_span,
@@ -120,7 +121,7 @@ async def get_evidence(
                 detail=f"Evidence {evidence_id} not found"
             )
 
-        data = dict(record)
+        data = fill_rows([dict(record)], **RETRIEVAL_ROW)[0]
 
         # Extract exact quote: span computed via find() on the chunk text
         # (exact by construction on schema v2 — C8 invariant; the stored v1
@@ -186,7 +187,9 @@ async def verify_evidence(
     cypher = """
     MATCH (c:Chunk {id: $evidence_id})
     MATCH (c)<-[:HAS_CHUNK]-(i:Speech)
-    RETURN c.text AS chunk_text,
+    RETURN c.id AS chunk_id,
+           c.text AS chunk_text,
+           i.id AS speech_id,
            i.text AS text
     """
 
@@ -200,7 +203,7 @@ async def verify_evidence(
                 detail=f"Evidence {evidence_id} not found"
             )
 
-        data = dict(record)
+        data = fill_rows([dict(record)], **RETRIEVAL_ROW)[0]
         text = data.get("text", "")
         span_start, span_end = compute_chunk_span(
             text,

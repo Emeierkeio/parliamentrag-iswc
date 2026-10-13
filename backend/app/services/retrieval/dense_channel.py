@@ -1,6 +1,8 @@
 """
 Dense retrieval channel: semantic search on pre-computed chunk embeddings
-via Neo4j's native vector index.
+via Neo4j's native vector index, or via the Postgres text archive for the
+scopes it covers (services/archive.py); archive hits are joined to the graph
+by chunk id, so both paths return the same rows.
 
 Similarity scores are on the Neo4j vector-index scale, cosine mapped to
 [0,1] as (1+cos)/2. The graph channel normalizes to the same scale so the
@@ -16,9 +18,21 @@ from ...models.evidence import (
 )
 from ...config import get_config
 
+from ..archive import RETRIEVAL_ROW, fill_rows, get_archive
 from .scope import DEFAULT_SCOPE, Scope, scope_param, session_clause, vector_indexes
 
 logger = logging.getLogger(__name__)
+
+
+# Candidate chunks from the Neo4j vector index, or from a list of archive hits
+# ($hits: [{id, similarity}]); both bind c and score for HIT_BODY.
+VECTOR_HEAD = """
+        CALL db.index.vector.queryNodes($index_name, $top_k, $query_embedding)
+        YIELD node AS c, score"""
+HITS_HEAD = """
+        UNWIND $hits AS hit
+        MATCH (c:Chunk {id: hit.id})
+        WITH c, hit.similarity AS score"""
 
 
 class DenseChannel:
@@ -84,9 +98,32 @@ class DenseChannel:
 
         # No MATCH clause may precede db.index.vector.queryNodes: the index
         # procedure must be the first clause or Neo4j falls back to a scan.
-        cypher = f"""
-        CALL db.index.vector.queryNodes($index_name, $top_k, $query_embedding)
-        YIELD node AS c, score
+        cypher = VECTOR_HEAD + self.HIT_BODY.format(date_filter=date_filter)
+
+        archive = get_archive()
+        archived = [p for p in scope if archive and archive.covers(p)]
+        graph_scope = tuple(p for p in scope if p not in archived)
+
+        results: List[Dict[str, Any]] = []
+        if graph_scope:
+            for index in vector_indexes(self.client, graph_scope, index_name):
+                results.extend(self.client.query(
+                    cypher, {**params, "index_name": index, "scope": scope_param(graph_scope)}))
+        for pair in archived:
+            hits = archive.search(query_embedding, pair, top_k, threshold, date_start, date_end)
+            results.extend(self.client.query(
+                HITS_HEAD + self.HIT_BODY.format(date_filter=date_filter),
+                {**params, "hits": hits, "scope": scope_param((pair,))}))
+        if len(results) > top_k:
+            results = sorted(results, key=lambda r: r["similarity"], reverse=True)[:top_k]
+        fill_rows(results, **RETRIEVAL_ROW)
+
+        logger.info(f"Dense channel: retrieved {len(results)} chunks")
+        return self._process_results(results)
+
+    # Everything after the candidate chunks c and their score: speaker, sitting
+    # and group of each chunk. Shared by the Neo4j index and the archive path.
+    HIT_BODY = """
         WHERE score >= $threshold
         MATCH (c)<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(speaker)
         MATCH (i)<-[:CONTAINS_SPEECH]-(f:Phase)<-[:HAS_PHASE]-(d:Debate)<-[:HAS_DEBATE]-(s:Session)
@@ -129,15 +166,6 @@ class DenseChannel:
                score AS similarity
         ORDER BY score DESC
         """
-
-        results: List[Dict[str, Any]] = []
-        for index in vector_indexes(self.client, scope, index_name):
-            results.extend(self.client.query(cypher, {**params, "index_name": index}))
-        if len(results) > top_k:
-            results = sorted(results, key=lambda r: r["similarity"], reverse=True)[:top_k]
-
-        logger.info(f"Dense channel: retrieved {len(results)} chunks")
-        return self._process_results(results)
 
     def _process_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
