@@ -195,12 +195,14 @@ def _verdict(r: dict) -> list[str]:
     groups = f"{g['named']}/{g['total']} groups, Mixed Group components and Government present"
     if missing:
         groups += " — missing: " + ", ".join(missing)
+    for m in g.get("mismatches", []):
+        groups += f" — {m['name']} is written as ({m['group_written']}) but belongs to {m['voice'] or m['group']}"
 
     voices = a["voices"]
     if not a["available"]:
         authority = "authority on the topic could not be computed"
     elif not voices:
-        authority = "no exact quote to assess"
+        authority = "no deputy or member of the Government quoted or named"
     else:
         def why(v: dict) -> str:
             if v.get("role") == "governo":
@@ -210,7 +212,7 @@ def _verdict(r: dict) -> list[str]:
             return f"{v['rank']}/{v['group_size']} in group" if v.get("rank") else "not ranked"
         ok = sum(1 for v in voices if v["authoritative"])
         authority = f"{ok}/{len(voices)} authoritative (Government, rapporteur or top 5 of their group): " + \
-            "; ".join(f"{v['name']} {why(v)}" for v in voices)
+            "; ".join(f"{v['name']} {why(v)}" + (" (named)" if v.get("source") == "named" else "") for v in voices)
 
     if not q["total"]:
         quotes = "no quotes of four or more words to check"
@@ -240,9 +242,10 @@ async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
 
     1. All groups: every parliamentary group in office, every Mixed Group
        component with deputies and the Government is named or quoted.
-    2. Authoritative voices: every person quoted exactly speaks for the
-       Government, is the rapporteur, or is among the top 5 of their group
-       by authority on the question's topic.
+    2. Authoritative voices: every deputy or member of the Government quoted
+       exactly or named (full name, or surname without namesakes) speaks for
+       the Government, is the rapporteur, or is among the top 5 of their
+       group by authority on the question's topic.
     3. Exact quotes: every text in «…», “…” or "…" of 4+ words is a
        continuous stretch of one floor speech of the 19th legislature, and
        the speaker's surname appears near it.
@@ -291,7 +294,7 @@ async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
             "topic": r["authority"]["topic"],
             "available": r["authority"]["available"],
             "voices": [
-                {k: v[k] for k in ("name", "group", "role", "rank", "group_size", "authoritative") if k in v}
+                {k: v[k] for k in ("name", "group", "role", "rank", "group_size", "authoritative", "source") if k in v}
                 for v in r["authority"]["voices"]
             ],
         },
