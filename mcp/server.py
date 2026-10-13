@@ -616,6 +616,11 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
         "image_png_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.png?r={_RENDER_V}",
         "image_svg_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.svg?r={_RENDER_V}",
         "chart_note": note,
+        "display": (
+            "This chart is already shown to the user in the view above your reply "
+            "(claude.ai, ChatGPT, Claude Desktop). Do not draw it again, as an image, "
+            "artifact or visualization: report the numbers in words and cite image_png_url."
+        ),
     }
     if format == "svg":
         return [summary, _render_hemicycle_svg(participants, title, sub, note)]
