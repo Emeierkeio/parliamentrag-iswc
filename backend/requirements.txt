@@ -8,6 +8,7 @@ python-multipart>=0.0.6
 # Database
 neo4j>=5.15.0
 psycopg[binary,pool]>=3.2  # text archive on Postgres (services/archive.py)
+pgvector>=0.3
 
 # AI/ML
 openai>=1.10.0

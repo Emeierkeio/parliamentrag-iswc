@@ -51,21 +51,16 @@ def _vector(values: Sequence[float]) -> str:
     return "[" + ",".join(f"{v:.6g}" for v in values) + "]"
 
 
-def _parse_vector(text: Optional[str]) -> Optional[List[float]]:
-    if not text:
-        return None
-    return [float(v) for v in text.strip("[]").split(",")]
-
-
 class TextArchive:
     """Vector search and text lookups on the Postgres archive."""
 
     def __init__(self, url: str, scopes: Iterable[ScopePair]):
+        from pgvector.psycopg import register_vector
         from psycopg_pool import ConnectionPool
 
         self.scopes = tuple(scopes)
         self.pool = ConnectionPool(url, min_size=1, max_size=8, open=True,
-                                   kwargs={"autocommit": True})
+                                   kwargs={"autocommit": True}, configure=register_vector)
         atexit.register(self.pool.close)
 
     def covers(self, pair: ScopePair) -> bool:
@@ -112,11 +107,14 @@ class TextArchive:
         ids = list({i for i in ids if i})
         if not ids:
             return {}
+        # Binary transfer: half-precision vectors are 3 KB per chunk instead of
+        # ~13 KB as text, which matters over the link to the VPS.
         with self.pool.connection() as conn:
-            rows = conn.execute(
-                "SELECT id, text, embedding::text, speech_id FROM chunk WHERE id = ANY(%s)",
+            rows = conn.cursor(binary=True).execute(
+                "SELECT id, text, embedding, speech_id FROM chunk WHERE id = ANY(%s)",
                 [ids]).fetchall()
-        return {r[0]: {"text": r[1], "embedding": _parse_vector(r[2]), "speech_id": r[3]}
+        return {r[0]: {"text": r[1], "embedding": r[2].to_list() if r[2] is not None else None,
+                       "speech_id": r[3]}
                 for r in rows}
 
     def speeches(self, ids: Iterable[str]) -> Dict[str, str]:
