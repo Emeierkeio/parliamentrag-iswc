@@ -25,6 +25,12 @@ is archived and already has its text_embedding (authority needs it). The
 nodes and relations stay. load skips stripped chunks (no embedding left), so
 the nightly sequence ingest -> embeddings -> load -> strip only moves the new
 sittings. --sessions limits load and strip to some sitting numbers.
+
+  python build/pg_archive.py meta --pg postgresql://... --neo4j-uri bolt://...
+
+meta copies again speaker, group on the day and government flag of every
+archived chunk from the graph, where they changed (a speech relinked to
+another speaker after it was archived).
 """
 
 import argparse
@@ -109,6 +115,20 @@ WHERE c.text IS NOT NULL OR c.embedding IS NOT NULL
 RETURN sp.id AS speech_id, sp.text AS speech_text,
        sp.text_embedding IS NOT NULL AS has_speech_embedding,
        collect([c.id, c.text]) AS chunks
+"""
+
+META = """
+MATCH (s:Session {chamber: $assembly, legislature: $term})
+WHERE s.number IN $numbers
+MATCH (s)-[:HAS_DEBATE]->(:Debate)-[:HAS_PHASE]->(:Phase)-[:CONTAINS_SPEECH]->(sp:Speech)
+      -[:HAS_CHUNK]->(c:Chunk)
+OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(p)
+OPTIONAL MATCH (p)-[m:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
+WHERE m.start_date <= s.date AND (m.end_date IS NULL OR m.end_date >= s.date)
+  AND coalesce(m.chamber, 'camera') = $assembly
+WITH sp, c, p, head(collect(g.name)) AS group_name
+RETURN c.id AS id, p.id AS speaker_id, group_name,
+       coalesce(sp.speaker_in_government, p:GovernmentMember AND NOT p:Deputy, false) AS in_government
 """
 
 STRIP_CHUNKS = "UNWIND $ids AS cid MATCH (c:Chunk {id: cid}) REMOVE c.text, c.embedding"
@@ -197,6 +217,40 @@ def cmd_load(pg: str, neo4j_uri: str, user: str, password: str,
     driver.close()
 
 
+def cmd_meta(pg: str, neo4j_uri: str, user: str, password: str,
+             assembly: str, term: int, sessions_per_batch: int, only=None) -> None:
+    from neo4j import GraphDatabase
+
+    driver = GraphDatabase.driver(neo4j_uri, auth=(user, password))
+    numbers = _session_numbers(driver, assembly, term, only)
+    changed = 0
+    with psycopg.connect(pg) as conn:
+        for i in range(0, len(numbers), sessions_per_batch):
+            batch = numbers[i:i + sessions_per_batch]
+            with driver.session() as s:
+                rows = s.run(META, assembly=assembly, term=term, numbers=batch).data()
+            with conn.cursor() as cur:
+                cur.execute("CREATE TEMP TABLE IF NOT EXISTS meta_in "
+                            "(id text, speaker_id text, group_name text, in_government boolean) "
+                            "ON COMMIT DELETE ROWS")
+                with cur.copy("COPY meta_in FROM STDIN") as copy:
+                    for r in rows:
+                        copy.write_row((r["id"], r["speaker_id"], r["group_name"],
+                                        bool(r["in_government"])))
+                cur.execute("""
+                    UPDATE chunk SET speaker_id = m.speaker_id, group_name = m.group_name,
+                                     in_government = m.in_government
+                    FROM meta_in m
+                    WHERE chunk.id = m.id
+                      AND (chunk.speaker_id, chunk.group_name, chunk.in_government)
+                          IS DISTINCT FROM (m.speaker_id, m.group_name, m.in_government)
+                """)
+                changed += cur.rowcount
+            conn.commit()
+    logger.info("speaker or group updated on %d archived chunks", changed)
+    driver.close()
+
+
 def cmd_strip(pg: str, neo4j_uri: str, user: str, password: str,
               assembly: str, term: int, sessions_per_batch: int, only=None) -> None:
     from neo4j import GraphDatabase
@@ -239,7 +293,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
                         datefmt="%H:%M:%S")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    ap.add_argument("command", choices=["schema", "load", "strip"])
+    ap.add_argument("command", choices=["schema", "load", "strip", "meta"])
     ap.add_argument("--pg", required=True, help="Postgres connection string")
     ap.add_argument("--neo4j-uri")
     ap.add_argument("--neo4j-user", default="neo4j")
@@ -259,6 +313,8 @@ def main() -> int:
     if args.command == "load":
         cmd_schema(args.pg)
         cmd_load(*common)
+    elif args.command == "meta":
+        cmd_meta(*common)
     else:
         cmd_strip(*common)
     return 0

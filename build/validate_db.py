@@ -104,6 +104,18 @@ class Validator:
         self.check(rows[0]["c"] == 0, "tutti gli interventi del Senato hanno un oratore",
                    f"{rows[0]['c']} senza SPOKEN_BY")
 
+        # The transcript names the speaker by senatore URI; a link to someone
+        # with another senatore URI is a surname match gone wrong (13/10/2026:
+        # Giorgia Meloni's speeches on senator Marco Meloni).
+        rows = self.q("""
+            MATCH (sp:Speech)-[:SPOKEN_BY]->(p:Person)
+            WHERE sp.deputatoId STARTS WITH 'http://dati.senato.it/senatore/'
+              AND p.senato_id IS NOT NULL AND p.senato_id <> sp.deputatoId
+            RETURN count(sp) AS c, collect(DISTINCT p.last_name)[..5] AS chi
+        """)
+        self.check(rows[0]["c"] == 0, "interventi del Senato legati alla persona del resoconto",
+                   f"{rows[0]['c']} legati a un'altra persona: {rows[0]['chi']}")
+
         rows = self.q("""
             MATCH (p:Person) WHERE any(m IN coalesce(p.mandates, []) WHERE m STARTS WITH 'senato_')
               AND NOT p:Senator

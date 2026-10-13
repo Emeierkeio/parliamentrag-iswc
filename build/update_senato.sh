@@ -62,7 +62,7 @@ step "disegni di legge e firmatari" "$PY" build/download_senate_ddl.py --legisla
 step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/link_senate_acts.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
 
-archive() { # load | strip
+archive() { # load | meta | strip
 	env NEO4J_PASSWORD="$PASS_VAL" "$PY" build/pg_archive.py "$1" --pg "$ARCHIVE_VAL" \
 		--neo4j-uri "$URI" --neo4j-user "$USER_VAL" --assembly senato --term 19
 }
@@ -71,6 +71,7 @@ if [ -n "$ARCHIVE_VAL" ]; then
 	# toglie solo ciò che l'archivio ha identico: se un passo prima è fallito,
 	# il testo resta nel grafo e passa al giro dopo.
 	step "testo e vettori → archivio Postgres" archive load
+	step "oratori e gruppi riallineati nell'archivio" archive meta
 	step "testo e vettori archiviati tolti dal grafo" archive strip
 fi
 

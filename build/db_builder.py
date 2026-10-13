@@ -2115,12 +2115,30 @@ class DatabaseBuilder:
         3. Speeches with only a surname in cognomeNome — linked to the
            unique matching senator of the same legislature, or else to the
            unique person holding a government office on the sitting's date.
+           A speech whose senatore URI matched no senator in step 2 is by
+           someone who is not a senator (ministers: Giorgia Meloni is
+           senatore/23006), so it skips the senator surname match: it gave
+           Meloni's, Antonio Tajani's and Giuseppina Castiello's speeches to
+           the senators Marco Meloni, Cristina Tajani and Francesco Castiello.
 
         Returns counts per phase for logging.
         """
         prefix = f"sen_leg{legislature}_"
         counts: dict[str, int] = {}
         with self._driver.session() as neo_session:
+            # 0. Undo links to a person whose senatore URI differs from the
+            #    one the transcript names (earlier surname matches, see 3a);
+            #    the speech is then relinked below.
+            result = neo_session.execute_write(lambda tx: tx.run("""
+                MATCH (sp:Speech)-[r:SPOKEN_BY]->(p:Person)
+                WHERE sp.id STARTS WITH $prefix
+                  AND sp.deputatoId STARTS WITH 'http://dati.senato.it/senatore/'
+                  AND p.senato_id IS NOT NULL AND p.senato_id <> sp.deputatoId
+                DELETE r
+                RETURN count(r) AS c
+            """, prefix=prefix).single())
+            counts["unlinked_wrong_person"] = result["c"]
+
             # 1. Normalize legacy short-form ids to full URIs
             result = neo_session.execute_write(lambda tx: tx.run("""
                 MATCH (sp:Speech)
@@ -2147,6 +2165,7 @@ class DatabaseBuilder:
                 MATCH (sp:Speech)
                 WHERE sp.id STARTS WITH $prefix
                   AND NOT (sp)-[:SPOKEN_BY]->()
+                  AND NOT coalesce(sp.deputatoId, '') STARTS WITH 'http://dati.senato.it/senatore/'
                   AND sp.cognomeNome IS NOT NULL AND sp.cognomeNome <> ''
                 MATCH (d:Person)
                 WHERE ('senato_' + toString($legislature)) IN coalesce(d.mandates, [])
