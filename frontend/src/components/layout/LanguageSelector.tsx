@@ -11,10 +11,6 @@ import { cn } from '@/lib/utils';
 export const LOCALES = [
   { code: 'it', label: 'Italiano' },
   { code: 'en', label: 'English' },
-  { code: 'fr', label: 'Français' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'es', label: 'Español' },
-  { code: 'pt', label: 'Português' },
 ] as const;
 
 export function LanguageSelector({ isCollapsed = false }: { isCollapsed?: boolean }) {
