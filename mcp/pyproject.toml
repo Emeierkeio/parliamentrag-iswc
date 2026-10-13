@@ -17,4 +17,4 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["server"]
+py-modules = ["server", "ui_views"]

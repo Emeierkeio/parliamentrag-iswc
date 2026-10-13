@@ -24,6 +24,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp import Image as FastMCPImage
 from mcp.types import ToolAnnotations
 
+from ui_views import HEMICYCLE_VIEW, VERIFY_VIEW
+
 API_BASE = os.environ.get("PARLIAMENTRAG_API", "https://www.parliamentrag.it/api")
 # Verificatore delle tre garanzie: sul backend di Fascicoli con la chiave del
 # server MCP; senza chiave (uso locale via stdio) passa dalla route pubblica
@@ -62,10 +64,9 @@ mcp = FastMCP(
         "get_vote_hemicycle for that vote_id: it returns the numeric breakdown, "
         "a stable public image URL you should cite, and the chart itself. For "
         "secret ballots it returns an explanation instead of a chart. "
-        "If your client does not display tool-result images inline but can "
-        "render artifacts or HTML (e.g. claude.ai web), call it with "
-        "format='svg' and render the returned SVG markup as an artifact, "
-        "verbatim and complete, so the user actually sees the chart. "
+        "On hosts with MCP Apps (claude.ai, ChatGPT, Claude Desktop) the "
+        "chart and the verification report appear to the user in a view under "
+        "the tool call: do not redraw them as artifacts. "
         "Always answer in the language of the conversation (English, French, "
         "Italian, ...): translate summaries and labels, but keep verbatim "
         "quotes in the original Italian. "
@@ -99,6 +100,31 @@ def _ro(title: str) -> ToolAnnotations:
         idempotentHint=True,
         openWorldHint=True,
     )
+
+
+# Viste MCP Apps: l'host (claude.ai, ChatGPT, Claude Desktop) le mostra sotto
+# la chiamata dello strumento. Gli host senza MCP Apps usano il testo.
+_UI_MIME = "text/html;profile=mcp-app"
+_VERIFY_UI = "ui://parliamentrag/verify.html"
+_HEMICYCLE_UI = "ui://parliamentrag/hemicycle.html"
+
+
+def _ui(uri: str) -> dict:
+    # Chiave annidata della specifica 2026-01-26 e chiave piatta delle bozze
+    # precedenti, ancora letta da alcuni host.
+    return {"ui": {"resourceUri": uri}, "ui/resourceUri": uri}
+
+
+@mcp.resource(_VERIFY_UI, name="verify_view", title="Verifica delle tre garanzie",
+              mime_type=_UI_MIME, meta={"ui": {"prefersBorder": True}})
+def _verify_view() -> str:
+    return VERIFY_VIEW
+
+
+@mcp.resource(_HEMICYCLE_UI, name="hemicycle_view", title="Emiciclo di una votazione",
+              mime_type=_UI_MIME, meta={"ui": {"prefersBorder": True}})
+def _hemicycle_view() -> str:
+    return HEMICYCLE_VIEW
 
 
 async def _get(path: str, params: dict | None = None) -> Any:
@@ -235,7 +261,7 @@ def _verdict(r: dict) -> list[str]:
     ]
 
 
-@mcp.tool(annotations=_ro("Check an answer against the three guarantees"))
+@mcp.tool(annotations=_ro("Check an answer against the three guarantees"), meta=_ui(_VERIFY_UI))
 async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
     """Check an answer about the Chamber of Deputies against ParliamentRAG's
     three guarantees, deterministically and without a language model:
@@ -290,6 +316,13 @@ async def verify_answer(answer: str, question: Optional[str] = None) -> dict:
             "present": [g["key"] for g in r["groups"]["items"] if g["status"] != "missing"],
             "missing": [g["label"] for g in r["groups"]["items"] if g["status"] == "missing"],
         },
+        "groups_detail": [
+            {k: g[k] for k in ("key", "label", "status")} for g in r["groups"]["items"]
+        ],
+        "group_mismatches": [
+            {k: m.get(k) for k in ("name", "group_written", "voice", "group")}
+            for m in r["groups"].get("mismatches", [])
+        ],
         "authority": {
             "topic": r["authority"]["topic"],
             "available": r["authority"]["available"],
@@ -509,7 +542,7 @@ async def get_debate(debate_id: str) -> dict:
 
 
 
-@mcp.tool(annotations=_ro("Vote hemicycle: numbers + chart"))
+@mcp.tool(annotations=_ro("Vote hemicycle: numbers + chart"), meta=_ui(_HEMICYCLE_UI))
 async def get_vote_hemicycle(vote_id: str, format: str = "png"):
     """Hemicycle chart of a roll-call vote, together with the numbers behind
     it: one dot per deputy, coloured by outcome (green=in favour, red=against,
@@ -525,10 +558,10 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
     2. the chart: a PNG image block (default), or the SVG markup as a text
        block when format="svg" (lightweight, can be embedded inline).
 
-    If your client cannot display tool-result images inline but supports
-    artifacts or HTML rendering (e.g. claude.ai web), use format="svg" and
-    render the returned markup as an artifact, verbatim and complete: the
-    user then sees the chart instead of a link.
+    Hosts with MCP Apps (claude.ai, ChatGPT, Claude Desktop) show the chart
+    to the user in a view under the tool call: do not redraw it. Only if your
+    client shows neither the view nor tool-result images, use format="svg"
+    and render the markup as an artifact, verbatim and complete.
 
     For secret ballots there is nothing to draw: individual votes are not
     public (only abstentions are on record), and the tool returns the
