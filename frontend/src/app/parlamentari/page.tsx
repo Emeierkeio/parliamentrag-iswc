@@ -31,9 +31,11 @@ interface DeputyRow {
 
 // One row per deputy: whoever changed group has several memberships, so
 // the current one (no end_date) is collected first and the rest dropped
+// Senators carry the Deputy label too: a Camera group membership decides
 const DIRECTORY_CYPHER =
-  "MATCH (d:Deputy) " +
-  "OPTIONAL MATCH (d)-[m:MEMBER_OF_GROUP]->(g:ParliamentaryGroup) " +
+  "MATCH (d:Deputy)-[:MEMBER_OF_GROUP]->(:ParliamentaryGroup {chamber: 'camera'}) " +
+  "WITH DISTINCT d " +
+  "OPTIONAL MATCH (d)-[m:MEMBER_OF_GROUP]->(g:ParliamentaryGroup {chamber: 'camera'}) " +
   "WITH d, g, m ORDER BY m.end_date IS NOT NULL, m.start_date DESC " +
   "WITH d, collect(g.name)[0] AS group " +
   "RETURN d.id AS id, d.first_name AS first_name, d.last_name AS last_name, " +

@@ -1626,11 +1626,20 @@ class DatabaseBuilder:
                         UNWIND $ids AS id MATCH (p:Person {id: id})
                         WITH collect(p) AS nodes
                         WITH nodes, [n IN nodes | n.mandates] AS mandateLists
-                        CALL apoc.refactor.mergeNodes(nodes, {properties: 'discard', mergeRels: true})
+                        // mergeRels would also fold parallel edges to the same
+                        // node into one: consecutive group periods (Patuanelli,
+                        // three M5S rows) or two offices in one government.
+                        // Only exact duplicates are dropped, below.
+                        CALL apoc.refactor.mergeNodes(nodes, {properties: 'discard', mergeRels: false})
                         YIELD node
                         SET node.mandates = apoc.coll.toSet(apoc.coll.flatten(
                             [m IN mandateLists WHERE m IS NOT NULL]))
-                        RETURN node
+                        WITH node
+                        MATCH (node)-[r]-(other)
+                        WITH node, other, type(r) AS t, startNode(r) = node AS outgoing,
+                             properties(r) AS props, collect(r) AS rels
+                        WHERE size(rels) > 1
+                        FOREACH (dup IN tail(rels) | DELETE dup)
                     """, ids=ids).consume())
                     merged += len(ids) - 1
         print(f"Merged {merged} duplicate Person nodes")

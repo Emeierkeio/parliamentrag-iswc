@@ -53,13 +53,20 @@ def _get_services():
 
 class RankingRequest(BaseModel):
     topic: str = Field(..., min_length=2, max_length=500)
+    chamber: str = Field("camera", pattern="^(camera|senato)$")
 
 
-def _fetch_all_deputy_ids(neo4j_client: Neo4jClient) -> List[str]:
-    """Fetch all deputy IDs from Neo4j."""
-    cypher = "MATCH (d:Deputy) RETURN d.id AS id"
+def _fetch_all_deputy_ids(neo4j_client: Neo4jClient, chamber: str = "camera") -> List[str]:
+    """Ids of the members of one chamber: senators carry the Deputy label
+    too, so membership in a group of that chamber decides."""
+    cypher = """
+    MATCH (d:Deputy)
+    WHERE EXISTS { (d)-[m:MEMBER_OF_GROUP]->() WHERE m.affiliation IS NULL
+                   AND coalesce(m.chamber, 'camera') = $chamber }
+    RETURN d.id AS id
+    """
     with neo4j_client.session() as session:
-        result = session.run(cypher)
+        result = session.run(cypher, chamber=chamber)
         return [record["id"] for record in result]
 
 
@@ -133,6 +140,8 @@ def _fetch_deputy_details_batch(neo4j_client: Neo4jClient, deputy_ids: List[str]
 async def authority_ranking(request: RankingRequest):
     """Rank all deputies by authority on a given topic (cached per topic)."""
     cache_key = " ".join(request.topic.lower().split())
+    if request.chamber != "camera":
+        cache_key = f"{request.chamber}:{cache_key}"
 
     cached = _ranking_cache.get(cache_key)
     if cached is not None:
@@ -143,7 +152,7 @@ async def authority_ranking(request: RankingRequest):
     # Share one computation among concurrent requests for the same topic
     task = _ranking_inflight.get(cache_key)
     if task is None:
-        task = asyncio.create_task(_compute_ranking(request.topic))
+        task = asyncio.create_task(_compute_ranking(request.topic, request.chamber))
         _ranking_inflight[cache_key] = task
         task.add_done_callback(lambda _t: _ranking_inflight.pop(cache_key, None))
 
@@ -157,7 +166,7 @@ async def authority_ranking(request: RankingRequest):
     return result
 
 
-async def _compute_ranking(topic: str) -> Dict[str, Any]:
+async def _compute_ranking(topic: str, chamber: str = "camera") -> Dict[str, Any]:
     neo4j_client, retrieval_engine, authority_scorer = _get_services()
     coalition_logic = CoalitionLogic()
 
@@ -170,7 +179,7 @@ async def _compute_ranking(topic: str) -> Dict[str, Any]:
     logger.info(f"[RANKING] Embedded topic in {(time.time()-t0)*1000:.0f}ms")
 
     deputy_ids = await asyncio.get_running_loop().run_in_executor(
-        None, _fetch_all_deputy_ids, neo4j_client
+        None, _fetch_all_deputy_ids, neo4j_client, chamber
     )
     logger.info(f"[RANKING] Found {len(deputy_ids)} deputies")
 

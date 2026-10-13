@@ -18,7 +18,7 @@ interface GroupRow {
 // Solo le appartenenze correnti: chi e' transitato da un gruppo a inizio
 // legislatura non deve comparire ne' nei conteggi ne' negli elenchi
 const DIRECTORY_QUERY =
-  "MATCH (g:ParliamentaryGroup)<-[m:MEMBER_OF_GROUP]-(d:Deputy) " +
+  "MATCH (g:ParliamentaryGroup {chamber: 'camera'})<-[m:MEMBER_OF_GROUP]-(d:Deputy) " +
   "WHERE m.end_date IS NULL " +
   "RETURN g.name AS name, count(DISTINCT d) AS members ORDER BY members DESC";
 

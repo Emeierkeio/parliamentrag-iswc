@@ -228,7 +228,7 @@ export default function RankingPage() {
   const [allCommittees, setAllCommittees] = useState<string[]>([]);
   useEffect(() => {
     graphQuery<{ name: string }>(
-      "MATCH (c:Committee) RETURN c.name AS name ORDER BY name"
+      "MATCH (c:Committee) WHERE coalesce(c.chamber, 'camera') IN ['camera', 'bicamerale'] RETURN c.name AS name ORDER BY name"
     )
       .then((rows) => setAllCommittees(rows.map((r) => r.name)))
       .catch(() => {});

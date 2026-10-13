@@ -551,10 +551,13 @@ async def get_recent_topics(lang: str = "it", refresh: bool = False):
             act_rows = neo4j.query(
                 "MATCH (se:Session)-[:HAS_DEBATE]->(:Debate)-[:DISCUSSES]->(ph) "
                 "WHERE se.date >= date() - duration({days: $days}) "
+                # Act numbers repeat across chambers: a Senate debate would
+                # pick up the Camera act with the same number.
+                "  AND coalesce(se.chamber, 'camera') = 'camera' "
                 "WITH DISTINCT ph, max(se.date) AS sd "
                 "WITH ph, sd, split(ph.number, '-')[0] AS base "
                 "MATCH (a:ParliamentaryAct) "
-                "WHERE a.uri STARTS WITH 'http' AND a.title IS NOT NULL AND a.title <> '' "
+                "WHERE a.uri STARTS WITH 'http://dati.camera.it/' AND a.title IS NOT NULL AND a.title <> '' "
                 "  AND (a.number = ph.number OR a.number = base "
                 "       OR a.number = replace(ph.number, '-', '/')) "
                 "  AND (CASE WHEN ph.type = 'pdl' THEN a.type IN ['Progetto di Legge', 'pdl'] "

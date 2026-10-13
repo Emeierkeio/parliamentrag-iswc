@@ -15,9 +15,9 @@ router = APIRouter(prefix="/api/graph", tags=["Graph"])
 
 # English labels (migrated schema)
 ENGLISH_LABELS = {
-    "Speech", "Phase", "Debate", "Session", "Deputy",
+    "Speech", "Phase", "Debate", "Session", "Deputy", "Senator",
     "GovernmentMember", "ParliamentaryGroup", "Committee",
-    "ParliamentaryAct", "Chunk"
+    "ParliamentaryAct", "Chunk", "Vote", "IndividualVote"
 }
 
 # English relationship types (migrated schema)

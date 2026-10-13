@@ -29,7 +29,7 @@ interface MemberRow {
 
 // Stessa regola dell'elenco: contano solo le membership correnti
 const DIRECTORY_QUERY =
-  "MATCH (g:ParliamentaryGroup)<-[m:MEMBER_OF_GROUP]-(d:Deputy) " +
+  "MATCH (g:ParliamentaryGroup {chamber: 'camera'})<-[m:MEMBER_OF_GROUP]-(d:Deputy) " +
   "WHERE m.end_date IS NULL " +
   "RETURN g.name AS name, count(DISTINCT d) AS members ORDER BY members DESC";
 
@@ -76,7 +76,7 @@ export default function GruppoDettaglioPage() {
           return null;
         }
         const membersQuery =
-          `MATCH (g:ParliamentaryGroup {name: "${escapeCypherString(group.name)}"})` +
+          `MATCH (g:ParliamentaryGroup {name: "${escapeCypherString(group.name)}", chamber: 'camera'})` +
           "<-[mm:MEMBER_OF_GROUP]-(d:Deputy) " +
           "WHERE mm.end_date IS NULL " +
           "OPTIONAL MATCH (d)-[mc:MEMBER_OF_COMPONENT]->(c:MistoComponent) " +

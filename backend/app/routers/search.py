@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Query, HTTPException
 
 from ..services.archive import fill_rows
+from ..services.retrieval.scope import default_scope, loaded_chambers, scope_param, session_clause
 from ..services.neo4j_client import Neo4jClient
 from ..config import get_settings
 from ..key_pool import make_client
@@ -74,6 +75,12 @@ def _ensure_act_vector_index():
         _act_index_ensured = True  # Don't retry on failure
 
 
+# Act search serves the Camera pages and the MCP server, whose tools speak of
+# the Chamber of Deputies: Senate bills and control acts stay out.
+CAMERA_ACT = ("NOT (a.uri STARTS WITH 'http://dati.senato.it/' "
+              "OR a.uri STARTS WITH 'senato:')")
+
+
 def _search_speeches_text(
     client: Neo4jClient,
     q: str,
@@ -106,17 +113,24 @@ def _search_speeches_text(
         where_clauses.append("s.date <= date($end_date)")
         params["end_date"] = end_date
 
+    where_clauses.append(session_clause())
+    params["scope"] = scope_param(default_scope())
     where_clause = " AND ".join(where_clauses)
 
+    # Keyword search reads c.text, which archived chunks (Senate) do not have
+    # in the graph: it finds Camera speeches only. Browse (empty query) lists
+    # both and takes the archived text from the archive.
     cypher = f"""
     MATCH (c:Chunk)<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(d)
     WHERE (d:Deputy OR d:GovernmentMember)
     MATCH (i)<-[:CONTAINS_SPEECH]-(f:Phase)<-[:HAS_PHASE]-(dib:Debate)<-[:HAS_DEBATE]-(s:Session)
     OPTIONAL MATCH (d)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
     WHERE mg.start_date <= s.date AND (mg.end_date IS NULL OR mg.end_date >= s.date)
+      AND coalesce(mg.chamber, s.chamber, 'camera') = coalesce(s.chamber, 'camera')
     WITH c, i, d, s, dib, g
     WHERE {where_clause}
     RETURN c.id AS chunk_id,
+           coalesce(s.chamber, 'camera') AS chamber,
            c.text AS text,
            i.id AS speech_id,
            toString(s.date) AS date,
@@ -130,12 +144,14 @@ def _search_speeches_text(
     """
 
     with client.session() as session:
-        result = session.run(cypher, **params)
+        result = fill_rows(session.run(cypher, **params).data(),
+                           chunk_fields={"chunk_id": {"text": "text"}})
         records = []
         for record in result:
             records.append({
                 "type": "speech",
                 "id": record["chunk_id"],
+                "chamber": record["chamber"],
                 "text": record["text"][:500] if record["text"] else "",
                 "date": record["date"],
                 "session_number": record["session_number"],
@@ -166,7 +182,7 @@ def _search_acts_text(
 ) -> List[Dict[str, Any]]:
     """Text search on ParliamentaryAct title and description; with an
     empty query it lists the author's acts."""
-    where_clauses = []
+    where_clauses = [CAMERA_ACT]
     params: Dict[str, Any] = {"limit": limit}
     if q:
         where_clauses.append(
@@ -393,7 +409,7 @@ def _search_acts_semantic(
     cypher = f"""
     CALL db.index.vector.queryNodes('act_description_embedding_index', $top_k, $embedding)
     YIELD node AS a, score
-    WHERE score >= $threshold
+    WHERE score >= $threshold AND {CAMERA_ACT}
     {signatory_match}
     {group_match}
     WITH a, d, g, score
@@ -584,18 +600,25 @@ async def search_results(
 async def list_deputies(
     q: Optional[str] = Query(None, description="Filter by name"),
     limit: int = Query(50, ge=1, le=200),
+    chamber: str = Query("camera", pattern="^(camera|senato)$"),
 ) -> List[Dict[str, Any]]:
     """
-    List deputies, optionally filtered by name.
+    List the members of one chamber (deputies by default, senators with
+    chamber=senato), optionally filtered by name.
     """
     client = get_client()
+    # Senators carry the Deputy label too: membership in a group of the
+    # chamber decides. Party affiliations of ministers have no chamber.
+    in_chamber = ("EXISTS { (d)-[m:MEMBER_OF_GROUP]->() WHERE m.affiliation IS NULL "
+                  "AND coalesce(m.chamber, 'camera') = $chamber }")
 
     try:
         if q:
-            cypher = """
+            cypher = f"""
             MATCH (d:Deputy)
-            WHERE toLower(d.first_name) CONTAINS toLower($search_text)
-               OR toLower(d.last_name) CONTAINS toLower($search_text)
+            WHERE (toLower(d.first_name) CONTAINS toLower($search_text)
+               OR toLower(d.last_name) CONTAINS toLower($search_text))
+              AND {in_chamber}
             RETURN d.id AS id,
                    d.first_name AS first_name,
                    d.last_name AS last_name,
@@ -603,10 +626,10 @@ async def list_deputies(
             ORDER BY d.last_name, d.first_name
             LIMIT $limit
             """
-            params = {"search_text": q, "limit": limit}
+            params = {"search_text": q, "limit": limit, "chamber": chamber}
         else:
-            cypher = """
-            MATCH (d:Deputy)
+            cypher = f"""
+            MATCH (d:Deputy) WHERE {in_chamber}
             RETURN d.id AS id,
                    d.first_name AS first_name,
                    d.last_name AS last_name,
@@ -614,7 +637,7 @@ async def list_deputies(
             ORDER BY d.last_name, d.first_name
             LIMIT $limit
             """
-            params = {"limit": limit}
+            params = {"limit": limit, "chamber": chamber}
 
         with client.session() as session:
             result = session.run(cypher, **params)
@@ -634,17 +657,20 @@ async def list_deputies(
 
 
 @router.get("/groups")
-async def list_groups() -> List[Dict[str, Any]]:
+async def list_groups(
+    chamber: str = Query("camera", pattern="^(camera|senato)$"),
+) -> List[Dict[str, Any]]:
     """
-    List all parliamentary groups.
+    List the parliamentary groups of one chamber with their current members.
     """
     client = get_client()
 
     try:
         cypher = """
-        MATCH (g:ParliamentaryGroup)
-        OPTIONAL MATCH (d:Deputy)-[:MEMBER_OF_GROUP]->(g)
-        WITH g, count(d) AS member_count
+        MATCH (g:ParliamentaryGroup) WHERE coalesce(g.chamber, 'camera') = $chamber
+        OPTIONAL MATCH (d:Deputy)-[m:MEMBER_OF_GROUP]->(g)
+        WHERE m.end_date IS NULL AND m.affiliation IS NULL
+        WITH g, count(DISTINCT d) AS member_count
         RETURN g.name AS name,
                g.acronym AS acronym,
                member_count
@@ -652,7 +678,7 @@ async def list_groups() -> List[Dict[str, Any]]:
         """
 
         with client.session() as session:
-            result = session.run(cypher)
+            result = session.run(cypher, chamber=chamber)
             return [
                 {
                     "name": record["name"],

@@ -93,7 +93,8 @@ async def graph_sample():
     client = get_services()["neo4j"]
     person = client.query_single(
         "MATCH (p:Deputy)-[m:MEMBER_OF_GROUP]->(g:ParliamentaryGroup) "
-        "WHERE m.end_date IS NULL "
+        "WHERE m.end_date IS NULL AND coalesce(m.chamber, 'camera') = 'camera' "
+        "AND m.affiliation IS NULL "
         "WITH p, m, g, rand() AS r ORDER BY r LIMIT 1 "
         "RETURN p.id AS id, p.first_name AS first_name, p.last_name AS last_name, "
         "p.term_of_office AS mandate, toString(m.start_date) AS membership_start, "
@@ -110,7 +111,7 @@ async def graph_sample():
     )
     act = client.query_single(
         "MATCH (:Person {id: $id})-[:PRIMARY_SIGNATORY]->(a:ParliamentaryAct) "
-        "WHERE a.uri STARTS WITH 'http' "
+        "WHERE a.uri STARTS WITH 'http://dati.camera.it/' "
         "OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(e:EurovocConcept) "
         "WITH a, e, rand() AS r ORDER BY e IS NULL, r LIMIT 1 "
         "RETURN a.uri AS uri, e.label_it AS topic",

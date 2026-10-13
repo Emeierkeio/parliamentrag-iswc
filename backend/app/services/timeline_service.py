@@ -130,7 +130,7 @@ async def get_sessions(
 
     cypher = f"""
 MATCH (s:Session)
-WHERE ($chambers IS NULL OR s.chamber IN $chambers)
+WHERE ($chambers IS NULL OR coalesce(s.chamber, 'camera') IN $chambers)
   AND s.legislature = $legislature
   AND ($before IS NULL OR s.date < date($before))
   AND ($from_date IS NULL OR s.date >= date($from_date))
@@ -586,6 +586,7 @@ async def get_vote_detail(
     return VoteDetailResponse(
         id=meta["id"],
         number=meta["number"] or 0,
+        chamber=meta["chamber"],
         subject=meta["subject"],
         description=meta["description"],
         acts=[a for a in acts if a.title or a.url or a.text_url],

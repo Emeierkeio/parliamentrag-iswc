@@ -261,13 +261,16 @@ def _fetch_chunk_texts(chunk_ids: List[str]) -> dict:
     """Batch-fetch chunk texts from Neo4j. Returns {chunk_id: text}."""
     if not chunk_ids:
         return {}
+    from ..services.archive import fill_rows
+
     client = _get_client()
     results = client.query("""
         UNWIND $ids AS cid
         MATCH (c:Chunk {id: cid})
         RETURN cid, c.text AS text
     """, {"ids": chunk_ids})
-    return {r["cid"]: r.get("text", "") for r in results}
+    fill_rows(results, chunk_fields={"cid": {"text": "text"}})
+    return {r["cid"]: r.get("text") or "" for r in results}
 
 
 def _compute_automated_metrics(

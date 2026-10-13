@@ -994,14 +994,15 @@ def _wedge_rank(party: str | None) -> float:
     up = (party or "").upper()
     if not up:
         return 5.5
-    if up != (party or "") and "MISTO" not in up:
-        pass
-    if "MISTO" in up or (party and party != party.upper()):
-        # componenti del Misto (nomi in minuscolo/misto) stanno col Misto
+    if "MISTO" in up:
         return 5.0
     for needle, rank in _WEDGE_ORDER:
         if needle in up:
             return float(rank)
+    if party != up:
+        # componenti del Misto (nomi in minuscolo/misto) stanno col Misto;
+        # i gruppi del Senato, anch'essi in minuscolo, passano dagli aghi sopra
+        return 5.0
     return 5.5
 
 

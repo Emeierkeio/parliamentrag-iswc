@@ -55,13 +55,14 @@ function profileCypher(uri: string): string {
   // changed group would otherwise produce one row per membership
   return (
     `MATCH (d:Deputy {id: "${uri}"}) ` +
-    "OPTIONAL MATCH (d)-[m:MEMBER_OF_GROUP]->(g:ParliamentaryGroup) " +
+    "OPTIONAL MATCH (d)-[m:MEMBER_OF_GROUP]->(g:ParliamentaryGroup {chamber: 'camera'}) " +
     "WITH d, g, m ORDER BY m.end_date IS NOT NULL, m.start_date DESC " +
     "WITH d, collect(g.name)[0] AS group " +
     "OPTIONAL MATCH (d)-[mc:MEMBER_OF_COMPONENT]->(c:MistoComponent) WHERE group = 'MISTO' AND mc.end_date IS NULL " +
     "WITH d, group, collect(c.name)[0] AS component " +
-    "OPTIONAL MATCH (s:Speech)-[:SPOKEN_BY]->(d) WITH d, group, component, count(s) AS speeches " +
-    "OPTIONAL MATCH (d)-[:PRIMARY_SIGNATORY]->(a:ParliamentaryAct) " +
+    "OPTIONAL MATCH (s:Speech)-[:SPOKEN_BY]->(d) WHERE NOT s.id STARTS WITH 'sen_' " +
+    "WITH d, group, component, count(s) AS speeches " +
+    "OPTIONAL MATCH (d)-[:PRIMARY_SIGNATORY]->(a:ParliamentaryAct) WHERE a.uri STARTS WITH 'http://dati.camera.it/' " +
     "RETURN d.first_name AS first_name, d.last_name AS last_name, d.photo AS photo, " +
     "d.deputy_card AS deputy_card, d.profession AS profession, d.education AS education, " +
     "d.institutional_role AS institutional_role, group, component, speeches, count(a) AS acts"
@@ -121,6 +122,7 @@ export default function DeputyProfilePage() {
     const cypher =
       `MATCH (i:Speech)-[:SPOKEN_BY]->(d:Deputy {id: "${uri}"}) ` +
       "MATCH (i)<-[:CONTAINS_SPEECH]-(:Phase)<-[:HAS_PHASE]-(dib:Debate)<-[:HAS_DEBATE]-(s:Session) " +
+      "WHERE coalesce(s.chamber, 'camera') = 'camera' " +
       "WITH i, s, dib ORDER BY s.date DESC LIMIT 5 " +
       "RETURN i.id AS id, i.text AS text, toString(s.date) AS date, " +
       "s.number AS session_number, dib.title AS debate_title " +

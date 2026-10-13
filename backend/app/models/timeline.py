@@ -109,6 +109,7 @@ class VoteDetailResponse(BaseModel):
 
     id: str
     number: int
+    chamber: str = "camera"
     subject: Optional[str] = None
     description: Optional[str] = None
     acts: list[VoteActRef] = []

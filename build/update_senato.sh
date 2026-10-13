@@ -61,6 +61,10 @@ step "atti di controllo e indirizzo → grafo" env NEO4J_PASSWORD="$PASS_VAL" \
 step "disegni di legge e firmatari" "$PY" build/download_senate_ddl.py --legislature 19
 step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/link_senate_acts.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
+# Atti di controllo e DDL appena caricati: senza i loro embedding
+# l'autorevolezza li conterebbe a rilevanza neutra (0,5) su ogni tema.
+step "embedding di atti e interventi nuovi" env NEO4J_URI="$URI" NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/precalculate_embeddings.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --neo4j-password "$PASS_VAL"
 
 archive() { # load | meta | strip
 	env NEO4J_PASSWORD="$PASS_VAL" "$PY" build/pg_archive.py "$1" --pg "$ARCHIVE_VAL" \
