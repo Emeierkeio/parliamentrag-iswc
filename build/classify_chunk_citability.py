@@ -14,10 +14,16 @@ score/class are kept.
 
 Runs on the v2 DB only (PLAN_master [G]) — no backfill on the old schema.
 
+Chunks whose text lives in the Postgres archive (Senate XIX, decision of
+2026-10-12) have no c.text in Neo4j: with --archive-url (or ARCHIVE_URL) the
+text is read from the archive's chunk table. Scores are still written to the
+Chunk node, where the retrieval channels read them.
+
 Usage:
     python build/classify_chunk_citability.py --dry-run
     NEO4J_URI=bolt://localhost:7692 python build/classify_chunk_citability.py --concurrency 10
     python build/classify_chunk_citability.py --limit 200   # smoke test
+    ARCHIVE_URL=postgresql://... python build/classify_chunk_citability.py   # + Senato
 """
 
 from __future__ import annotations
@@ -44,7 +50,7 @@ COST_OUTPUT_PER_M = 0.60
 VALID_CLASSES = {"substance", "procedural", "rhetoric", "meta"}
 
 SYSTEM_PROMPT = """Sei un analista parlamentare. Per ogni frammento di intervento \
-alla Camera classifica se contiene:
+alla Camera o al Senato classifica se contiene:
 - "substance": una posizione politica o argomentazione di merito su un tema
 - "procedural": formule procedurali, ringraziamenti, gestione d'aula, annunci di voto senza motivazione
 - "rhetoric": retorica auto-celebrativa o di schieramento senza contenuto sul tema
@@ -139,8 +145,10 @@ def _find_verbatim_span(chunk_text: str, quote: str) -> str | None:
 
 
 class CitabilityClassifier:
-    def __init__(self, driver, openai_client, concurrency: int = 10, batch_size: int = 20):
+    def __init__(self, driver, openai_client, concurrency: int = 10, batch_size: int = 20,
+                 archive_url: str | None = None):
         self._driver = driver
+        self._archive_url = archive_url
         self._client = openai_client
         self._sem = asyncio.Semaphore(concurrency)
         self._batch_size = batch_size
@@ -149,6 +157,7 @@ class CitabilityClassifier:
             "quotes_stored": 0,
             "quotes_rejected_non_verbatim": 0,
             "batches_failed": 0,
+            "chunks_without_text": 0,
             "api_calls": 0,
             "input_tokens": 0,
             "output_tokens": 0,
@@ -167,21 +176,54 @@ class CitabilityClassifier:
             ).single()["n"]
 
     def fetch_pending_page(self, page_size: int, skip_ids: set[str]) -> list[dict]:
-        """Fetch a page of unclassified chunks, excluding in-run failures."""
+        """Fetch a page of unclassified chunks, excluding in-run failures.
+
+        Chunks without text in Neo4j take it from the archive; those found in
+        neither are added to skip_ids and stay unclassified.
+        """
+        while True:
+            rows = self._fetch_rows(page_size, skip_ids)
+            missing = [r["id"] for r in rows if not r["text"]]
+            if missing:
+                archived = self._archive_texts(missing)
+                for r in rows:
+                    if not r["text"]:
+                        r["text"] = archived.get(r["id"])
+            page = [{"id": r["id"], "text": r["text"]} for r in rows if r["text"]]
+            no_text = {r["id"] for r in rows if not r["text"]}
+            if no_text:
+                logger.warning("%d chunks without text in Neo4j or archive — skipped", len(no_text))
+                self.stats["chunks_without_text"] += len(no_text)
+                skip_ids.update(no_text)
+            # A page made only of text-less chunks would end the run early.
+            if page or not rows:
+                return page
+
+    def _fetch_rows(self, page_size: int, skip_ids: set[str]) -> list[dict]:
+        text_filter = "" if self._archive_url else "AND c.text IS NOT NULL "
         with self._driver.session() as s:
-            rows = s.run(
+            return s.run(
                 "MATCH (c:Chunk) WHERE (c.citability_v IS NULL OR c.citability_v < $v) "
-                "AND c.text IS NOT NULL AND NOT c.id IN $skip "
+                + text_filter
+                + "AND NOT c.id IN $skip "
                 "RETURN c.id AS id, c.text AS text LIMIT $n",
                 v=CITABILITY_V,
                 skip=list(skip_ids),
                 n=page_size,
-            )
-            return [{"id": r["id"], "text": r["text"] or ""} for r in rows]
+            ).data()
+
+    def _archive_texts(self, ids: list[str]) -> dict[str, str]:
+        import psycopg
+
+        with psycopg.connect(self._archive_url, connect_timeout=10) as conn:
+            return dict(conn.execute(
+                "SELECT id, text FROM chunk WHERE id = ANY(%s)", [ids]).fetchall())
 
     def write_batch(self, records: list[dict]) -> None:
+        # execute_write retries transient errors (deadlocks with the nightly
+        # job, which strips text from the same Chunk nodes).
         with self._driver.session() as s:
-            s.run(
+            s.execute_write(lambda tx: tx.run(
                 """
                 UNWIND $records AS rec
                 MATCH (c:Chunk {id: rec.id})
@@ -193,7 +235,7 @@ class CitabilityClassifier:
                 """,
                 records=records,
                 v=CITABILITY_V,
-            )
+            ).consume())
 
     # ------------------------------------------------------------------
     # OpenAI
@@ -367,6 +409,8 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=10, help="Max parallel OpenAI calls")
     parser.add_argument("--batch-size", type=int, default=20, help="Chunks per LLM call")
     parser.add_argument("--limit", type=int, default=None, help="Max chunks to process (smoke test)")
+    parser.add_argument("--archive-url", default=os.environ.get("ARCHIVE_URL") or None,
+                        help="Postgres archive with the text of archived chunks (Senate XIX)")
     args = parser.parse_args()
 
     try:
@@ -390,7 +434,8 @@ def main() -> None:
     client = AsyncOpenAI(api_key=openai_api_key, max_retries=3)
 
     classifier = CitabilityClassifier(
-        driver, client, concurrency=args.concurrency, batch_size=args.batch_size
+        driver, client, concurrency=args.concurrency, batch_size=args.batch_size,
+        archive_url=args.archive_url,
     )
     try:
         if args.dry_run:
@@ -402,6 +447,7 @@ def main() -> None:
                 f"  Chunks classified   : {stats['chunks_classified']:,}\n"
                 f"  Quotes stored       : {stats['quotes_stored']:,}\n"
                 f"  Quotes non-verbatim : {stats['quotes_rejected_non_verbatim']:,}\n"
+                f"  Without text        : {stats['chunks_without_text']:,}\n"
                 f"  Failed batches      : {stats['batches_failed']} ({stats['failed_chunk_ids']} chunks, re-run to retry)\n"
                 f"  API calls           : {stats['api_calls']:,}\n"
                 f"  Tokens              : {stats['input_tokens']:,} in / {stats['output_tokens']:,} out\n"

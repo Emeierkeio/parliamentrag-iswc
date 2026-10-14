@@ -370,6 +370,26 @@ else
 		|| warn "emendamenti nel grafo: caricamento incompleto, riprende al prossimo giro"
 fi
 
+# ── Citabilità dei chunk nuovi ───────────────────────────────────────────────
+# Il merger pesa la citabilità per il 25% del punteggio e Fascicoli scarta i
+# chunk procedurali: un chunk senza punteggio vale 0,5 e non viene mai
+# scartato. Classifica solo i chunk senza citability_v, di entrambe le camere;
+# il testo del Senato lo legge dall'archivio Postgres. Dopo il Senato, così
+# prende anche le sue sedute nuove. Non blocca: riprende al giro dopo.
+if [ -z "${OPENAI_KEY_VAL:-}" ]; then
+	warn "OPENAI_API_KEY not found in .env — citabilità saltata."
+else
+	CIT_NEO4J="${SENATO_NEO4J:-$DEMO_NEO4J}"
+	CIT_ARCHIVE="${ARCHIVE_URL:-$(grep '^ARCHIVE_URL=' .env | cut -d= -f2-)}"
+	citability() {
+		env NEO4J_PASSWORD="$NEO4J_PASS_VAL" OPENAI_API_KEY="$OPENAI_KEY_VAL" \
+			"$PY" build/classify_chunk_citability.py --neo4j-uri "$CIT_NEO4J" \
+			--neo4j-user "${NEO4J_USER_VAL:-neo4j}" ${CIT_ARCHIVE:+--archive-url "$CIT_ARCHIVE"}
+	}
+	run "Citabilità chunk nuovi → $CIT_NEO4J${CIT_ARCHIVE:+ + archivio}" citability \
+		|| warn "citabilità: classificazione incompleta, riprende al prossimo giro"
+fi
+
 # ── Fotografia del grafo per il sito del centro ──────────────────────────────
 # www.parliamentrag.it non ha backend: numeri e data del grafo stanno in
 # src/data/site-data.json del repo del centro, che Railway pubblica a ogni push
