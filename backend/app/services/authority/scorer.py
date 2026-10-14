@@ -100,16 +100,23 @@ class AuthorityScorer:
         try:
             speaker_data = self._fetch_speaker_data(speaker_id, reference_date)
         except Exception as exc:
-            logger.warning(f"Authority fetch failed for {speaker_id}: {exc}")
-            speaker_data = None
-
-        if not speaker_data:
-            logger.warning(f"No data found for speaker {speaker_id}")
+            logger.error(f"[AUTHORITY] FALLBACK 0.5 for {speaker_id}: fetch failed: {exc}")
             return {
                 "speaker_id": speaker_id,
                 "total_score": 0.5,
                 "components": {},
                 "coalition": "unknown",
+                "fallback": "fetch_error",
+            }
+
+        if not speaker_data:
+            logger.warning(f"[AUTHORITY] FALLBACK 0.5 for {speaker_id}: not in the graph")
+            return {
+                "speaker_id": speaker_id,
+                "total_score": 0.5,
+                "components": {},
+                "coalition": "unknown",
+                "fallback": "not_found",
             }
 
         current_group = speaker_data.get("current_group", "MISTO")
@@ -200,6 +207,7 @@ class AuthorityScorer:
         # ranking (observed 2026-07-23). Retry and the global bound live in
         # _fetch_speaker_data (they apply to every caller).
         all_data: Dict[str, Any] = {}
+        fetch_errors: Dict[str, str] = {}
         with ThreadPoolExecutor(max_workers=min(4, max(1, len(speaker_ids)))) as db_pool:
             db_futures = {
                 db_pool.submit(self._fetch_speaker_data, sid, reference_date): sid
@@ -212,6 +220,7 @@ class AuthorityScorer:
                     if data:
                         all_data[sid] = data
                 except Exception as exc:
+                    fetch_errors[sid] = type(exc).__name__
                     logger.warning(f"DB fetch failed for {sid}: {exc}")
 
         _t_db = _time.perf_counter()
@@ -220,13 +229,14 @@ class AuthorityScorer:
             f"in {(_t_db - _t0)*1000:.0f}ms"
         )
 
-        # Default result for speakers not found in DB
+        # Default result for speakers not found in DB or whose fetch failed
         results: Dict[str, Dict[str, Any]] = {
             sid: {
                 "speaker_id": sid,
                 "total_score": 0.5,
                 "components": {},
                 "coalition": "unknown",
+                "fallback": "fetch_error" if sid in fetch_errors else "not_found",
             }
             for sid in speaker_ids
             if sid not in all_data
@@ -296,7 +306,25 @@ class AuthorityScorer:
                         "total_score": 0.5,
                         "components": {},
                         "coalition": "unknown",
+                        "fallback": "scoring_error",
                     }
+
+        # The 0.5 fallback weakens the "authoritative voices" guarantee without
+        # any visible sign in the answer: one summary line per query, at ERROR
+        # when the cause is the database (e.g. MemoryPoolOutOfMemory).
+        fallbacks = {sid: r["fallback"] for sid, r in results.items() if r.get("fallback")}
+        if fallbacks:
+            by_reason: Dict[str, List[str]] = {}
+            for sid, reason in fallbacks.items():
+                by_reason.setdefault(reason, []).append(sid)
+            summary = "; ".join(f"{k}={len(v)}" for k, v in sorted(by_reason.items()))
+            errors = sorted(set(fetch_errors.values()))
+            log = logger.error if set(by_reason) - {"not_found"} else logger.warning
+            log(
+                f"[AUTHORITY] FALLBACK 0.5 for {len(fallbacks)}/{len(speaker_ids)} speakers "
+                f"({summary}){' errors=' + ','.join(errors) if errors else ''}: "
+                f"{', '.join(sorted(fallbacks))}"
+            )
 
         _t_cpu = _time.perf_counter()
         logger.info(
@@ -352,15 +380,46 @@ class AuthorityScorer:
         """Fetch all data needed to score a speaker, trying Deputy then GovernmentMember."""
         cypher = """
         MATCH (d:Deputy {id: $speaker_id})
+
+        // Memory (2026-10-15): the two ORDER BY ... LIMIT below keep every
+        // candidate row in memory WITH all the columns of the outer row. When
+        // they ran after the embeddings had been collected, each of a busy
+        // speaker's ~1000 speech rows carried the 500 act embeddings: ~2GB of
+        // transaction memory for one speaker, MemoryPoolOutOfMemory under load
+        // and a silent 0.5 authority. So the two Top steps run first, on light
+        // columns only, and the embeddings are read after the LIMIT.
+        CALL {
+            WITH d
+            OPTIONAL MATCH (d)-[ar:PRIMARY_SIGNATORY|CO_SIGNATORY]->(a:ParliamentaryAct)
+            // Undated acts last: Neo4j sorts nulls first in DESC order
+            WITH elementId(a) AS act_eid, type(ar) AS signatory_type,
+                 coalesce(a.presentation_date, date('1900-01-01')) AS sort_date
+            ORDER BY sort_date DESC LIMIT 500
+            RETURN collect(CASE WHEN act_eid IS NOT NULL
+                                THEN {eid: act_eid, signatory_type: signatory_type} END) AS act_refs
+        }
+        // 300 recent speeches are enough for topic relevance and cap the
+        // transfer at ~15MB/speaker (2026-07-23).
+        CALL {
+            WITH d
+            OPTIONAL MATCH (i:Speech)-[:SPOKEN_BY]->(d)
+            OPTIONAL MATCH (i)<-[:CONTAINS_SPEECH]-(:Phase)<-[:HAS_PHASE]-(:Debate)<-[:HAS_DEBATE]-(s:Session)
+            WHERE s.date >= date() - duration({years: 4})
+            WITH elementId(i) AS speech_eid, s.date AS speech_date
+            ORDER BY speech_date DESC LIMIT 300
+            RETURN collect(CASE WHEN speech_eid IS NOT NULL
+                                THEN {eid: speech_eid, date: speech_date} END) AS speech_refs
+        }
+
         OPTIONAL MATCH (d)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
-        WITH d, collect({
+        WITH d, act_refs, speech_refs, collect({
             group: g.name,
             start_date: mg.start_date,
             end_date: mg.end_date
         }) AS group_memberships
 
         OPTIONAL MATCH (d)-[mc:MEMBER_OF_COMMITTEE]->(c:Committee)
-        WITH d, group_memberships, collect({
+        WITH d, act_refs, speech_refs, group_memberships, collect({
             committee_name: c.name,
             committee_embedding: c.embedding,
             start_date: mc.start_date,
@@ -375,7 +434,7 @@ class AuthorityScorer:
         OPTIONAL MATCH (d)-[rm:MEMBER_OF_COMMITTEE]->(cm:Committee)
         WHERE rm.officerRole IN ['PRESIDENTE', 'VICEPRESIDENTE', 'SEGRETARIO', 'CAPOGRUPPO']
            OR (rm.officerRole IS NULL AND rm.role IN ['president', 'vice_president', 'secretary'])
-        WITH d, group_memberships, committee_memberships, collect(
+        WITH d, act_refs, speech_refs, group_memberships, committee_memberships, collect(
             CASE WHEN cm IS NOT NULL
                  THEN {role_type: CASE rm.officerRole
                                       WHEN 'PRESIDENTE' THEN 'president'
@@ -391,38 +450,20 @@ class AuthorityScorer:
         ) AS institutional_roles
 
         CALL {
-            WITH d
-            OPTIONAL MATCH (d)-[ar:PRIMARY_SIGNATORY|CO_SIGNATORY]->(a:ParliamentaryAct)
-            // Undated acts last: Neo4j sorts nulls first in DESC order
-            WITH a, ar ORDER BY coalesce(a.presentation_date, date('1900-01-01')) DESC LIMIT 500
-            RETURN collect(
-                CASE WHEN a IS NOT NULL
-                     THEN {uri: a.uri, date: a.presentation_date,
-                           signatory_type: type(ar),
-                           // Bills have an empty dc:description: fall back to the title
-                           description_embedding: coalesce(a.description_embedding, a.title_embedding)}
-                END
-            ) AS acts
+            WITH act_refs
+            UNWIND act_refs AS ref
+            MATCH (a:ParliamentaryAct) WHERE elementId(a) = ref.eid
+            RETURN collect({uri: a.uri, date: a.presentation_date,
+                            signatory_type: ref.signatory_type,
+                            // Bills have an empty dc:description: fall back to the title
+                            description_embedding: coalesce(a.description_embedding, a.title_embedding)}) AS acts
         }
-        WITH d, group_memberships, committee_memberships, institutional_roles, acts
-
-        // Memory bound (2026-07-23): without LIMIT this fetch materializes the
-        // embeddings of EVERY speech of each speaker — with the v2 native lists
-        // it OOMed the container twice. 300 recent speeches are enough for
-        // topic relevance and cap the transfer at ~15MB/speaker.
         CALL {
-            WITH d
-            OPTIONAL MATCH (i:Speech)-[:SPOKEN_BY]->(d)
-            OPTIONAL MATCH (i)<-[:CONTAINS_SPEECH]-(:Phase)<-[:HAS_PHASE]-(:Debate)<-[:HAS_DEBATE]-(s:Session)
-            WHERE s.date >= date() - duration({years: 4})
-            WITH i, s ORDER BY s.date DESC LIMIT 300
-            RETURN collect(
-                CASE WHEN i IS NOT NULL
-                     THEN {speech_id: i.id, date: s.date, text_embedding: i.text_embedding}
-                END
-            ) AS interventions
+            WITH speech_refs
+            UNWIND speech_refs AS ref
+            MATCH (i:Speech) WHERE elementId(i) = ref.eid
+            RETURN collect({speech_id: i.id, date: ref.date, text_embedding: i.text_embedding}) AS interventions
         }
-        WITH d, group_memberships, committee_memberships, institutional_roles, acts, interventions
 
         RETURN d.id AS speaker_id,
                d.first_name AS first_name,
