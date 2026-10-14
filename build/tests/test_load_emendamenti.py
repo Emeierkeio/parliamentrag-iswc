@@ -39,6 +39,8 @@ def test_outcome_rest_of_partial_inadmissibility():
     raw = "Dichiarato inammissibile limitatamente al comma 2, respinto per la parte restante"
     assert L.normalize_outcome(raw) == "rejected"
     assert L.normalize_outcome("Parte precluso, parte ritirato") == "mixed"
+    assert L.normalize_outcome("Votato per parti separate. Respinta la parte evidenziata") == "mixed"
+    assert L.normalize_outcome("Sost id. em. 1.6") == "identical"
 
 
 def test_outcome_empty_and_unknown():

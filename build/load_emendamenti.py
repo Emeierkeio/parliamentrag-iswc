@@ -35,7 +35,8 @@ again: dump the two tables and restore them, then run this script there; the
 row hashes match and only what changed since the dump is written.
 
   pg_dump -Fc -t amendment -t amendment_chunk archivio > emendamenti.dump
-  PGOPTIONS='-c maintenance_work_mem=256MB' pg_restore --no-owner -d archivio emendamenti.dump
+  PGOPTIONS='-c maintenance_work_mem=256MB -c max_parallel_maintenance_workers=0' \\
+      pg_restore --no-owner -d archivio emendamenti.dump
 """
 
 from __future__ import annotations
@@ -73,6 +74,9 @@ CHUNK_OVERLAP = 250
 # Stale amendments are deleted only when the input still holds at least this
 # share of what is loaded: a truncated JSONL must not empty the graph.
 MIN_INPUT_SHARE = 0.9
+# Part of every row hash: bump it when the derived fields change (outcome
+# rules, dates) so that the next run rewrites all nodes and rows.
+DERIVATION_VERSION = 1
 
 
 # ----------------------------------------------------------------- outcomes
@@ -80,7 +84,7 @@ MIN_INPUT_SHARE = 0.9
 # Ordered: the first matching prefix wins. Partial outcomes ("respinta la
 # parte evidenziata; preclusa la restante parte") take the first verb.
 OUTCOME_RULES = [
-    (("id. ", "id.em", "sost. id.", "sost.id."), "identical"),
+    (("id. ", "id.em", "sost. id.", "sost.id.", "sost id.", "sot. id."), "identical"),
     (("v. ", "v.", "vedi "), "superseded"),
     (("ritirat", "trasformat"), "withdrawn"),
     (("approvat",), "approved"),
@@ -97,7 +101,7 @@ OUTCOME_RULES = [
     (("decadut",), "lapsed"),
     (("assorbit",), "absorbed"),
     (("non posto in votazione",), "not_voted"),
-    (("in parte ", "parte "), "mixed"),
+    (("in parte ", "parte ", "votato per parti separate"), "mixed"),
 ]
 REST_RE = re.compile(r"(\w+) per la parte restante")
 
@@ -165,7 +169,8 @@ def act_number(atto: str | None) -> str | None:
 
 
 def row_hash(row: dict) -> str:
-    return hashlib.sha1(json.dumps(row, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+    payload = json.dumps([DERIVATION_VERSION, row], sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(payload.encode()).hexdigest()[:16]
 
 
 def sub_parent(chamber: str, kind: str, numero: str) -> tuple[str, str | None] | None:
@@ -871,6 +876,10 @@ def load_archive(rows: list[dict], args, stats: Counter) -> None:
             embed_missing(conn, args, stats)
         if not args.skip_index:
             t = time.time()
+            # Parallel workers share the build memory through /dev/shm, which
+            # Docker caps at 64 MB: "could not resize shared memory segment"
+            # (2026-10-14, local archive). One process uses ordinary memory.
+            conn.execute("SET max_parallel_maintenance_workers = 0")
             conn.execute(f"SET maintenance_work_mem = '{args.index_mem}'")
             conn.execute(ARCHIVE_HNSW)
             conn.commit()
