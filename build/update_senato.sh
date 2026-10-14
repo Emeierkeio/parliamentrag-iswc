@@ -89,4 +89,15 @@ if [ -n "$ARCHIVE_VAL" ]; then
 	step "testo e vettori archiviati tolti dal grafo" archive strip
 fi
 
+# Link al singolo intervento su senato.it: la pagina della seduta per tutti,
+# l'ancora dell'intervento dove l'indice della seduta è in cache
+# (data/senate_toc, 40 pagine a giro finché non è completa).
+links() {
+	env NEO4J_PASSWORD="$PASS_VAL" "$PY" build/senate_speech_links.py "$@" \
+		--neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
+}
+step "link alle sedute su senato.it" links sittings
+senato_step "indici delle sedute (senato.it)" links toc --limit 40 --delay "$SENATO_DELAY"
+step "link ai singoli interventi" links anchor
+
 exit "$rc_all"
