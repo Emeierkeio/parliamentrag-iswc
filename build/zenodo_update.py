@@ -24,7 +24,12 @@ What this script does
    (parliamentrag_kg.ttl always; parliamentrag_votes.nt if present locally).
    Run `make export-rdf` (add EXPORT_RDF_FLAGS="--votes" for the votes file)
    first, otherwise you would re-upload stale dumps.
-4. Sets the publication_date of the draft to today.
+4. Sets the publication_date of the draft to today and applies
+   build/zenodo_metadata.json (title, description, license, keywords,
+   related identifiers), filling {{TRIPLES}} and {{INDIVIDUAL_VOTES}} from
+   dumps/rdf/export_meta.json. A new-version draft otherwise inherits the
+   previous version's metadata, which described the Chamber only and carried
+   CC BY 4.0 (wrong since the Chamber data are CC BY-SA).
 5. Leaves the draft UNPUBLISHED and prints its URL: you review it in the
    browser and press Publish yourself — a published DOI is permanent.
    With --publish it publishes the draft right away instead (used by the
@@ -35,8 +40,10 @@ deposit:write + deposit:actions, from zenodo.org/account/settings/applications).
 
 Usage:
     python build/zenodo_update.py [--dry-run] [--skip-votes] [--publish]
+                                  [--metadata FILE | --keep-metadata]
 """
 import argparse
+import json
 import os
 import re
 import sys
@@ -51,10 +58,30 @@ RDF_DIR = REPO_ROOT / "dumps" / "rdf"
 API = "https://zenodo.org/api"
 CONCEPT_RECID = "21560331"  # fixed forever; concept DOI 10.5281/zenodo.21560331
 DUMP_FILES = ["parliamentrag_kg.ttl", "parliamentrag_votes.nt"]
+METADATA_FILE = REPO_ROOT / "build" / "zenodo_metadata.json"
 
 
 def die(msg: str):
     sys.exit(f"ERROR: {msg}")
+
+
+def render_metadata(template_path: Path, export_meta: dict) -> dict:
+    """Load the metadata overrides and fill their {{TOKENS}} from export_meta.json."""
+    values = {
+        "TRIPLES": export_meta.get("triples"),
+        "INDIVIDUAL_VOTES": export_meta.get("individual_votes"),
+    }
+    text = template_path.read_text(encoding="utf-8")
+    for token, value in values.items():
+        if "{{" + token + "}}" in text:
+            if value is None:
+                die(f"{token} missing from export_meta.json — rerun the export "
+                    "(with --votes for INDIVIDUAL_VOTES)")
+            text = text.replace("{{" + token + "}}", f"{value:,}")
+    leftover = re.findall(r"\{\{[A-Z_]+\}\}", text)
+    if leftover:
+        die(f"unfilled tokens in {template_path.name}: {leftover}")
+    return json.loads(text)
 
 
 def main():
@@ -65,7 +92,20 @@ def main():
                         help="do not upload parliamentrag_votes.nt (3.8 GB)")
     parser.add_argument("--publish", action="store_true",
                         help="publish the draft after upload (permanent DOI)")
+    parser.add_argument("--metadata", default=str(METADATA_FILE),
+                        help="JSON with the metadata fields to set on the new version")
+    parser.add_argument("--keep-metadata", action="store_true",
+                        help="keep the previous version's metadata unchanged")
     args = parser.parse_args()
+
+    overrides = {}
+    if not args.keep_metadata:
+        meta_path = RDF_DIR / "export_meta.json"
+        export_meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
+        overrides = render_metadata(Path(args.metadata), export_meta)
+        print(f"Metadata from {Path(args.metadata).name}: {', '.join(overrides)}")
+        print(f"  title: {overrides.get('title', '(unchanged)')}")
+        print(f"  license: {overrides.get('license', '(unchanged)')}")
 
     load_dotenv(REPO_ROOT / ".env")
     token = os.environ.get("ZENODO_TOKEN")
@@ -128,6 +168,7 @@ def main():
     # 4. Stamp today's date on the new version.
     today = date.today().isoformat()
     meta = draft["metadata"]
+    meta.update(overrides)
     meta["publication_date"] = today
     meta.pop("doi", None)  # the draft gets its own DOI on publish
     r = requests.put(draft["links"]["self"], params=auth, json={"metadata": meta})

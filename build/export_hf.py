@@ -22,12 +22,18 @@ Tables (one Parquet file each, one HF config each):
   speech_references   NER-resolved mentions of persons / citations of acts,
                         lifted from Chunk to Speech level (DISTINCT pairs)
 
+Camera and Senato share the tables: every table that mixes them carries a
+`chamber` column ('camera', 'senato'; 'bicamerale' for joint committees).
+Senate speech text is read from the Postgres text archive (--archive-url or
+ARCHIVE_URL, see build/archive_text.py), since the graph no longer holds it.
+
 Deliberately excluded, same policy as export_rdf.py: embeddings (all
 `*embedding*` properties), Chunk nodes (retrieval artifacts — speeches keep the
 full text), ChatHistory (private), SpeakerDebateSummary (LLM-derived).
 
 License: source data from dati.camera.it is CC BY-SA 4.0, so the derived tables
-carry the same license; keep `license: cc-by-sa-4.0` in the dataset card.
+carry the same license (dati.senato.it is CC BY 3.0, which allows it); keep
+`license: cc-by-sa-4.0` in the dataset card.
 
 The dataset card is generated from build/hf_dataset_card.md: {{TOKEN}}
 placeholders (row counts, coverage date, recap coverage) are filled with
@@ -37,6 +43,7 @@ tables.
 
 Usage:
     python export_hf.py [--out DIR] [--skip-individual-votes] [--card-only]
+                        [--archive-url postgresql://...] [--repo USER/NAME]
 
 Then upload with (requires `hf auth login`):
     hf upload <user>/<dataset-name> dumps/hf . --repo-type dataset
@@ -57,9 +64,12 @@ import pandas as pd
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
+from archive_text import TextCoverage, archive_url_from_env, load_speech_texts
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 PARQUET_KWARGS = {"engine": "pyarrow", "compression": "zstd", "index": False}
+DEFAULT_REPO = "emeierkeio/parliamentrag-camera-leg19"
 
 
 def iso(value):
@@ -85,6 +95,13 @@ CARD_STAT_QUERIES = {
     "ROWS_SPEECHES": ("MATCH (:Session)-[:HAS_DEBATE]->(:Debate)-[:HAS_PHASE]->"
                       "(:Phase)-[:CONTAINS_SPEECH]->(sp:Speech) RETURN count(sp) AS v"),
     "ROWS_SESSIONS": "MATCH (n:Session) RETURN count(n) AS v",
+    "SESSIONS_CAMERA": "MATCH (n:Session {chamber: 'camera', legislature: 19}) RETURN count(n) AS v",
+    "SESSIONS_SENATO": "MATCH (n:Session {chamber: 'senato', legislature: 19}) RETURN count(n) AS v",
+    "SPEECHES_SENATO": ("MATCH (:Session {chamber: 'senato', legislature: 19})-[:HAS_DEBATE]->(:Debate)"
+                        "-[:HAS_PHASE]->(:Phase)-[:CONTAINS_SPEECH]->(sp:Speech) "
+                        "RETURN count(sp) AS v"),
+    "VOTES_SENATO": ("MATCH (:Session {chamber: 'senato', legislature: 19})-[:HAS_VOTE]->(v:Vote) "
+                     "RETURN count(v) AS v"),
     "ROWS_DEBATES": "MATCH (:Session)-[:HAS_DEBATE]->(d:Debate) RETURN count(d) AS v",
     "ROWS_VOTES": "MATCH (:Session)-[:HAS_VOTE]->(v:Vote) RETURN count(v) AS v",
     "ROWS_INDIVIDUAL_VOTES": ("MATCH (:Person)-[:VOTED]->(iv:IndividualVote)"
@@ -111,13 +128,13 @@ CARD_STAT_QUERIES = {
 }
 
 
-def render_card(driver, out_dir: Path):
+def render_card(driver, out_dir: Path, repo: str):
     """Fill build/hf_dataset_card.md tokens with live counts -> README.md."""
     template_path = Path(__file__).parent / "hf_dataset_card.md"
     if not template_path.exists():
         print("  hf_dataset_card.md not found — card skipped")
         return
-    text = template_path.read_text()
+    text = template_path.read_text().replace("{{HF_REPO}}", repo)
     with driver.session() as session:
         for token, cypher in CARD_STAT_QUERIES.items():
             value = session.run(cypher).single()["v"]
@@ -134,9 +151,11 @@ def render_card(driver, out_dir: Path):
 
 
 class HfExporter:
-    def __init__(self, driver, out_dir: Path):
+    def __init__(self, driver, out_dir: Path, archive_texts: dict | None = None):
         self.driver = driver
         self.out_dir = out_dir
+        self.archive_texts = archive_texts or {}
+        self.text_coverage = TextCoverage()
         self.row_counts = {}
 
     def rows(self, cypher: str):
@@ -168,7 +187,10 @@ class HfExporter:
                 "education": p.get("education"),
                 "institutional_role": p.get("institutional_role"),
                 "is_deputy": "Deputy" in rec["labels"],
+                "is_senator": "Senator" in rec["labels"],
                 "is_government_member": "GovernmentMember" in rec["labels"],
+                "camera_id": s(p.get("camera_id")),
+                "senato_id": s(p.get("senato_id")),
                 "term_of_office_start": iso(p.get("term_of_office_start")),
                 "deputy_card": s(p.get("deputy_card")),
                 "photo": s(p.get("photo")),
@@ -185,6 +207,7 @@ class HfExporter:
                 p = dict(rec["n"])
                 records.append({
                     "org_type": org_type,
+                    "chamber": p.get("chamber"),
                     "name": p["name"],
                     "acronym": p.get("acronym") or p.get("short_name"),
                     "uri": p.get("uri") or p.get("id"),
@@ -199,12 +222,14 @@ class HfExporter:
                               ("MEMBER_OF_COMPONENT", "misto_component")]:
             for rec in self.rows(
                 f"MATCH (a:Person)-[r:{rel}]->(b) "
-                "RETURN a.id AS person_id, b.name AS org_name, r"
+                "RETURN a.id AS person_id, b.name AS org_name, "
+                "b.chamber AS org_chamber, r"
             ):
                 r = dict(rec["r"])
                 records.append({
                     "person_id": rec["person_id"],
                     "org_type": org_type,
+                    "chamber": r.get("chamber") or rec["org_chamber"],
                     "org_name": rec["org_name"],
                     "role": r.get("officerRole"),
                     "start_date": iso(r.get("start_date")),
@@ -220,6 +245,7 @@ class HfExporter:
             records.append({
                 "person_id": rec["person_id"],
                 "org_type": "government",
+                "chamber": None,
                 "org_name": rec["org_name"],
                 "role": r.get("role"),
                 "start_date": iso(r.get("start_date")),
@@ -265,14 +291,18 @@ class HfExporter:
             "MATCH (s:Session)-[:HAS_DEBATE]->(d:Debate)-[:HAS_PHASE]->(ph:Phase)"
             "-[:CONTAINS_SPEECH]->(sp:Speech) "
             "OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(p:Person) "
-            "RETURN s.id AS session_id, s.date AS date, d.id AS debate_id, "
+            "RETURN s.id AS session_id, s.chamber AS chamber, s.date AS date, "
+            "d.id AS debate_id, "
             "d.title AS debate_title, ph.id AS phase_id, ph.title AS phase_title, "
             "ph.phaseType AS phase_type, sp, p.id AS speaker_id "
             "ORDER BY s.date, d.order, ph.order, sp.id"
         ):
             p = dict(rec["sp"])
+            text = p.get("text") or self.archive_texts.get(p["id"])
+            self.text_coverage.add(rec["chamber"], bool(text))
             records.append({
                 "speech_id": p["id"],
+                "chamber": rec["chamber"],
                 "session_id": rec["session_id"],
                 "date": iso(rec["date"]),
                 "debate_id": rec["debate_id"],
@@ -282,21 +312,23 @@ class HfExporter:
                 "phase_type": rec["phase_type"],
                 "speaker_id": rec["speaker_id"],
                 "speaker_name": p.get("cognomeNome"),
-                "text": p.get("text"),
+                "text": text,
             })
         self.write("speeches", records)
+        print(f"  speech text coverage: {self.text_coverage.as_dict()}")
 
     def export_votes(self):
         records = []
         for rec in self.rows(
             "MATCH (s:Session)-[:HAS_VOTE]->(v:Vote) "
             "OPTIONAL MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct) "
-            "RETURN s.id AS session_id, s.date AS date, v, "
+            "RETURN s.id AS session_id, s.chamber AS chamber, s.date AS date, v, "
             "collect(a.uri) AS act_uris ORDER BY s.date, v.number"
         ):
             p = dict(rec["v"])
             records.append({
                 "vote_id": p["id"],
+                "chamber": rec["chamber"],
                 "session_id": rec["session_id"],
                 "date": iso(rec["date"]),
                 "number": p.get("number"),
@@ -339,6 +371,7 @@ class HfExporter:
             p = dict(rec["n"])
             records.append({
                 "act_uri": p.get("uri"),
+                "chamber": p.get("chamber"),
                 "number": s(p.get("number")),
                 "act_type": p.get("type"),
                 "title": p.get("title"),
@@ -387,6 +420,14 @@ def main():
                         help="skip the 6.9M-row individual_votes table")
     parser.add_argument("--card-only", action="store_true",
                         help="only regenerate README.md from hf_dataset_card.md")
+    parser.add_argument("--archive-url", default=None,
+                        help="Postgres text archive for speeches stripped from the "
+                             "graph (default: ARCHIVE_URL)")
+    parser.add_argument("--allow-missing-text", action="store_true",
+                        help="write the tables even if a chamber is mostly without text")
+    parser.add_argument("--repo", default=os.environ.get("HF_DATASET_REPO", DEFAULT_REPO),
+                        help="dataset id used in the card examples (default: "
+                             "HF_DATASET_REPO or %(default)s)")
     args = parser.parse_args()
 
     load_dotenv(REPO_ROOT / ".env")
@@ -399,18 +440,26 @@ def main():
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    archive_texts = {}
+    if not args.card_only:
+        archive_texts = load_speech_texts(archive_url_from_env(args.archive_url))
+
     driver = GraphDatabase.driver(uri, auth=(user, password))
-    exporter = HfExporter(driver, out_dir)
+    exporter = HfExporter(driver, out_dir, archive_texts)
     started = time.time()
     try:
         if not args.card_only:
             print("Exporting tables...")
+            exporter.export_speeches()
+            broken = exporter.text_coverage.broken_chambers()
+            if broken and not args.allow_missing_text:
+                sys.exit(f"speech text missing for {broken}: pass --archive-url (or set "
+                         "ARCHIVE_URL) to read it from the Postgres archive")
             exporter.export_persons()
             exporter.export_organizations()
             exporter.export_memberships()
             exporter.export_sessions()
             exporter.export_debates()
-            exporter.export_speeches()
             exporter.export_votes()
             exporter.export_acts()
             exporter.export_act_subjects()
@@ -421,11 +470,12 @@ def main():
             meta_path = out_dir / "export_meta.json"
             meta_path.write_text(json.dumps({
                 "row_counts": exporter.row_counts,
+                "speech_text": exporter.text_coverage.as_dict(),
                 "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             }, indent=2) + "\n")
 
         print("Rendering dataset card...")
-        render_card(driver, out_dir)
+        render_card(driver, out_dir, args.repo)
     finally:
         driver.close()
     print(f"Done in {time.time() - started:.0f}s")

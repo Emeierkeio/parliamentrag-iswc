@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Orchestratore di `make zenodo-release`: rigenera i dump RDF (voti inclusi),
-# li carica su Zenodo e PUBBLICA la nuova versione, senza intervento. Pensato
+# li carica su Zenodo in una bozza e la PUBBLICA solo con PUBLISH=1; senza,
+# la bozza resta da controllare e pubblicare a mano dal link stampato. Pensato
 # per girare di notte: tiene sveglio il Mac con caffeinate e a fine corsa
 # manda una notifica.
 #
@@ -12,12 +13,17 @@
 # Ordine: dry-run Zenodo PRIMA dell'export, così un token scaduto o un account
 # sbagliato fanno fallire in pochi secondi invece che dopo un'ora di export.
 #
-# Variabili (passate dal Makefile): BACKEND_DIR
+# Il testo degli interventi del Senato sta solo nell'archivio Postgres:
+# ARCHIVE_URL va messo nello .env di root (lo legge export_rdf.py), altrimenti
+# l'export si ferma con «speech text missing for ['senato']».
+#
+# Variabili (passate dal Makefile): BACKEND_DIR, PUBLISH
 set -u -o pipefail
 
 cd "$(dirname "$0")/.."
 
 : "${BACKEND_DIR:=backend}"
+: "${PUBLISH:=0}"
 PY="$BACKEND_DIR/venv/bin/python"
 RDF_DIR="dumps/rdf"
 
@@ -64,6 +70,15 @@ NEW_VOTES=$(size parliamentrag_votes.nt)
 echo "  triple KG: $OLD_TRIPLES → $NEW_TRIPLES · file voti: $OLD_VOTES → $NEW_VOTES byte" | tee -a "$LOG"
 [ "$NEW_TRIPLES" -ge "$OLD_TRIPLES" ] || fail "KG più piccolo di prima ($NEW_TRIPLES < $OLD_TRIPLES): non pubblico"
 [ "$NEW_VOTES" -ge "$OLD_VOTES" ]     || fail "file voti più piccolo di prima: non pubblico"
+
+if [ "$PUBLISH" != "1" ]; then
+	run_step "Upload su Zenodo (bozza)"  "$PY" build/zenodo_update.py
+	DRAFT=$(grep -Eo 'https://zenodo\.org/[^ ]*deposit[^ ]*' "$LOG" | tail -1)
+	echo
+	echo "Fatto in $(( SECONDS / 60 )) min. Bozza da controllare e pubblicare: $DRAFT"
+	notify "Zenodo: bozza pronta" "Controlla e premi Publish"
+	exit 0
+fi
 
 run_step "Upload e pubblicazione su Zenodo"  "$PY" build/zenodo_update.py --publish
 

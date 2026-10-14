@@ -9,7 +9,10 @@ vocabulary, so the debate structure uses project classes aligned to Akoma
 Ntoso element names in rdfs:comment annotations).
 
 Node → RDF mapping:
-  Person / Deputy / GovernmentMember  foaf:Person (+ ocd:deputato for deputies)
+  Person / Deputy / GovernmentMember  foaf:Person (+ ocd:deputato for deputies,
+    / Senator                           osr:Senatore for senators; owl:sameAs
+                                        to the dati.camera.it / dati.senato.it
+                                        person URI when the node id differs)
   ParliamentaryGroup, Committee,      org:Organization
     Government, MistoComponent          (+ ocd:gruppoParlamentare / ocd:organo)
   ParliamentaryAct                    ocd:atto
@@ -38,16 +41,26 @@ Relationship → RDF mapping:
   CITES (chunk -> speech level)       dcterms:references (NER-resolved)
   VOTED / ON_VOTE (--votes only)      ocd:voto with pr:voter / pr:onVote
 
+Chambers: Camera and Senato share one graph. Groups and committees of the
+Senate get a `senato-` prefix in their minted URI (the Camera ones keep the
+URIs published on Zenodo), because acronyms such as FdI, M5S and Misto exist
+in both chambers. Senate speech text is not in Neo4j since 2026-10-13: it is
+read from the Postgres text archive (--archive-url or ARCHIVE_URL, see
+build/archive_text.py), and the export stops if a chamber is left mostly
+without text.
+
 Deliberately excluded: embeddings (all `*embedding*` properties), Chunk nodes
 (retrieval artifacts — Speech keeps the full transcript text), ChatHistory
 (private), SpeakerDebateSummary (LLM-derived, not source knowledge).
 
 License: the dataset entity carries dcterms:license CC BY-SA 4.0 (source data
 from dati.camera.it is CC BY-SA, so ShareAlike carries over to the derived
-graph); use the same license on the Zenodo record.
+graph; dati.senato.it is CC BY 3.0, which allows a CC BY-SA adaptation with
+attribution); use the same license on the Zenodo record.
 
 Usage:
     python export_rdf.py [--out DIR] [--format ttl|nt] [--votes] [--skip-text]
+                         [--archive-url postgresql://...] [--allow-missing-text]
 
 Connection comes from NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD (repo-root .env
 is loaded automatically, same convention as the other build scripts).
@@ -66,12 +79,20 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from rdflib import Graph, Literal, Namespace, URIRef
-from rdflib.namespace import DCTERMS, FOAF, ORG, PROV, RDF, RDFS, SDO, SKOS, XSD
+from rdflib.namespace import DCTERMS, FOAF, ORG, OWL, PROV, RDF, SDO, SKOS, XSD
+
+from archive_text import TextCoverage, archive_url_from_env, load_speech_texts
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 BASE_DEFAULT = "https://w3id.org/parliamentrag/"
 OCD = Namespace("http://dati.camera.it/ocd/")
+OSR = Namespace("http://dati.senato.it/osr/")
+
+SOURCE_BY_CHAMBER = {
+    "camera": ("http://dati.camera.it", "Camera dei deputati"),
+    "senato": ("http://dati.senato.it", "Senato della Repubblica"),
+}
 
 # Filtered inside the query (see node_rows), not client-side: the vectors are
 # ~1536 floats per node and streaming them over the SSH tunnel only to drop them
@@ -86,16 +107,46 @@ def slugify(text: str, max_len: int = 60) -> str:
     return slug
 
 
+def chamber_of_speech(speech_id: str) -> str:
+    """Chamber of a Speech node from its id (Senate ids start with `sen_`)."""
+    return "senato" if speech_id.startswith("sen_") else "camera"
+
+
+def org_slug(props: dict, use_acronym: bool) -> str:
+    """Local id of a group or committee URI, chamber-qualified for the Senate."""
+    label = (props.get("acronym") if use_acronym else None) or props["name"]
+    slug = slugify(label)
+    return f"senato-{slug}" if props.get("chamber") == "senato" else slug
+
+
+def act_local_id(props: dict) -> str:
+    """Local id of an act with no http URI.
+
+    Camera placeholders keep the number-based id already on Zenodo; Senate
+    acts use their full `senato:19:...` id, since bare numbers repeat across
+    chambers.
+    """
+    source_uri = props.get("uri", "")
+    if props.get("chamber") == "senato":
+        return source_uri
+    return str(props.get("number") or source_uri)
+
+
 class RdfExporter:
-    def __init__(self, driver, base: str, include_text: bool):
+    def __init__(self, driver, base: str, include_text: bool,
+                 archive_texts: dict | None = None):
         self.driver = driver
         self.include_text = include_text
+        self.archive_texts = archive_texts or {}
+        self.text_coverage = TextCoverage()
+        self.chambers = set()
         self.PRO = Namespace(base + "ontology#")   # classes and properties
         self.PRR = Namespace(base + "resource/")   # minted entity URIs
         self.g = Graph()
         for prefix, ns in [("ocd", OCD), ("foaf", FOAF), ("org", ORG),
                            ("skos", SKOS), ("dcterms", DCTERMS), ("prov", PROV),
-                           ("schema", SDO), ("pr", self.PRO), ("prr", self.PRR)]:
+                           ("schema", SDO), ("osr", OSR), ("owl", OWL),
+                           ("pr", self.PRO), ("prr", self.PRR)]:
             self.g.bind(prefix, ns)
         self.uri_by_eid = {}  # Neo4j elementId -> URIRef, filled by node passes
 
@@ -151,8 +202,14 @@ class RdfExporter:
             self.g.add((uri, RDF.type, FOAF.Person))
             if "Deputy" in rec["labels"]:
                 self.g.add((uri, RDF.type, OCD.deputato))
+            if "Senator" in rec["labels"]:
+                self.g.add((uri, RDF.type, OSR.Senatore))
             if "GovernmentMember" in rec["labels"]:
                 self.g.add((uri, RDF.type, PRO.GovernmentMember))
+            for key in ("camera_id", "senato_id"):
+                official = props.get(key)
+                if isinstance(official, str) and official.startswith("http") and official != node_id:
+                    self.g.add((uri, OWL.sameAs, URIRef(official)))
             self.add_props(uri, props, {
                 "first_name": FOAF.givenName,
                 "last_name": FOAF.familyName,
@@ -172,7 +229,7 @@ class RdfExporter:
         PRO = self.PRO
         for rec in self.node_rows("ParliamentaryGroup"):
             props = dict(rec["n"])
-            uri = self.mint("group", slugify(props.get("acronym") or props["name"]))
+            uri = self.mint("group", org_slug(props, use_acronym=True))
             self.uri_by_eid[rec["eid"]] = uri
             self.g.add((uri, RDF.type, ORG.Organization))
             self.g.add((uri, RDF.type, OCD.gruppoParlamentare))
@@ -182,7 +239,7 @@ class RdfExporter:
 
         for rec in self.node_rows("Committee"):
             props = dict(rec["n"])
-            uri = self.mint("committee", slugify(props["name"]))
+            uri = self.mint("committee", org_slug(props, use_acronym=False))
             self.uri_by_eid[rec["eid"]] = uri
             self.g.add((uri, RDF.type, ORG.Organization))
             self.g.add((uri, RDF.type, OCD.organo))
@@ -211,8 +268,8 @@ class RdfExporter:
             source_uri = props.get("uri", "")
             if source_uri.startswith("http"):
                 uri = URIRef(source_uri)
-            else:  # placeholder acts have no authoritative URI yet
-                uri = self.mint("act", props.get("number") or source_uri)
+            else:  # placeholder and Senate non-bill acts have no http URI
+                uri = self.mint("act", act_local_id(props))
             self.uri_by_eid[rec["eid"]] = uri
             self.g.add((uri, RDF.type, OCD.atto))
             self.add_props(uri, props, {
@@ -241,6 +298,8 @@ class RdfExporter:
                 "chamber": PRO.chamber,
                 "legislature": PRO.legislature,
             })
+            if props.get("chamber"):
+                self.chambers.add(props["chamber"])
 
         for rec in self.node_rows("Debate"):
             props = dict(rec["n"])
@@ -265,8 +324,12 @@ class RdfExporter:
             uri = self.mint("speech", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
             self.g.add((uri, RDF.type, PRO.Speech))
-            if self.include_text and props.get("text"):
-                self.g.add((uri, PRO.text, Literal(props["text"], lang="it")))
+            if not self.include_text:
+                continue
+            text = props.get("text") or self.archive_texts.get(props["id"])
+            self.text_coverage.add(chamber_of_speech(props["id"]), bool(text))
+            if text:
+                self.g.add((uri, PRO.text, Literal(text, lang="it")))
 
         for rec in self.node_rows("Vote"):
             props = dict(rec["n"])
@@ -290,15 +353,22 @@ class RdfExporter:
     def export_provenance(self):
         PRO = self.PRO
         dataset = self.PRR["dataset"]
+        chambers = [c for c in SOURCE_BY_CHAMBER if c in self.chambers] or ["camera"]
+        scope = ("Italian Parliament" if len(chambers) > 1
+                 else "Italian Chamber of Deputies" if chambers == ["camera"]
+                 else "Italian Senate")
         self.g.add((dataset, RDF.type, PROV.Entity))
         self.g.add((dataset, DCTERMS.title,
-                    Literal("ParliamentRAG knowledge graph (Italian Chamber of Deputies, leg. 19)", lang="en")))
-        # CC BY-SA 4.0: source data from dati.camera.it is CC BY-SA, ShareAlike carries over
+                    Literal(f"ParliamentRAG knowledge graph ({scope}, leg. 19)", lang="en")))
+        # CC BY-SA 4.0: dati.camera.it is CC BY-SA, ShareAlike carries over;
+        # dati.senato.it is CC BY 3.0, compatible with a BY-SA adaptation
         self.g.add((dataset, DCTERMS.license,
                     URIRef("https://creativecommons.org/licenses/by-sa/4.0/")))
-        self.g.add((dataset, DCTERMS.source, URIRef("http://dati.camera.it")))
+        for chamber in chambers:
+            self.g.add((dataset, DCTERMS.source, URIRef(SOURCE_BY_CHAMBER[chamber][0])))
+        holders = ", ".join(SOURCE_BY_CHAMBER[c][1] for c in chambers)
         self.g.add((dataset, DCTERMS.rightsHolder,
-                    Literal("Camera dei deputati (source data); ParliamentRAG (derived graph)", lang="en")))
+                    Literal(f"{holders} (source data); ParliamentRAG (derived graph)", lang="en")))
 
         meta = None
         for rec in self.node_rows("SchemaMeta"):
@@ -393,6 +463,7 @@ class RdfExporter:
                 self.g.add((membership, ORG.member, person))
                 self.g.add((membership, ORG.organization, organization))
                 self.add_props(membership, props, {
+                    "chamber": PRO.chamber,
                     "start_date": PRO.startDate,
                     "end_date": PRO.endDate,
                     "officerRole": PRO.role,
@@ -429,8 +500,8 @@ class RdfExporter:
 
     # ---- individual votes (streamed, N-Triples) ----------------------------
 
-    def export_votes_stream(self, path: Path):
-        """6.3M individual votes: streamed straight to N-Triples, never in RAM."""
+    def export_votes_stream(self, path: Path) -> int:
+        """Stream the individual votes (8.2M, 2026-10) to N-Triples, never in RAM."""
         PRO = self.PRO
 
         def nt(s, p, o):
@@ -454,6 +525,7 @@ class RdfExporter:
                 if count % 500_000 == 0:
                     print(f"  {count:,} individual votes...")
         print(f"  total: {count:,} individual votes -> {path.name}")
+        return count
 
 
 def main():
@@ -468,6 +540,11 @@ def main():
                         help="also export the 6.3M individual votes (separate .nt file)")
     parser.add_argument("--skip-text", action="store_true",
                         help="omit speech transcript text (much smaller dump)")
+    parser.add_argument("--archive-url", default=None,
+                        help="Postgres text archive for speeches stripped from the "
+                             "graph (default: ARCHIVE_URL)")
+    parser.add_argument("--allow-missing-text", action="store_true",
+                        help="write the dump even if a chamber is mostly without text")
     args = parser.parse_args()
 
     load_dotenv(REPO_ROOT / ".env")
@@ -480,8 +557,13 @@ def main():
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    archive_texts = {}
+    if not args.skip_text:
+        archive_texts = load_speech_texts(archive_url_from_env(args.archive_url))
+
     driver = GraphDatabase.driver(uri, auth=(user, password))
-    exporter = RdfExporter(driver, args.base, include_text=not args.skip_text)
+    exporter = RdfExporter(driver, args.base, include_text=not args.skip_text,
+                           archive_texts=archive_texts)
     started = time.time()
     try:
         print("Exporting nodes...")
@@ -491,6 +573,13 @@ def main():
         exporter.export_proceedings()
         exporter.export_provenance()
         print(f"  {len(exporter.uri_by_eid):,} nodes mapped")
+        coverage = exporter.text_coverage.as_dict()
+        if coverage:
+            print(f"  speech text coverage: {coverage}")
+        broken = exporter.text_coverage.broken_chambers()
+        if broken and not args.allow_missing_text:
+            sys.exit(f"speech text missing for {broken}: pass --archive-url (or set "
+                     "ARCHIVE_URL) to read it from the Postgres archive")
 
         print("Exporting relationships...")
         exporter.export_simple_relationships()
@@ -504,15 +593,20 @@ def main():
                              format="turtle" if args.format == "ttl" else "nt")
 
         # Consumed by the backend /api/data/stats endpoint
-        meta_path = out_dir / "export_meta.json"
-        meta_path.write_text(json.dumps({
+        meta = {
             "triples": len(exporter.g),
+            "chambers": sorted(exporter.chambers),
+            "speech_text": exporter.text_coverage.as_dict(),
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        }) + "\n")
+        }
+        meta_path = out_dir / "export_meta.json"
+        meta_path.write_text(json.dumps(meta) + "\n")
 
         if args.votes:
             print("Streaming individual votes...")
-            exporter.export_votes_stream(out_dir / "parliamentrag_votes.nt")
+            meta["individual_votes"] = exporter.export_votes_stream(
+                out_dir / "parliamentrag_votes.nt")
+            meta_path.write_text(json.dumps(meta) + "\n")
     finally:
         driver.close()
     print(f"Done in {time.time() - started:.0f}s")

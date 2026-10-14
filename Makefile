@@ -15,7 +15,7 @@
 #   make og-images                    # regenerate Open Graph preview images (home, /home, /data)
 #   make db-backup                    # dated dump of the remote DB on the server (few min downtime)
 #   make db-pull                      # download latest dump + restore into a local Neo4j (:7691)
-#   make zenodo-release               # export RDF + upload + Publish su Zenodo, senza presidio
+#   make zenodo-release [PUBLISH=1]   # export RDF + upload in bozza su Zenodo (Publish solo con PUBLISH=1)
 #   make db-use-local / db-use-remote # switch NEO4J_URI in .env between local copy and remote
 #   make purge-user-data DRY=1        # count user data past DATA_RETENTION_UNTIL (drop DRY=1 to delete)
 
@@ -202,7 +202,8 @@ export-rdf:
 	@$(BACKEND_DIR)/venv/bin/python build/export_rdf.py $(EXPORT_RDF_FLAGS)
 
 ## Export parquet del KG per Hugging Face in dumps/hf/ (tabelle + card).
-## Usa NEO4J_URI dallo .env (snapshot locale :7691). La card viene generata
+## Usa NEO4J_URI dallo .env (snapshot locale :7691) e ARCHIVE_URL per il
+## testo del Senato (archivio Postgres). La card viene generata
 ## da build/hf_dataset_card.md con i conteggi presi dal grafo al momento
 ## dell'export, quindi non va mai aggiornata a mano. EXPORT_HF_FLAGS:
 ## "--card-only" per rigenerare solo il README, "--skip-individual-votes".
@@ -243,10 +244,12 @@ zenodo-update:
 
 ## Tutto il flusso senza presidio (lancialo e vai a dormire): tunnel, dry-run
 ## Zenodo, export con voti, controllo che il dump non sia più piccolo del
-## precedente, upload e PUBBLICAZIONE (DOI permanente). Tiene sveglio il Mac
-## con caffeinate e notifica a fine corsa; log in build/logs/zenodo-release-*.log.
+## precedente, upload in bozza; con PUBLISH=1 anche la PUBBLICAZIONE (DOI
+## permanente). Il testo del Senato viene dall'archivio Postgres: serve
+## ARCHIVE_URL nello .env. Tiene sveglio il Mac con caffeinate e notifica a
+## fine corsa; log in build/logs/zenodo-release-*.log.
 zenodo-release: tunnel
-	@BACKEND_DIR="$(BACKEND_DIR)" caffeinate -i bash build/zenodo_release.sh
+	@BACKEND_DIR="$(BACKEND_DIR)" PUBLISH="$(PUBLISH)" caffeinate -i bash build/zenodo_release.sh
 
 ## Open the SSH tunnel to the remote demo Neo4j if it is not already up.
 ## Also detects half-dead tunnels (port listening but connection refused/hung after

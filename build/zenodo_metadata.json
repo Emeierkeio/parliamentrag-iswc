@@ -1,0 +1,24 @@
+{
+  "title": "ParliamentRAG Knowledge Graph - Italian Parliament (Chamber of Deputies and Senate), 19th Legislature (RDF export)",
+  "description": "<p>RDF export of the ParliamentRAG knowledge graph covering both houses of the Italian Parliament, the Chamber of Deputies and the Senate, in the 19th legislature: people (deputies, senators, government members), parliamentary groups, committees, acts, EuroVoc topics, sittings, debates, full speech transcripts, roll-call votes and {{INDIVIDUAL_VOTES}} individual votes.</p><p>Two files:</p><ul><li><b>parliamentrag_kg.ttl</b> (Turtle): the structural KG, {{TRIPLES}} triples;</li><li><b>parliamentrag_votes.nt</b> (N-Triples): the individual vote cast by each member in every electronic ballot of both houses.</li></ul><p>Ontology alignment: OCD (dati.camera.it), OSR (dati.senato.it), FOAF, W3C ORG, SKOS (EuroVoc), PROV-O, plus a small project namespace (https://w3id.org/parliamentrag/ontology#) for debate-structure terms aligned to Akoma Ntoso. Each sitting carries its chamber (pr:chamber). Members keep their official URIs from dati.camera.it or dati.senato.it, with owl:sameAs links when a person sat in both houses or in the government. Embeddings, retrieval chunks, user conversations and AI-generated summaries are not part of the export.</p><p>Source data: open data of the Chamber of Deputies (dati.camera.it, CC BY-SA 4.0), of the Senate (dati.senato.it, CC BY 3.0) and the EuroVoc thesaurus of the EU Publications Office. The derived graph is released under CC BY-SA 4.0, as the ShareAlike clause of the Chamber data requires. Versions before this one covered the Chamber of Deputies only.</p><p>Companion system described in: Tritella, Pozzi, Palmonari, \"Who Speaks Matters: Authority-Aware Multi-View RAG over Italian Parliamentary Proceedings\", The Semantic Web - ISWC 2026, doi:10.1007/978-3-032-42029-9_24. Source code: doi:10.5281/zenodo.23173703.</p>",
+  "license": "cc-by-sa-4.0",
+  "keywords": [
+    "knowledge graph",
+    "RDF",
+    "linked data",
+    "parliamentary proceedings",
+    "Italian Parliament",
+    "Italian Chamber of Deputies",
+    "Italian Senate",
+    "retrieval-augmented generation",
+    "EuroVoc",
+    "Akoma Ntoso"
+  ],
+  "related_identifiers": [
+    {"identifier": "10.1007/978-3-032-42029-9_24", "relation": "isSupplementTo", "resource_type": "publication-conferencepaper", "scheme": "doi"},
+    {"identifier": "https://orkg.org/papers/R1909763", "relation": "isSupplementTo", "resource_type": "publication", "scheme": "url"},
+    {"identifier": "http://dati.camera.it", "relation": "isDerivedFrom", "resource_type": "dataset", "scheme": "url"},
+    {"identifier": "http://dati.senato.it", "relation": "isDerivedFrom", "resource_type": "dataset", "scheme": "url"},
+    {"identifier": "10.5281/zenodo.23173703", "relation": "isCompiledBy", "resource_type": "software", "scheme": "doi"}
+  ]
+}
