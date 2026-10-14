@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/data", tags=["Data"])
@@ -37,18 +38,89 @@ STATS_LABELS = {
 _STATS_TTL_S = 3600
 _stats_cache: dict = {"at": 0.0, "data": None}
 
+CHAMBERS = ("camera", "senato")
+
+# Senate nodes are told apart by id prefix (build/senate_parser.py,
+# build/sparql_ingester.individual_vote_id): each prefix is a range-index
+# seek, and the Camera figure is the label total minus the Senate one.
+SENATE_PREFIX_COUNTS = {
+    "speeches": ("Speech", "id", ("sen_",)),
+    "chunks": ("Chunk", "id", ("sen_",)),
+    "individual_votes": ("IndividualVote", "id", ("iv_senato_",)),
+    "acts": ("ParliamentaryAct", "uri", ("http://dati.senato.it/", "senato:")),
+}
+
+# Sessions ingested before the Senate carry no chamber: they are Camera.
+# MEMBER_OF_GROUP edges with `affiliation` record the party of a Government
+# member, not a seat, so they are left out of the per-chamber people.
+CHAMBER_GROUPED_COUNTS = {
+    "sessions": (
+        "MATCH (s:Session) "
+        "RETURN coalesce(s.chamber, 'camera') AS chamber, count(s) AS c"
+    ),
+    "votes": (
+        "MATCH (s:Session)-[:HAS_VOTE]->(v:Vote) "
+        "RETURN coalesce(s.chamber, 'camera') AS chamber, count(DISTINCT v) AS c"
+    ),
+    "people": (
+        "MATCH (p:Person)-[r:MEMBER_OF_GROUP]->(:ParliamentaryGroup) "
+        "WHERE coalesce(r.affiliation, false) = false "
+        "RETURN coalesce(r.chamber, 'camera') AS chamber, count(DISTINCT p) AS c"
+    ),
+    "groups": (
+        "MATCH (:Person)-[r:MEMBER_OF_GROUP]->(g:ParliamentaryGroup) "
+        "WHERE coalesce(r.affiliation, false) = false "
+        "RETURN coalesce(r.chamber, 'camera') AS chamber, count(DISTINCT g) AS c"
+    ),
+}
+
+
+def _chamber_stats(client, totals: dict) -> dict:
+    """Split the KG counts into Camera and Senato.
+
+    `people` counts the members of each chamber (Government members included
+    when they hold a seat), so the two chambers do not add up to the
+    top-level `people`, which also has Government members without a seat.
+    """
+    by_chamber: dict = {ch: {} for ch in CHAMBERS}
+    for key, (label, prop, prefixes) in SENATE_PREFIX_COUNTS.items():
+        senato = 0
+        for prefix in prefixes:
+            result = client.query(
+                f"MATCH (n:`{label}`) WHERE n.`{prop}` STARTS WITH $p RETURN count(n) AS c",
+                {"p": prefix},
+            )
+            senato += result[0]["c"] if result else 0
+        total = totals.get(key)
+        by_chamber["senato"][key] = senato
+        by_chamber["camera"][key] = total - senato if total is not None else None
+    for key, cypher in CHAMBER_GROUPED_COUNTS.items():
+        counts = {row["chamber"]: row["c"] for row in client.query(cypher)}
+        for ch in CHAMBERS:
+            by_chamber[ch][key] = counts.get(ch, 0)
+    return by_chamber
+
 
 @router.get("/stats")
 async def kg_stats():
-    """Live KG counts (label counts are O(1) via the Neo4j count store).
+    """Live KG counts, in total and per chamber (`by_chamber`).
 
-    `triples` comes from the last RDF export (dumps/rdf/export_meta.json,
-    written by build/export_rdf.py) and is null if no export has run here.
+    Label counts are O(1) via the Neo4j count store; the per-chamber split
+    costs a few seconds (the Senate individual votes), hence the cache and
+    the worker thread. `triples` comes from the last RDF export
+    (dumps/rdf/export_meta.json, written by build/export_rdf.py) and is null
+    if no export has run here.
     """
     now = time.time()
     if _stats_cache["data"] is not None and now - _stats_cache["at"] < _STATS_TTL_S:
         return _stats_cache["data"]
 
+    data = await run_in_threadpool(_compute_stats)
+    _stats_cache.update(at=now, data=data)
+    return data
+
+
+def _compute_stats() -> dict:
     from ..services.deps import get_services
 
     client = get_services()["neo4j"]
@@ -68,6 +140,7 @@ async def kg_stats():
     )
     last = result[0].get("last_date") if result else None
     data["last_update"] = str(last.to_native() if hasattr(last, "to_native") else last) if last else None
+    data["by_chamber"] = _chamber_stats(client, data)
 
     data["triples"] = None
     meta_path = RDF_DIR / "export_meta.json"
@@ -76,8 +149,6 @@ async def kg_stats():
             data["triples"] = json.loads(meta_path.read_text()).get("triples")
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("Unreadable export_meta.json: %s", e)
-
-    _stats_cache.update(at=now, data=data)
     return data
 
 
