@@ -25,6 +25,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { NewsletterSignup } from "@/components/feedback/NewsletterSignup";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { ScopePicker } from "@/components/chat/ScopePicker";
 import { LOCALES } from "@/components/layout/LanguageSelector";
@@ -244,6 +245,10 @@ function MoreSheetContent({ onOpenSettings }: { onOpenSettings: () => void }) {
             <span className="truncate">{l.label}</span>
           </button>
         ))}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-border/60">
+        <NewsletterSignup source="mobile_menu" variant="compact" />
       </div>
 
       {/* Footer: data date (the info that matters) + small icon actions */}

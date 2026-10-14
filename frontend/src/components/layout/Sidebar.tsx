@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from 'next-intl';
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -20,11 +20,15 @@ import {
   CalendarDays,
   Users,
   Landmark,
+  Mail,
 } from "lucide-react";
 import { config } from "@/config";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { ScopePicker } from "@/components/chat/ScopePicker";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { NewsletterSignup } from "@/components/feedback/NewsletterSignup";
+import { fetchNewsletterEnabled } from "@/components/feedback/api";
 import { useLastUpdate, formatLastUpdateShort } from "@/hooks/use-last-update";
 
 interface SidebarProps {
@@ -45,6 +49,7 @@ export function MobileMenuButton(_props: { onClick: () => void; className?: stri
 
 export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueuing = false, isMobile = false, isMobileOpen = false, onCloseMobile }: SidebarProps) {
   const t = useTranslations('Sidebar');
+  const tNews = useTranslations('Newsletter');
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Cached pre-paint in the shared hook, so full-page navigations render the
@@ -192,6 +197,7 @@ export function Sidebar({ isCollapsed, onToggle, isQueryRunning = false, isQueui
         {/* Bottom Navigation */}
         <div className="p-3 pb-5 border-t border-sidebar-border">
           <nav className="flex flex-col gap-0.5 pt-2">
+            <NewsletterMenu isCollapsed={isCollapsed} label={tNews('menuLabel')} />
             <LanguageSelector isCollapsed={isCollapsed} />
             <NavButton
                 item={{ icon: Settings, label: t('settings'), onClick: () => setSettingsOpen(true) }}
@@ -333,3 +339,49 @@ function NavButton({ item, isCollapsed, variant = "default", disabled = false }:
 }
 
 
+
+// Bottom-nav entry that opens the email opt-in. Hidden until the backend
+// reports the mailing list as configured.
+function NewsletterMenu({ isCollapsed, label }: { isCollapsed: boolean; label: string }) {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetchNewsletterEnabled().then((on) => alive && setEnabled(on));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!enabled) return null;
+
+  const trigger = (
+    <Button
+      variant="ghost"
+      className={cn(
+        "relative w-full justify-start transition-all duration-200 gap-2.5 h-8 mb-0.5 text-[13px]",
+        "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+        isCollapsed && "justify-center px-0 mx-auto w-9 h-9"
+      )}
+    >
+      <Mail className="h-4 w-4 shrink-0" />
+      {!isCollapsed && <span className="truncate">{label}</span>}
+    </Button>
+  );
+
+  return (
+    <Popover>
+      {isCollapsed ? (
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={10}>{label}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      )}
+      <PopoverContent side="right" align="end" sideOffset={12} className="w-[340px] p-5">
+        <NewsletterSignup source="sidebar" variant="compact" />
+      </PopoverContent>
+    </Popover>
+  );
+}

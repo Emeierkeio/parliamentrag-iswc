@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { LOCALES } from "@/components/layout/LanguageSelector";
 import { useKgStats } from "@/hooks/use-kg-stats";
 import { useLastUpdate } from "@/hooks/use-last-update";
+import { NewsletterSignup } from "@/components/feedback/NewsletterSignup";
 
 /* ── Display typeface — editorial serif with optical sizing ────── */
 const fraunces = Fraunces({
@@ -556,6 +557,13 @@ export default function LandingPage() {
               <DataStats inverted />
             </aside>
           </Reveal>
+        </div>
+      </section>
+
+      {/* ── Aggiornamenti via email ────────────────────────────── */}
+      <section id="aggiornamenti" className="px-6 py-14 sm:py-20 border-t border-border">
+        <div className="max-w-6xl mx-auto">
+          <NewsletterSignup source="landing" variant="section" />
         </div>
       </section>
 

@@ -220,7 +220,7 @@ export function AnswerFeedback({ context, fresh = false, className }: AnswerFeed
       postedVoteRef.current = voted;
     }
     if (email) {
-      if (!(await subscribeNewsletter(email))) return "email_failed";
+      if (!(await subscribeNewsletter(email, "feedback"))) return "email_failed";
       markSubscribed();
       subscribedNowRef.current = true;
     }

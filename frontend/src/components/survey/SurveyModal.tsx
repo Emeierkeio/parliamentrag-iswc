@@ -58,6 +58,7 @@ import {
   getEvaluatedChatIds,
 } from "@/lib/survey-api";
 import { useLastUpdate, formatLastUpdateShort } from "@/hooks/use-last-update";
+import { NewsletterSignup } from "@/components/feedback/NewsletterSignup";
 
 interface SurveyModalProps {
   isOpen: boolean;
@@ -1492,6 +1493,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
                     ))}
                   </div>
                 )}
+                <NewsletterSignup source="valutazione" className="mt-6" />
               </div>
             </ScrollArea>
 
@@ -2305,7 +2307,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
 
         {/* Step: Success */}
         {step === "success" && (
-          <div className="flex flex-col items-center justify-center h-[40vh] px-6 py-8">
+          <div className="flex flex-col items-center justify-center min-h-[40vh] px-6 py-8">
             <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
               <CheckCircle2 className="w-10 h-10 text-emerald-600" />
             </div>
@@ -2313,7 +2315,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               Grazie per la tua valutazione!
             </h3>
             <p className="text-gray-500 dark:text-gray-400 text-center max-w-sm mb-6">
-              Il tuo feedback e prezioso per migliorare il sistema.
+              Il tuo feedback è prezioso per migliorare il sistema.
             </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => { setStep("select"); loadData(); }}>
@@ -2321,6 +2323,7 @@ export function SurveyModal({ isOpen, onClose, evaluatorId, fullScreen }: Survey
               </Button>
               <Button onClick={onClose}>Chiudi</Button>
             </div>
+            <NewsletterSignup source="survey_done" className="mt-8 w-full max-w-lg text-left" />
           </div>
         )}
       </DialogContent>
