@@ -467,6 +467,21 @@ class TestCameraAggregateQuery:
 
         assert "seduta.rdf/s19_405" in captured_queries[0]
 
+    def test_query_tries_padded_and_unpadded_seduta_uri(self):
+        """dati.camera.it writes rif_seduta both as s19_004 and s19_24."""
+        ingester = SparqlIngester(driver=MagicMock())
+        captured_queries: list[str] = []
+
+        def fake_sparql_get(query, timeout=30, max_retries=3):
+            captured_queries.append(query)
+            return []
+
+        with patch("sparql_ingester._sparql_get", side_effect=fake_sparql_get):
+            ingester._get_camera_votes_for_sitting(19, 4)
+
+        assert "seduta.rdf/s19_4>" in captured_queries[0]
+        assert "seduta.rdf/s19_004>" in captured_queries[0]
+
     def test_query_contains_approvato(self):
         """The aggregate query must request ocd:approvato (Camera outcome flag)."""
         ingester = SparqlIngester(driver=MagicMock())
@@ -485,7 +500,7 @@ class TestCameraAggregateQuery:
         """Vote id for (leg=19, session=405, vote=13) must be 'camera_leg19_sed405_v013'."""
         ingester = SparqlIngester(driver=MagicMock())
         ingester._get_camera_sittings_in_db = MagicMock(return_value={405})
-        ingester._get_camera_sittings_with_votes = MagicMock(return_value=set())
+        ingester._get_camera_vote_numbers = MagicMock(return_value={})
 
         vote_uri = "http://dati.camera.it/ocd/votazione.rdf/vs19_405_013"
         ingester._get_camera_votes_for_sitting = MagicMock(return_value=[{
@@ -507,29 +522,55 @@ class TestCameraAggregateQuery:
 
 
 class TestCameraAggregateSkip:
-    """Tests that ingest_camera_aggregate_votes skips sittings that already have votes."""
+    """Tests that ingest_camera_aggregate_votes skips votazioni already in the graph."""
 
-    def test_skips_sittings_with_existing_votes(self):
-        """When sittings_in_db={349, 405} and sittings_with_votes={349},
-        only sitting 405 should be fetched from SPARQL."""
+    @staticmethod
+    def _binding(session: int, vote: int) -> dict:
+        return {"votazione": {"value": f"http://dati.camera.it/ocd/votazione.rdf/vs19_{session:03d}_{vote:03d}"}}
+
+    def test_writes_only_missing_vote_numbers(self):
+        """A sitting with votes 1-2 from XML gets only the missing vote 3 (the final one)."""
         ingester = SparqlIngester(driver=MagicMock())
-        ingester._get_camera_sittings_in_db = MagicMock(return_value={349, 405})
-        ingester._get_camera_sittings_with_votes = MagicMock(return_value={349})
-        ingester._get_camera_votes_for_sitting = MagicMock(return_value=[])
+        ingester._get_camera_sittings_in_db = MagicMock(return_value={210})
+        ingester._get_camera_vote_numbers = MagicMock(return_value={210: {1, 2}})
+        ingester._get_camera_votes_for_sitting = MagicMock(
+            return_value=[self._binding(210, n) for n in (1, 2, 3)]
+        )
+        written: list[dict] = []
+        ingester._write_camera_aggregate_votes = lambda batch, legislature: written.extend(batch) or len(batch)
+
+        ingester.ingest_camera_aggregate_votes(legislature=19, start_session=1)
+
+        assert [w["voteNumber"] for w in written] == [3]
+
+    def test_sitting_with_all_votes_writes_nothing(self):
+        ingester = SparqlIngester(driver=MagicMock())
+        ingester._get_camera_sittings_in_db = MagicMock(return_value={349})
+        ingester._get_camera_vote_numbers = MagicMock(return_value={349: {1}})
+        ingester._get_camera_votes_for_sitting = MagicMock(return_value=[self._binding(349, 1)])
         ingester._write_camera_aggregate_votes = MagicMock(return_value=0)
 
         ingester.ingest_camera_aggregate_votes(legislature=19, start_session=1)
 
-        calls = ingester._get_camera_votes_for_sitting.call_args_list
-        fetched_sessions = [c[0][1] for c in calls]  # second positional arg is session_num
-        assert 405 in fetched_sessions
-        assert 349 not in fetched_sessions
+        ingester._write_camera_aggregate_votes.assert_not_called()
+
+    def test_only_sessions_overrides_start_session(self):
+        ingester = SparqlIngester(driver=MagicMock())
+        ingester._get_camera_sittings_in_db = MagicMock(return_value={4, 210, 405})
+        ingester._get_camera_vote_numbers = MagicMock(return_value={})
+        ingester._get_camera_votes_for_sitting = MagicMock(return_value=[])
+        ingester._write_camera_aggregate_votes = MagicMock(return_value=0)
+
+        ingester.ingest_camera_aggregate_votes(legislature=19, start_session=350, only_sessions={4, 210})
+
+        fetched = [c[0][1] for c in ingester._get_camera_votes_for_sitting.call_args_list]
+        assert fetched == [4, 210]
 
     def test_start_session_filters_earlier_sittings(self):
         """Sittings below start_session must be excluded from the fetch."""
         ingester = SparqlIngester(driver=MagicMock())
         ingester._get_camera_sittings_in_db = MagicMock(return_value={200, 405})
-        ingester._get_camera_sittings_with_votes = MagicMock(return_value=set())
+        ingester._get_camera_vote_numbers = MagicMock(return_value={})
         ingester._get_camera_votes_for_sitting = MagicMock(return_value=[])
         ingester._write_camera_aggregate_votes = MagicMock(return_value=0)
 
@@ -547,7 +588,7 @@ class TestCameraAggregateOutcome:
     def _run_ingest_with_approvato(self, approvato_value: Optional[str]) -> list[dict]:
         ingester = SparqlIngester(driver=MagicMock())
         ingester._get_camera_sittings_in_db = MagicMock(return_value={405})
-        ingester._get_camera_sittings_with_votes = MagicMock(return_value=set())
+        ingester._get_camera_vote_numbers = MagicMock(return_value={})
 
         vote_uri = "http://dati.camera.it/ocd/votazione.rdf/vs19_405_001"
         binding: dict = {"votazione": {"value": vote_uri}}
@@ -582,3 +623,36 @@ class TestCameraAggregateOutcome:
         batches = self._run_ingest_with_approvato(None)
         assert len(batches) == 1
         assert batches[0]["outcome"] == "unknown"
+
+
+class TestCameraVoteGaps:
+    """find_camera_vote_gaps compares dati.camera.it with the graph per vote number."""
+
+    def test_reports_empty_and_partial_sittings(self):
+        ingester = SparqlIngester(driver=MagicMock())
+        uri = "http://dati.camera.it/ocd/votazione.rdf/vs19_{:03d}_{:03d}".format
+        ingester._get_camera_votazioni = MagicMock(return_value={
+            4: {1: uri(4, 1)},
+            33: {68: uri(33, 68), 69: uri(33, 69)},
+            400: {1: uri(400, 1)},
+        })
+        ingester._get_camera_vote_numbers = MagicMock(return_value={33: {68}, 400: {1}})
+
+        gaps = ingester.find_camera_vote_gaps(19)
+
+        assert gaps == {4: {1: uri(4, 1)}, 33: {69: uri(33, 69)}}
+
+    def test_votazioni_listing_uses_keyset_pagination(self):
+        ingester = SparqlIngester(driver=MagicMock())
+        captured: list[str] = []
+
+        def fake_sparql_get(query, timeout=30, max_retries=3):
+            captured.append(query)
+            return [{"votazione": {"value": "http://dati.camera.it/ocd/votazione.rdf/vs19_004_001"}}]
+
+        with patch("sparql_ingester._sparql_get", side_effect=fake_sparql_get):
+            out = ingester._get_camera_votazioni(19)
+
+        assert out == {4: {1: "http://dati.camera.it/ocd/votazione.rdf/vs19_004_001"}}
+        assert "OFFSET" not in captured[0]
+        assert "FILTER(STR(?votazione) >" in captured[0]

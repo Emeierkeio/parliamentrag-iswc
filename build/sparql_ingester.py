@@ -372,43 +372,12 @@ class SparqlIngester:
             })
             sitting_written = 0
             for uri in uris:
-                session_num, vote_num = parse_votazione_uri(uri)
-                if session_num is None or vote_num is None:
-                    continue
-                offset = 0
-                while True:
-                    bindings = self._get_votazione_individual_votes(uri, offset=offset)
-                    if not bindings:
-                        break
-                    batch = []
-                    for row in bindings:
-                        dep_uri = row.get("deputato", {}).get("value", "")
-                        tipo = row.get("tipo", {}).get("value", "")
-                        pid_match = _DEPUTATO_URI_RE.search(dep_uri)
-                        if not pid_match:
-                            total_skipped += 1
-                            continue
-                        neo4j_id = person_to_neo4j.get(pid_match.group(1))
-                        if not neo4j_id:
-                            total_skipped += 1
-                            continue
-                        batch.append({
-                            "id": individual_vote_id(
-                                chamber, legislature, pid_match.group(1), session_num, vote_num,
-                            ),
-                            "deputyId": neo4j_id,
-                            "sessionNumber": session_num,
-                            "voteNumber": vote_num,
-                            "outcome": OUTCOME_MAP.get(tipo, "absent"),
-                        })
-                    if batch:
-                        w, s = self._write_votes(batch, chamber=chamber, legislature=legislature)
-                        total_written += w
-                        total_skipped += s
-                        sitting_written += w
-                    if len(bindings) < SPARQL_PAGE_SIZE:
-                        break
-                    offset += SPARQL_PAGE_SIZE
+                w, s = self._ingest_votazione_individual_votes(
+                    uri, person_to_neo4j, chamber=chamber, legislature=legislature,
+                )
+                total_written += w
+                total_skipped += s
+                sitting_written += w
             logger.info("  sitting %s: %d individual votes written (total: %d)",
                         num, sitting_written, total_written)
 
@@ -421,6 +390,54 @@ class SparqlIngester:
             "votes_written": total_written,
             "votes_skipped": total_skipped,
         }
+
+    def _ingest_votazione_individual_votes(
+        self,
+        votazione_uri: str,
+        person_to_neo4j: dict[str, str],
+        chamber: str = "camera",
+        legislature: int = 19,
+    ) -> tuple[int, int]:
+        """Individual votes of one votazione. Returns (written, skipped)."""
+        session_num, vote_num = parse_votazione_uri(votazione_uri)
+        if session_num is None or vote_num is None:
+            return 0, 0
+        written = 0
+        skipped = 0
+        offset = 0
+        while True:
+            bindings = self._get_votazione_individual_votes(votazione_uri, offset=offset)
+            if not bindings:
+                break
+            batch = []
+            for row in bindings:
+                dep_uri = row.get("deputato", {}).get("value", "")
+                tipo = row.get("tipo", {}).get("value", "")
+                pid_match = _DEPUTATO_URI_RE.search(dep_uri)
+                if not pid_match:
+                    skipped += 1
+                    continue
+                neo4j_id = person_to_neo4j.get(pid_match.group(1))
+                if not neo4j_id:
+                    skipped += 1
+                    continue
+                batch.append({
+                    "id": individual_vote_id(
+                        chamber, legislature, pid_match.group(1), session_num, vote_num,
+                    ),
+                    "deputyId": neo4j_id,
+                    "sessionNumber": session_num,
+                    "voteNumber": vote_num,
+                    "outcome": OUTCOME_MAP.get(tipo, "absent"),
+                })
+            if batch:
+                w, s = self._write_votes(batch, chamber=chamber, legislature=legislature)
+                written += w
+                skipped += s
+            if len(bindings) < SPARQL_PAGE_SIZE:
+                break
+            offset += SPARQL_PAGE_SIZE
+        return written, skipped
 
     def ingest_committee_roles(
         self,
@@ -474,23 +491,31 @@ class SparqlIngester:
         legislature: int = 19,
         start_session: int = 350,
         limit_sessions: int = 0,
+        only_sessions: Optional[set[int]] = None,
     ) -> dict:
-        """Ingest aggregate Vote nodes from Camera SPARQL for sittings not yet covered.
+        """Ingest aggregate Vote nodes from Camera SPARQL for votazioni not yet in the graph.
 
-        Skips any sitting that already has at least one HAS_VOTE relationship to avoid
-        duplicating XML-sourced votes (which cover Camera XIX sittings 1-349).
+        A votazione is skipped when its sitting already has a Vote with the same
+        number, so XML-sourced votes (Camera XIX sittings 1-349, different id
+        scheme) are never duplicated. Skipping whole sittings with at least one
+        vote instead left 59 sittings empty and 23 without their last votazione,
+        often the final vote (PDL 1275, sitting 210).
 
         Args:
             legislature: Legislature number (18 or 19).
             start_session: Only process sessions >= this number (default 350, first post-XML).
             limit_sessions: If > 0, cap the number of sittings processed (for testing).
+            only_sessions: If given, process exactly these sittings (start_session ignored).
 
         Returns:
             Stats dict: {"sittings_processed": N, "votes_written": N}
         """
         sittings = self._get_camera_sittings_in_db(legislature)
-        done = self._get_camera_sittings_with_votes(legislature)
-        todo = sorted(n for n in sittings if n >= start_session and n not in done)
+        existing = self._get_camera_vote_numbers(legislature)
+        if only_sessions is not None:
+            todo = sorted(n for n in sittings if n in only_sessions)
+        else:
+            todo = sorted(n for n in sittings if n >= start_session)
         if limit_sessions:
             todo = todo[:limit_sessions]
         logger.info(
@@ -505,7 +530,7 @@ class SparqlIngester:
                 session_num, vote_num = parse_votazione_uri(
                     row.get("votazione", {}).get("value", "")
                 )
-                if vote_num is None:
+                if vote_num is None or vote_num in existing.get(num, ()):
                     continue
                 approvato = row.get("approvato", {}).get("value")
                 outcome = (
@@ -536,7 +561,7 @@ class SparqlIngester:
                 })
             if batch:
                 written += self._write_camera_aggregate_votes(batch, legislature)
-            logger.info("  sitting %d: %d votes written (total so far: %d)", num, len(batch), written)
+                logger.info("  sitting %d: %d votes written (total so far: %d)", num, len(batch), written)
         logger.info(
             "Camera aggregate ingest complete: sittings=%d, votes_written=%d",
             len(todo), written,
@@ -624,12 +649,15 @@ OFFSET {offset}
         return _sparql_get(query)
 
     def _get_votazione_individual_votes(self, votazione_uri: str, offset: int = 0) -> list[dict]:
-        """Fetch one page of individual vote records for a single votazione."""
+        """Fetch one page of individual vote records for a single votazione.
+
+        DISTINCT: the triples sit in more than one graph, so every vote came
+        back twice and was written twice."""
         query = f"""
 PREFIX ocd: <http://dati.camera.it/ocd/>
 PREFIX dc: <http://purl.org/dc/elements/1.1/>
 
-SELECT ?deputato ?tipo
+SELECT DISTINCT ?deputato ?tipo
 WHERE {{
   ?voto a ocd:voto ;
         ocd:rif_votazione <{votazione_uri}> ;
@@ -664,9 +692,13 @@ WHERE {{
         """Fetch aggregate vote records for one Camera sitting from SPARQL.
 
         Uses SELECT DISTINCT because each Camera votazione has two rdf:type triples,
-        causing duplicate rows without DISTINCT.
+        causing duplicate rows without DISTINCT. The seduta URI is written both
+        with and without zero padding (s19_004 next to s19_24), so both are tried.
         """
-        seduta_uri = f"http://dati.camera.it/ocd/seduta.rdf/s{legislature}_{session_num}"
+        seduta_uris = " ".join(sorted({
+            f"<http://dati.camera.it/ocd/seduta.rdf/s{legislature}_{session_num}>",
+            f"<http://dati.camera.it/ocd/seduta.rdf/s{legislature}_{session_num:03d}>",
+        }))
         query = f"""
 PREFIX ocd: <http://dati.camera.it/ocd/>
 PREFIX dc: <http://purl.org/dc/elements/1.1/>
@@ -676,8 +708,9 @@ SELECT DISTINCT ?votazione ?label ?tipo ?approvato ?favorevoli ?contrari
                 ?presenti ?votanti ?astenuti ?maggioranza ?data
                 ?descrizione ?finale ?fiducia ?segreta ?atto ?attoTitolo ?aic ?aicTitolo
 WHERE {{
+  VALUES ?seduta {{ {seduta_uris} }}
   ?votazione a <http://dati.camera.it/ocd/votazione> ;
-             ocd:rif_seduta <{seduta_uri}> .
+             ocd:rif_seduta ?seduta .
   OPTIONAL {{ ?votazione rdfs:label ?label . }}
   OPTIONAL {{ ?votazione dc:type ?tipo . }}
   OPTIONAL {{ ?votazione ocd:approvato ?approvato . }}
@@ -714,17 +747,105 @@ WHERE {{
             )
             return {record["n"] for record in result if record["n"] is not None}
 
-    def _get_camera_sittings_with_votes(self, legislature: int) -> set[int]:
-        """Return Camera session numbers that already have at least one HAS_VOTE relationship."""
+    def _get_camera_vote_numbers(self, legislature: int) -> dict[int, set[int]]:
+        """Return Camera session number -> numbers of the Vote nodes it already has."""
         with self._driver.session() as neo_session:
             result = neo_session.run(
-                "MATCH (s:Session)-[:HAS_VOTE]->(:Vote) "
+                "MATCH (s:Session)-[:HAS_VOTE]->(v:Vote) "
                 "WHERE coalesce(s.chamber, 'camera') = 'camera' "
-                "AND s.legislature = $legislature "
-                "RETURN DISTINCT s.number AS n",
+                "AND s.legislature = $legislature AND v.number IS NOT NULL "
+                "RETURN s.number AS n, collect(DISTINCT toInteger(v.number)) AS votes",
                 legislature=legislature,
             )
-            return {record["n"] for record in result if record["n"] is not None}
+            return {
+                record["n"]: set(record["votes"])
+                for record in result if record["n"] is not None
+            }
+
+    def _get_camera_votazioni(self, legislature: int) -> dict[int, dict[int, str]]:
+        """Every votazione of the legislature on dati.camera.it, as
+        session number -> {vote number: votazione URI}. Keyset pagination: large OFFSETs
+        return HTTP 500 on Virtuoso."""
+        leg_uri = f"http://dati.camera.it/ocd/legislatura.rdf/repubblica_{legislature}"
+        out: dict[int, dict[int, str]] = {}
+        last = ""
+        while True:
+            query = f"""
+PREFIX ocd: <http://dati.camera.it/ocd/>
+
+SELECT DISTINCT ?votazione
+WHERE {{
+  ?votazione a ocd:votazione ;
+             ocd:rif_leg <{leg_uri}> .
+  FILTER(STR(?votazione) > "{last}")
+}}
+ORDER BY ?votazione
+LIMIT 10000
+"""
+            bindings = _sparql_get(query)
+            if not bindings:
+                break
+            for row in bindings:
+                uri = row["votazione"]["value"]
+                session_num, vote_num = parse_votazione_uri(uri)
+                if session_num is not None and vote_num is not None:
+                    out.setdefault(session_num, {})[vote_num] = uri
+            last = bindings[-1]["votazione"]["value"]
+            if len(bindings) < 10000:
+                break
+        if not out:
+            raise RuntimeError("dati.camera.it returned no votazioni (endpoint down?)")
+        return out
+
+    def find_camera_vote_gaps(self, legislature: int = 19) -> dict[int, dict[int, str]]:
+        """Votazioni published on dati.camera.it but missing from the graph,
+        as session number -> {vote number: votazione URI}."""
+        published = self._get_camera_votazioni(legislature)
+        existing = self._get_camera_vote_numbers(legislature)
+        gaps = {}
+        for num, votes in published.items():
+            have = existing.get(num, set())
+            missing = {n: uri for n, uri in votes.items() if n not in have}
+            if missing:
+                gaps[num] = missing
+        return gaps
+
+    def fill_camera_vote_gaps(self, legislature: int = 19) -> dict:
+        """Compare the whole legislature with dati.camera.it and write the
+        missing votazioni: aggregate Vote nodes, then their individual votes."""
+        gaps = self.find_camera_vote_gaps(legislature)
+        sittings_in_db = self._get_camera_sittings_in_db(legislature)
+        no_session = sorted(n for n in gaps if n not in sittings_in_db)
+        if no_session:
+            logger.warning("Sittings with votes on dati.camera.it but no Session node: %s", no_session)
+        logger.info(
+            "Camera vote gaps: %d votazioni in %d sittings",
+            sum(len(v) for v in gaps.values()), len(gaps),
+        )
+        agg = self.ingest_camera_aggregate_votes(
+            legislature=legislature, only_sessions=set(gaps),
+        )
+        person_to_neo4j = self._camera_person_index()
+        written = 0
+        skipped = 0
+        for num in sorted(gaps):
+            if num not in sittings_in_db:
+                continue
+            for _, uri in sorted(gaps[num].items()):
+                w, s = self._ingest_votazione_individual_votes(
+                    uri, person_to_neo4j, chamber="camera", legislature=legislature,
+                )
+                written += w
+                skipped += s
+            logger.info("  sitting %d: individual votes written so far %d", num, written)
+        return {
+            "gap_votazioni": sum(len(v) for v in gaps.values()),
+            "gap_sittings": len(gaps),
+            "sittings_without_session": no_session,
+            "aggregate_written": agg["votes_written"],
+            "individual_written": written,
+            "individual_skipped": skipped,
+        }
 
     def _write_camera_aggregate_votes(self, batch: list[dict], legislature: int) -> int:
         """Write aggregate Vote nodes and HAS_VOTE relationships for Camera sessions.
@@ -1023,6 +1144,19 @@ if __name__ == "__main__":
         help="First session number for Camera aggregate ingest (default 350)",
     )
     parser.add_argument(
+        "--fill-gaps",
+        action="store_true",
+        help=(
+            "Compare the whole legislature with dati.camera.it and write the "
+            "missing votazioni (aggregate + individual votes), then exit"
+        ),
+    )
+    parser.add_argument(
+        "--check-gaps",
+        action="store_true",
+        help="Only report votazioni missing from the graph; exit 1 if any",
+    )
+    parser.add_argument(
         "--individual-recent",
         action="store_true",
         help=(
@@ -1045,7 +1179,25 @@ if __name__ == "__main__":
     try:
         ingester = SparqlIngester(driver)
 
-        if args.individual_recent:
+        if args.check_gaps:
+            gaps = ingester.find_camera_vote_gaps(legislature=args.legislature)
+            total = sum(len(v) for v in gaps.values())
+            print(f"==> Camera votazioni missing from the graph: {total} in {len(gaps)} sittings")
+            for num in sorted(gaps):
+                print(f"    sitting {num}: {sorted(gaps[num])}")
+            sys.exit(1 if gaps else 0)
+        elif args.fill_gaps:
+            print(f"==> Filling Camera vote gaps against dati.camera.it (leg={args.legislature})...")
+            stats = ingester.fill_camera_vote_gaps(legislature=args.legislature)
+            print(
+                f"    Missing votazioni  : {stats['gap_votazioni']} in {stats['gap_sittings']} sittings\n"
+                f"    Aggregate written  : {stats['aggregate_written']}\n"
+                f"    Individual written : {stats['individual_written']}\n"
+                f"    Individual skipped : {stats['individual_skipped']}"
+            )
+            if stats["sittings_without_session"]:
+                print(f"    Sittings without Session node: {stats['sittings_without_session']}")
+        elif args.individual_recent:
             # Incremental mode: individual votes for recent sittings only
             print(f"==> Ingesting individual votes per votazione (leg={args.legislature}, start={args.start_session})...")
             iv_stats = ingester.ingest_individual_votes_for_recent_sittings(

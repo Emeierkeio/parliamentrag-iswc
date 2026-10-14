@@ -194,8 +194,21 @@ fi
 
 # ── Voti aggregati/individuali da dati.camera.it ─────────────────────────────
 # I voti aggregati vivono solo nella SPARQL (gli XML non portano più il blocco
-# raccoltaVotazioni) e l'endpoint pubblica con qualche giorno di lag: si
-# ripassano le ultime ~10 sedute Camera a ogni update. MERGE idempotenti.
+# raccoltaVotazioni) e l'endpoint pubblica con qualche giorno di lag. Il
+# confronto copre tutta la legislatura votazione per votazione (due query
+# SPARQL più le sole votazioni mancanti): riprende anche le sedute XML rimaste
+# senza voti o senza l'ultimo voto. I voti individuali delle ultime ~10 sedute
+# si ripassano comunque, perché possono arrivare dopo gli aggregati.
+run "Voti Camera mancanti rispetto a dati.camera.it" \
+	"$PY" build/sparql_ingester.py --neo4j-uri "$DEMO_NEO4J" --neo4j-user neo4j \
+	--neo4j-password "$NEO4J_PASS_VAL" --fill-gaps --legislature 19 \
+	|| warn "vote gap fill failed (SPARQL flaky?) — will retry at next update-data"
+if [ -n "$LOCAL_UP" ]; then
+	run "Voti Camera mancanti (locale)" \
+		"$PY" build/sparql_ingester.py --neo4j-uri "$LOCAL_NEO4J" --neo4j-user neo4j \
+		--neo4j-password "$NEO4J_PASS_VAL" --fill-gaps --legislature 19 \
+		|| warn "vote gap fill failed on local snapshot"
+fi
 START=$(cypher_scalar "$DEMO_NEO4J" 'import os
 from neo4j import GraphDatabase
 d = GraphDatabase.driver(os.environ["NEO4J_TARGET"], auth=("neo4j", os.environ["NEO4J_PASSWORD"]))
@@ -204,21 +217,13 @@ with d.session() as s:
 print(max(1, (m or 11) - 10))
 d.close()')
 if [ -z "$START" ]; then
-	warn "start-session non calcolabile — refresh voti aggregati saltato, retry at next update-data"
+	warn "start-session non calcolabile — refresh voti individuali saltato, retry at next update-data"
 else
-	run "Voti aggregati SPARQL (da seduta $START)" \
-		"$PY" build/sparql_ingester.py --neo4j-uri "$DEMO_NEO4J" --neo4j-user neo4j \
-		--neo4j-password "$NEO4J_PASS_VAL" --aggregate-only --legislature 19 --start-session "$START" \
-		|| warn "aggregate votes refresh failed (SPARQL flaky?) — will retry at next update-data"
 	run "Voti individuali recenti SPARQL (da seduta $START)" \
 		"$PY" build/sparql_ingester.py --neo4j-uri "$DEMO_NEO4J" --neo4j-user neo4j \
 		--neo4j-password "$NEO4J_PASS_VAL" --individual-recent --legislature 19 --start-session "$START" \
 		|| warn "individual votes refresh failed (SPARQL flaky?) — will retry at next update-data"
 	if [ -n "$LOCAL_UP" ]; then
-		run "Voti aggregati SPARQL (locale)" \
-			"$PY" build/sparql_ingester.py --neo4j-uri "$LOCAL_NEO4J" --neo4j-user neo4j \
-			--neo4j-password "$NEO4J_PASS_VAL" --aggregate-only --legislature 19 --start-session "$START" \
-			|| warn "aggregate votes refresh failed on local snapshot"
 		run "Voti individuali SPARQL (locale)" \
 			"$PY" build/sparql_ingester.py --neo4j-uri "$LOCAL_NEO4J" --neo4j-user neo4j \
 			--neo4j-password "$NEO4J_PASS_VAL" --individual-recent --legislature 19 --start-session "$START" \
