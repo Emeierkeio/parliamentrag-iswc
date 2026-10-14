@@ -31,7 +31,7 @@ The figures above count the Camera dei Deputati only: it is the corpus behind th
 
 - **Verified citations**: every quote is checked verbatim against its source chunk; unverifiable quotes are removed
 - **Topic-aware authority scoring**: the system picks the most credible speaker per party for the specific question asked
-- **6 languages** (IT / EN / FR / DE / ES / PT), editorial newspaper-style UI
+- **2 languages** (IT / EN), editorial newspaper-style UI
 
 ---
 
@@ -89,7 +89,7 @@ Each question runs through a single streamed pipeline; the frontend renders prog
 | `/explorer` | Interactive knowledge-graph exploration |
 | `/data` | Open-data page: live graph statistics, ontology alignment for non-specialists, RDF dumps |
 
-**UI**: editorial newspaper-style design (Fraunces serif), light/dark themes, mobile bottom navigation, and full internationalization in 6 languages (`frontend/messages/{it,en,fr,de,es,pt}.json` via `next-intl`).
+**UI**: editorial newspaper-style design (Fraunces serif), light/dark themes, mobile bottom navigation, and full internationalization in Italian and English (`frontend/messages/{it,en}.json` via `next-intl`).
 
 ---
 
