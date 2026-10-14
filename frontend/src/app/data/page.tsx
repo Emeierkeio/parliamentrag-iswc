@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { Fraunces } from "next/font/google";
 import { ArrowLeft, ArrowUpRight, Download } from "lucide-react";
-import { useKgStats } from "@/hooks/use-kg-stats";
+import { CHAMBERS, useKgStats } from "@/hooks/use-kg-stats";
 import { useLastUpdate } from "@/hooks/use-last-update";
 
 const fraunces = Fraunces({
@@ -28,13 +28,16 @@ const ZENODO_URL = `https://doi.org/${ZENODO_DOI}`;
 const ZENODO_UPDATED = "2026-07-26";
 
 /* ── Graph numbers — live from /api/data/stats, static fallback ── */
-const STATS = [
-  { field: "people", key: "stPeople" },
+/* Counts with a chamber show Camera and Senato apart, never summed */
+const CHAMBER_STATS = [
   { field: "speeches", key: "stSpeeches" },
+  { field: "people", key: "stPeople" },
   { field: "sessions", key: "stSessions" },
   { field: "acts", key: "stActs" },
   { field: "votes", key: "stVotes" },
   { field: "individual_votes", key: "stIndVotes", compact: true },
+] as const;
+const SHARED_STATS = [
   { field: "eurovoc_concepts", key: "stEurovoc" },
   { field: "triples", key: "stTriples" },
 ] as const;
@@ -264,13 +267,35 @@ export default function DataPage() {
         <div className="max-w-6xl mx-auto">
           <TermRule index="01" title={t("sec1Title")} />
           <div className="mt-10 grid grid-cols-2 md:grid-cols-4 border-t border-l border-primary-foreground/15">
-            {STATS.map((s) => (
+            {CHAMBER_STATS.map((s) => (
+              <div
+                key={s.key}
+                className="border-b border-r border-primary-foreground/15 p-5 sm:p-6"
+              >
+                <p className="text-[13px] text-primary-foreground/55 leading-snug">
+                  {t(s.key)}
+                </p>
+                <dl className="mt-3 space-y-1.5">
+                  {CHAMBERS.map((ch) => (
+                    <div key={ch} className="flex items-baseline justify-between gap-3">
+                      <dt className="font-mono text-[11px] uppercase tracking-wider text-primary-foreground/50">
+                        {t(ch === "camera" ? "chamberCamera" : "chamberSenato")}
+                      </dt>
+                      <dd className="font-mono text-xl sm:text-2xl font-medium tracking-tight tabular-nums">
+                        {formatStat(stats.by_chamber[ch][s.field] ?? 0, locale, "compact" in s && s.compact)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+            {SHARED_STATS.map((s) => (
               <div
                 key={s.key}
                 className="border-b border-r border-primary-foreground/15 p-5 sm:p-6"
               >
                 <p className="font-mono text-2xl sm:text-3xl font-medium tracking-tight tabular-nums">
-                  {formatStat(stats[s.field] ?? 0, locale, "compact" in s && s.compact)}
+                  {formatStat(stats[s.field] ?? 0, locale)}
                 </p>
                 <p className="mt-2 text-[13px] text-primary-foreground/55 leading-snug">
                   {t(s.key)}

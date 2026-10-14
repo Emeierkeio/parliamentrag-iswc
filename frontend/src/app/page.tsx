@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { config } from "@/config";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LOCALES } from "@/components/layout/LanguageSelector";
-import { useKgStats } from "@/hooks/use-kg-stats";
+import { CHAMBERS, useKgStats } from "@/hooks/use-kg-stats";
 import { useLastUpdate } from "@/hooks/use-last-update";
 
 /* ── Display typeface — editorial serif with optical sizing ────── */
@@ -689,30 +689,48 @@ function DataStats({ inverted = false }: { inverted?: boolean }) {
   const td = useTranslations("DataPage");
   const locale = useLocale();
   const kg = useKgStats();
-  const stats = [
-    { value: kg.triples ?? 0, key: "stTriples" },
-    { value: kg.individual_votes, key: "stIndVotes", compact: true },
-    { value: kg.speeches, key: "stSpeeches" },
-  ] as const;
   const fmt = (value: number, compact?: boolean) =>
     new Intl.NumberFormat(locale, {
       useGrouping: "always",
       ...(compact ? { notation: "compact" as const, maximumFractionDigits: 1 } : {}),
     }).format(value);
+  /* Speeches and votes per chamber, never summed; triples are one export */
+  const rows: { key: string; values: { label?: string; value: number; compact?: boolean }[] }[] = [
+    { key: "stTriples", values: [{ value: kg.triples ?? 0 }] },
+    ...(["individual_votes", "speeches"] as const).map((field) => ({
+      key: field === "speeches" ? "stSpeeches" : "stIndVotes",
+      values: CHAMBERS.map((ch) => ({
+        label: td(ch === "camera" ? "chamberCamera" : "chamberSenato"),
+        value: kg.by_chamber[ch][field],
+        compact: field === "individual_votes",
+      })),
+    })),
+  ];
   return (
     <div>
-      {stats.map((s, i) => (
+      {rows.map((r, i) => (
         <div
-          key={s.key}
+          key={r.key}
           className={`flex items-baseline justify-between gap-4 py-4 ${
             i === 0 ? "" : `border-t ${inverted ? "border-primary-foreground/15" : "border-border"}`
           }`}
         >
-          <span className={`[font-family:var(--font-display)] text-2xl sm:text-3xl font-medium tracking-tight tabular-nums ${inverted ? "text-primary-foreground" : "text-primary"}`}>
-            {fmt(s.value, "compact" in s && s.compact)}
+          <span className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            {r.values.map((v) => (
+              <span key={v.label ?? "total"} className="inline-flex items-baseline gap-2">
+                {v.label && (
+                  <span className={`font-mono text-[11px] uppercase tracking-wider ${inverted ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                    {v.label}
+                  </span>
+                )}
+                <span className={`[font-family:var(--font-display)] text-2xl sm:text-3xl font-medium tracking-tight tabular-nums ${inverted ? "text-primary-foreground" : "text-primary"}`}>
+                  {fmt(v.value, v.compact)}
+                </span>
+              </span>
+            ))}
           </span>
           <span className={`text-sm text-right leading-snug ${inverted ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
-            {td(s.key)}
+            {td(r.key)}
           </span>
         </div>
       ))}
