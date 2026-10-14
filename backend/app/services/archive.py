@@ -51,6 +51,25 @@ def _vector(values: Sequence[float]) -> str:
     return "[" + ",".join(f"{v:.6g}" for v in values) + "]"
 
 
+# The link to the VPS drops idle connections without closing them: a query
+# sent on one waited on TCP retransmits for a quarter of an hour (Fascicoli,
+# 14/10/2026). Keepalives mark an idle dead connection broken within a minute,
+# tcp_user_timeout fails a write the peer never acknowledges, statement_timeout
+# bounds a slow query, and the pool checks every connection before lending it
+# and retires idle ones.
+CONNECTION_KWARGS: Dict[str, Any] = {
+    "autocommit": True,
+    "connect_timeout": 10,
+    "keepalives": 1,
+    "keepalives_idle": 30,
+    "keepalives_interval": 10,
+    "keepalives_count": 3,
+    "tcp_user_timeout": 20000,
+    "options": "-c statement_timeout=60000",
+}
+POOL_OPTIONS: Dict[str, Any] = {"min_size": 1, "max_size": 8, "max_idle": 120, "timeout": 30}
+
+
 class TextArchive:
     """Vector search and text lookups on the Postgres archive."""
 
@@ -59,8 +78,9 @@ class TextArchive:
         from psycopg_pool import ConnectionPool
 
         self.scopes = tuple(scopes)
-        self.pool = ConnectionPool(url, min_size=1, max_size=8, open=True,
-                                   kwargs={"autocommit": True}, configure=register_vector)
+        self.pool = ConnectionPool(url, open=True, kwargs=dict(CONNECTION_KWARGS),
+                                   configure=register_vector,
+                                   check=ConnectionPool.check_connection, **POOL_OPTIONS)
         atexit.register(self.pool.close)
 
     def covers(self, pair: ScopePair) -> bool:
