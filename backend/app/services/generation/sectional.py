@@ -26,6 +26,33 @@ from .reported_speech import annotate_evidence_with_reported_speech
 logger = logging.getLogger(__name__)
 
 
+
+def _senate_loaded() -> bool:
+    from ..retrieval.scope import loaded_chambers
+
+    return "senato" in loaded_chambers()
+
+
+def _chamber_line(e: Dict[str, Any]) -> str:
+    """"Aula" line of an evidence block; absent with the Camera alone, so the
+    prompt stays as it was."""
+    if not _senate_loaded():
+        return ""
+    senate = str(e.get("doc_id", "") or e.get("evidence_id", "")).startswith("sen_")
+    return "\nAula: " + ("Senato" if senate else "Camera")
+
+
+def _chamber_rule() -> str:
+    if not _senate_loaded():
+        return ""
+    return """
+
+AULA
+- Ogni evidenza dice in quale Aula è stata pronunciata (Camera o Senato).
+- Nomina l'Aula solo quando aiuta a capire: posizioni diverse del gruppo nelle
+  due Aule, citazioni da entrambe, riferimenti a un voto. Negli altri casi non
+  serve. Non sommare mai voti di Camera e Senato."""
+
 class SectionalWriter:
     """Write one section per party from retrieved evidence only.
 
@@ -883,7 +910,7 @@ SBAGLIATO: Il gruppo discute di economia. **Rossi** «...» [CIT:id]. Il gruppo 
                 response = await self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": self.SYSTEM_PROMPT},
+                        {"role": "system", "content": self.SYSTEM_PROMPT + _chamber_rule()},
                         {"role": "user", "content": attempt_prompt}
                     ],
                     temperature=0.1,
@@ -1176,7 +1203,7 @@ SBAGLIATO: Il gruppo discute di economia. **Rossi** «...» [CIT:id]. Il gruppo 
             lines.append(f"""
 [ID: {eid} | Pertinenza query: {similarity:.2f}{relevance_label}]
 Speaker: {speaker} ({speaker_party}){group_change_note}{rs_warning}
-Date: {date}
+Date: {date}{_chamber_line(e)}
 TESTO DISPONIBILE (scegli la parte più incisiva, copiala VERBATIM tra «»):
 {quote_text[:1000]}
 ---""")

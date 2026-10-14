@@ -769,7 +769,21 @@ class GenerationPipeline:
             key=lambda x: (x["chamber"], x["session_number"]),
         )
 
+        # Per chamber, for answers that mix the two houses (Senate ids: sen_...).
+        by_chamber: Dict[str, Dict[str, set]] = {}
+        for e in evidence_list:
+            chamber = "senato" if str(e.get("doc_id", "")).startswith("sen_") else "camera"
+            slot = by_chamber.setdefault(chamber, {"speeches": set(), "speakers": set()})
+            if e.get("speech_id"):
+                slot["speeches"].add(e["speech_id"])
+            if e.get("speaker_id"):
+                slot["speakers"].add(e["speaker_id"])
+
         return {
+            "by_chamber": {
+                c: {"intervention_count": len(v["speeches"]), "speaker_count": len(v["speakers"])}
+                for c, v in by_chamber.items()
+            },
             "intervention_count": len(unique_speeches),
             "speaker_count": len(unique_speakers),
             "first_date": min(dates) if dates else None,

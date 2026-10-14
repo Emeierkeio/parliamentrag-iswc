@@ -234,6 +234,14 @@ REGOLE GENERALI:
             parts.append(f"- Interventi analizzati: {intervention_count}")
         if speaker_count:
             parts.append(f"- Parlamentari coinvolti: {speaker_count}")
+        by_chamber = topic_statistics.get("by_chamber") or {}
+        if len(by_chamber) > 1:
+            for chamber, label, members in (("camera", "Alla Camera", "deputati"),
+                                            ("senato", "Al Senato", "senatori")):
+                c = by_chamber.get(chamber) or {}
+                parts.append(f"- {label}: {c.get('intervention_count', 0)} interventi di "
+                             f"{c.get('speaker_count', 0)} {members}")
+            parts.append("  (riporta la divisione tra Camera e Senato solo se aiuta a capire)")
         if last_date:
             date_str = last_date.strftime("%d/%m/%Y") if hasattr(last_date, 'strftime') else str(last_date)
             parts.append(f"- Ultimo intervento: {date_str}")
@@ -483,8 +491,14 @@ Scrivi le 2 frasi dell'introduzione."""
             if first and last:
                 fmt = lambda d: d.strftime("%d/%m/%Y") if hasattr(d, "strftime") else str(d)
                 period = f", nel periodo dal {fmt(first)} al {fmt(last)}"
+            split = ""
+            by_chamber = stats.get("by_chamber") or {}
+            if len(by_chamber) > 1:
+                cam = (by_chamber.get("camera") or {}).get("intervention_count", 0)
+                sen = (by_chamber.get("senato") or {}).get("intervention_count", 0)
+                split = f" ({cam} alla Camera, {sen} al Senato)"
             parts.append(
-                f"Sono stati analizzati {n_int} interventi di {n_spk} {_members_word()}{period}."
+                f"Sono stati analizzati {n_int} interventi{split} di {n_spk} {_members_word()}{period}."
             )
         return " ".join(parts)
 
