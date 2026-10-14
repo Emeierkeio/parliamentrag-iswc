@@ -17,7 +17,9 @@ Run:  uv run mcp/server.py          (stdio transport, no install needed)
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
@@ -649,8 +651,8 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
         ),
     }
     if format == "svg":
-        return [summary, _render_hemicycle_svg(participants, title, sub, note)]
-    png = _render_hemicycle_png(participants, title, sub, note)
+        return [summary, _render_hemicycle_svg(participants, title, sub, note, d.get("chamber"))]
+    png = _render_hemicycle_png(participants, title, sub, note, d.get("chamber"))
     return [summary, FastMCPImage(data=png, format="png")]
 
 
@@ -901,7 +903,7 @@ _HEMI_W, _HEMI_H = 1400, 970
 # Versione del renderer, nei query string degli URL immagine: i voti sono
 # immutabili ma la grafica evolve, e Cloudflare tiene la cache per max-age —
 # bump a ogni modifica visiva per non servire render vecchi.
-_RENDER_V = "2"
+_RENDER_V = "3"
 _HEMI_DISCLAIMER = ("Rappresentazione schematica: i punti mostrano i totali di "
                     "voto per gruppo, non il seggio reale dei singoli deputati.")
 
@@ -959,7 +961,7 @@ def _hemicycle_captions(d: dict, participants: list[dict]) -> tuple[str, str, st
     note = _HEMI_DISCLAIMER
     if d.get("chamber") == "senato":
         title = "Senato · " + title
-        note = note.replace("deputati", "senatori")
+        note = _HEMI_DISCLAIMER_SENATO if _senate_plan() else note.replace("deputati", "senatori")
     cc = _counts_consistency(d)
     if cc and cc.get("consistent") is False:
         note += (" Attenzione: la somma dei conteggi per gruppo non coincide "
@@ -967,11 +969,104 @@ def _hemicycle_captions(d: dict, participants: list[dict]) -> tuple[str, str, st
     return title, sub, note
 
 
-def _hemicycle_layout(participants: list[dict]):
+# ASCII only: the default Pillow font has no accented glyphs.
+_HEMI_DISCLAIMER_SENATO = (
+    "Pianta reale dell'Aula del Senato (senato.it): ogni punto corrisponde al posto "
+    "attuale del senatore; chi ha lasciato l'incarico siede nel posto libero vicino al "
+    "suo gruppo. I posti chiari sono senza voto registrato.")
+
+
+def _senate_plan() -> Optional[dict]:
+    """Official Senate floor plan with current seat assignments, or None."""
+    global _SENATE_PLAN
+    if _SENATE_PLAN is None:
+        _SENATE_PLAN = {}
+        for candidate in (Path(__file__).parent / "senato_aula.json", Path("senato_aula.json")):
+            if candidate.exists():
+                _SENATE_PLAN = json.loads(candidate.read_text(encoding="utf-8"))
+                break
+    return _SENATE_PLAN or None
+
+
+_SENATE_PLAN: Optional[dict] = None
+
+
+def _name_key(first: str, last: str) -> str:
+    import re
+    import unicodedata
+
+    s = unicodedata.normalize("NFKD", f"{first} {last}").encode("ascii", "ignore").decode().lower()
+    return " ".join(sorted(re.findall(r"[a-z]+", s)))
+
+
+def _senate_layout(participants: list[dict], plan: dict):
+    """Each senator on their real seat; senators no longer in office (no
+    current seat) take the free seat nearest to their group's seats."""
+    import math
+
+    # Fit the plan into the area between the caption block and the legend.
+    x0, y0, w, h = 150.0, 180.0, 1100.0, 560.0
+    xs = [c[1] for c in plan["seats"]]
+    ys = [c[2] for c in plan["seats"]]
+    k = min(w / (max(xs) - min(xs)), h / (max(ys) - min(ys)))
+    ox = x0 + (w - (max(xs) - min(xs)) * k) / 2 - min(xs) * k
+    oy = y0 - min(ys) * k
+    pos = {c[0]: (ox + c[1] * k, oy + c[2] * k) for c in plan["seats"]}
+
+    taken: dict[int, dict] = {}
+    pending: list[dict] = []
+    for p in participants:
+        pid = (p.get("id") or "").rstrip("/")
+        seat = None
+        if "dati.senato.it/senatore/" in pid:
+            seat = plan["by_id"].get(pid.rsplit("/", 1)[-1])
+        if seat is None:
+            seat = plan["by_name"].get(_name_key(p.get("first_name", ""), p.get("last_name", "")))
+        if seat is not None and seat in pos and seat not in taken:
+            taken[seat] = p
+        else:
+            pending.append(p)
+
+    centroid: dict[str, tuple[float, float]] = {}
+    for party in {p.get("party") for p in taken.values()}:
+        pts = [pos[s] for s, p in taken.items() if p.get("party") == party]
+        centroid[party] = (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts))
+    middle = (x0 + w / 2, y0 + h / 2)
+    for p in sorted(pending, key=lambda q: (q.get("party") or "", q.get("last_name", ""))):
+        cx, cy = centroid.get(p.get("party"), middle)
+        free = [s for s in pos if s not in taken]
+        if not free:
+            break
+        taken[min(free, key=lambda s: math.hypot(pos[s][0] - cx, pos[s][1] - cy))] = p
+
+    # Order by group position on the plan (left to right), for the group strip.
+    mean_x = {party: c[0] for party, c in centroid.items()}
+    pairs = sorted(taken.items(), key=lambda sp: (
+        mean_x.get(sp[1].get("party"), middle[0]),
+        _OUTCOME_ORDER.get(sp[1].get("outcome"), 3),
+        pos[sp[0]][0],
+    ))
+    ordered = [p for _, p in pairs]
+    seats = [(pos[s][0], pos[s][1], 0.0, 0) for s, _ in pairs]
+    empty = [pos[s] for s in pos if s not in taken]
+    dot = plan.get("seatRadius", 5.1) * k * 1.05
+
+    tally = {"favor": 0, "against": 0, "abstain": 0, "absent": 0}
+    for p in ordered:
+        tally[p.get("outcome") if p.get("outcome") in tally else "absent"] += 1
+    return ordered, seats, dot, tally, empty
+
+
+def _hemicycle_layout(participants: list[dict], chamber: Optional[str] = None):
     """Disposizione dei seggi: stessa geometria per PNG e SVG.
 
-    Ritorna (ordered, seats, dot, tally) con seats allineati a ordered."""
+    Ritorna (ordered, seats, dot, tally, empty) con seats allineati a ordered;
+    empty sono i posti senza voto (solo nella pianta reale del Senato)."""
     import math
+
+    plan = _senate_plan() if chamber == "senato" else None
+    if plan:
+        return _senate_layout(participants, plan)
 
     CX, CY = _HEMI_W // 2, 700
     INNER, OUTER = 220, 500
@@ -1011,7 +1106,7 @@ def _hemicycle_layout(participants: list[dict]):
     for p in ordered:
         tally[p.get("outcome") if p.get("outcome") in tally else "absent"] += 1
 
-    return ordered, seats, dot, tally
+    return ordered, seats, dot, tally, []
 
 
 _LEGEND_LABELS = [("favor", "Favorevoli"), ("against", "Contrari"),
@@ -1026,6 +1121,8 @@ _PARTY_ABBR = [
     ("AZIONE", "Azione"),
     ("VERDI E SINISTRA", "AVS"),
     ("ITALIA VIVA", "IV"),
+    ("CIVICI", "Civici"),
+    ("AUTONOMIE", "Aut"),
     ("NOI MODERATI", "NM"),
     ("MINORANZE LINGUISTICHE", "Min.Ling."),
     ("EUROPA", "+Eu"),
@@ -1096,7 +1193,7 @@ def _hemicycle_palette():
 
 def _render_hemicycle_png(
     participants: list[dict], title: str, subtitle: str,
-    note: str = _HEMI_DISCLAIMER,
+    note: str = _HEMI_DISCLAIMER, chamber: Optional[str] = None,
 ) -> bytes:
     import io as _io
 
@@ -1104,7 +1201,7 @@ def _render_hemicycle_png(
 
     W, H = _HEMI_W, _HEMI_H
     CY = 700
-    ordered, seats, dot, tally = _hemicycle_layout(participants)
+    ordered, seats, dot, tally, empty = _hemicycle_layout(participants, chamber)
 
     img = PILImage.new("RGB", (W, H), (247, 243, 236))
     draw = ImageDraw.Draw(img)
@@ -1118,13 +1215,15 @@ def _render_hemicycle_png(
         draw.text((40, 118 + i * 24), line, fill=(141, 135, 121),
                   font=ImageFont.load_default(18))
 
+    for x, y in empty:
+        draw.circle((x, y), dot, outline=(214, 209, 199), width=2)
     for (x, y, _a, _r), p in zip(seats, ordered):
         color = _OUTCOME_COLOR.get(p.get("outcome"), _OUTCOME_COLOR["absent"])
         draw.circle((x, y), dot, fill=color)
 
     x = 130
     for key, label in _LEGEND_LABELS:
-        if key == "abstain" and tally[key] == 0:
+        if key in ("abstain", "absent") and tally[key] == 0:
             continue
         draw.circle((x, CY + 90), 11, fill=_OUTCOME_COLOR[key])
         text = f"{label} {tally[key]}"
@@ -1168,7 +1267,7 @@ def _render_hemicycle_png(
 
 def _render_hemicycle_svg(
     participants: list[dict], title: str, subtitle: str,
-    note: str = _HEMI_DISCLAIMER,
+    note: str = _HEMI_DISCLAIMER, chamber: Optional[str] = None,
 ) -> str:
     """Stessa grafica del PNG, come testo SVG: pesa una frazione e un modello
     può reinserirla inline senza perdita."""
@@ -1177,7 +1276,7 @@ def _render_hemicycle_svg(
     hexc = {"favor": "#059669", "against": "#dc2626",
             "abstain": "#f59e0b", "absent": "#c8c4ba"}
     CY = 700
-    ordered, seats, dot, tally = _hemicycle_layout(participants)
+    ordered, seats, dot, tally, empty = _hemicycle_layout(participants, chamber)
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {_HEMI_W} {_HEMI_H}" '
@@ -1189,12 +1288,15 @@ def _render_hemicycle_svg(
     for i, line in enumerate(_wrap_note(note)):
         parts.append(f'<text x="40" y="{132 + i * 24}" font-size="18" '
                      f'fill="#8d8779">{escape(line)}</text>')
+    for x, y in empty:
+        parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{dot:.1f}" fill="none" '
+                     f'stroke="#d6d1c7" stroke-width="2"/>')
     for (x, y, _a, _r), p in zip(seats, ordered):
         color = hexc.get(p.get("outcome"), hexc["absent"])
         parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{dot:.1f}" fill="{color}"/>')
     x = 130.0
     for key, label in _LEGEND_LABELS:
-        if key == "abstain" and tally[key] == 0:
+        if key in ("abstain", "absent") and tally[key] == 0:
             continue
         text = f"{label} {tally[key]}"
         parts.append(f'<circle cx="{x:.0f}" cy="{CY + 90}" r="11" fill="{hexc[key]}"/>')
@@ -1366,12 +1468,12 @@ def main() -> None:
             headers = {"Cache-Control": "public, max-age=86400"}
             if fmt == "svg":
                 return Response(
-                    _render_hemicycle_svg(participants, title, sub, note),
+                    _render_hemicycle_svg(participants, title, sub, note, d.get("chamber")),
                     media_type="image/svg+xml",
                     headers=headers,
                 )
             return Response(
-                _render_hemicycle_png(participants, title, sub, note),
+                _render_hemicycle_png(participants, title, sub, note, d.get("chamber")),
                 media_type="image/png",
                 headers=headers,
             )
