@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { config } from "@/config";
+import { takeHandoffQuery } from "@/lib/handoff";
 import { Send, Square } from "lucide-react";
 import {
   Tooltip,
@@ -19,6 +20,8 @@ interface ChatInputProps {
   disabled?: boolean;
   className?: string;
   placeholder?: string;
+  /** Fill the box from a ?q= hand-off link (see lib/handoff). */
+  acceptHandoff?: boolean;
 }
 
 export function ChatInput({
@@ -28,10 +31,27 @@ export function ChatInput({
   disabled = false,
   className,
   placeholder,
+  acceptHandoff = false,
 }: ChatInputProps) {
   const t = useTranslations("Chat");
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!acceptHandoff) return;
+    const handed = takeHandoffQuery();
+    if (!handed) return;
+    // Deferred so the value lands after mount; the cursor goes to the end.
+    requestAnimationFrame(() => {
+      setValue(handed);
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(handed.length, handed.length);
+      });
+    });
+  }, [acceptHandoff]);
 
   // Auto-resize textarea
   useEffect(() => {

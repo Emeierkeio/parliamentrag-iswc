@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
         destination: 'https://www.parliamentrag.it/:path*',
         permanent: true,
       },
+      // Hand-off links from Stenografo land on the root; the question box
+      // lives on /home. The query string (q, utm_*) is carried over.
+      {
+        source: '/',
+        has: [{ type: 'query', key: 'q' }],
+        destination: '/home',
+        permanent: false,
+      },
     ];
   },
 };

@@ -83,6 +83,7 @@ export function ChatArea({
                 isLoading={isLoading}
                 placeholder={t("searchPlaceholder")}
                 className="flex-1"
+                acceptHandoff
               />
             ) : (
               <span className="flex-1" aria-hidden="true" />
@@ -294,6 +295,7 @@ function WelcomeScreen({ onSendMessage, onCancelRequest, isLoading }: WelcomeScr
               onCancel={onCancelRequest}
               isLoading={isLoading}
               placeholder={t("searchPlaceholder")}
+              acceptHandoff
             />
             <p className="mt-2 text-[10px] leading-tight text-muted-foreground/60">
               {t("researchNote")}{" "}
