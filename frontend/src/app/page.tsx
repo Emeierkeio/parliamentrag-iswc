@@ -607,7 +607,7 @@ export default function LandingPage() {
               <FooterLink href="https://doi.org/10.5281/zenodo.21560331" external>
                 Zenodo
               </FooterLink>
-              <FooterLink href="https://huggingface.co/datasets/emeierkeio/parliamentrag-camera-leg19" external>
+              <FooterLink href="https://huggingface.co/datasets/emeierkeio/parliamentrag-leg19" external>
                 Hugging Face
               </FooterLink>
               <FooterLink href="/method">{t("footerMethod")}</FooterLink>

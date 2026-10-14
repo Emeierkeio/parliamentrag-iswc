@@ -54,7 +54,7 @@ LOCAL_HTTP_PORT        := 7477
 LOCAL_BACKUP_DIR       := $(CURDIR)/neo4j-local-backups
 
 # Hugging Face dataset (parquet mirror of the KG, follows the live DB)
-HF_DATASET_REPO        := emeierkeio/parliamentrag-camera-leg19
+HF_DATASET_REPO        := emeierkeio/parliamentrag-leg19
 
 .PHONY: help purge-user-data dev dev-backend dev-frontend stop install install-backend install-frontend build check-ports update-data link-refs og-images tunnel browser db-backup db-pull db-use-local db-use-remote export-hf hf-upload zenodo-update zenodo-release
 

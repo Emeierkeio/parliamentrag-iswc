@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 : "${BACKEND_DIR:=backend}"
 : "${LOCAL_BOLT_PORT:=7691}"
 : "${LOCAL_SYNC:=1}"
-: "${HF_DATASET_REPO:=emeierkeio/parliamentrag-camera-leg19}"
+: "${HF_DATASET_REPO:=emeierkeio/parliamentrag-leg19}"
 
 PY="$BACKEND_DIR/venv/bin/python"
 LOCAL_NEO4J="bolt://localhost:$LOCAL_BOLT_PORT"

@@ -69,7 +69,7 @@ from archive_text import TextCoverage, archive_url_from_env, load_speech_texts
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 PARQUET_KWARGS = {"engine": "pyarrow", "compression": "zstd", "index": False}
-DEFAULT_REPO = "emeierkeio/parliamentrag-camera-leg19"
+DEFAULT_REPO = "emeierkeio/parliamentrag-leg19"
 
 
 def iso(value):

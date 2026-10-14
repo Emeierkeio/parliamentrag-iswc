@@ -10,7 +10,7 @@
   <a href="https://doi.org/10.5281/zenodo.23173703"><img alt="Source code on Zenodo" src="https://img.shields.io/badge/Code-Zenodo_DOI-1682D4?style=flat-square&logo=zenodo&logoColor=white"></a>
   <a href="https://iswc2026.semanticweb.org"><img alt="Two papers accepted at ISWC 2026" src="https://img.shields.io/badge/ISWC_2026-In--Use_%2B_Demo_papers-6A4C93?style=flat-square"></a>
   <a href="https://doi.org/10.5281/zenodo.21560331"><img alt="RDF dataset on Zenodo" src="https://img.shields.io/badge/Dataset-Zenodo_DOI-1682D4?style=flat-square&logo=zenodo&logoColor=white"></a>
-  <a href="https://huggingface.co/datasets/emeierkeio/parliamentrag-camera-leg19"><img alt="Dataset on Hugging Face" src="https://img.shields.io/badge/Dataset-Hugging_Face-FFD21E?style=flat-square&logo=huggingface&logoColor=black"></a>
+  <a href="https://huggingface.co/datasets/emeierkeio/parliamentrag-leg19"><img alt="Dataset on Hugging Face" src="https://img.shields.io/badge/Dataset-Hugging_Face-FFD21E?style=flat-square&logo=huggingface&logoColor=black"></a>
   <a href="LICENSE"><img alt="Code license Apache 2.0" src="https://img.shields.io/badge/Code-Apache_2.0-0969DA?style=flat-square"></a>
   <a href="https://creativecommons.org/licenses/by-sa/4.0/"><img alt="Data license CC BY-SA 4.0" src="https://img.shields.io/badge/Data-CC_BY--SA_4.0-97CA00?style=flat-square&logo=creativecommons&logoColor=white"></a>
 </p>
@@ -109,7 +109,7 @@ sittings, votes) and the Senate's stenographic reports.
 - Every build/update ends with an **invariant validation gate** (`build/validate_db.py`): string embeddings, orphan speeches, broken chunk offsets or malformed URIs fail the build
 - **RDF export**: the whole graph is serialized back to RDF (`make export-rdf`; Turtle, plus the 6.3M individual votes in N-Triples) and archived on Zenodo under CC BY-SA 4.0 with DOI [10.5281/zenodo.21560331](https://doi.org/10.5281/zenodo.21560331); project terms use the [w3id.org/parliamentrag](https://w3id.org/parliamentrag/) namespace
 - **Amendments**: the update pipeline also collects the XIX amendments of both chambers (about 223k, with signatories, outcome when published and the bill's iter across chambers) into one JSONL; they are not part of the graph yet
-- **Hugging Face dataset**: the corpus is also published in tabular form as [emeierkeio/parliamentrag-camera-leg19](https://huggingface.co/datasets/emeierkeio/parliamentrag-camera-leg19) (CC BY-SA 4.0), refreshed via `make export-hf`
+- **Hugging Face dataset**: the corpus is also published in tabular form as [emeierkeio/parliamentrag-leg19](https://huggingface.co/datasets/emeierkeio/parliamentrag-leg19) (CC BY-SA 4.0), refreshed via `make export-hf`
 
 The construction pipeline lives in [`build/`](build/README.md):
 
@@ -285,7 +285,7 @@ Accepted at the **In-Use Track of the 25th International Semantic Web Conference
 
 A companion **demo paper** on the live system was accepted at the ISWC 2026 Posters & Demos track; we will add its CEUR-WS citation here once the proceedings are out.
 
-The **RDF dataset** can be cited via its Zenodo DOI: [10.5281/zenodo.21560332](https://doi.org/10.5281/zenodo.21560332) (version used in the paper) or [10.5281/zenodo.21560331](https://doi.org/10.5281/zenodo.21560331) (always the latest version). The same data are also on Hugging Face in tabular form: [emeierkeio/parliamentrag-camera-leg19](https://huggingface.co/datasets/emeierkeio/parliamentrag-camera-leg19).
+The **RDF dataset** can be cited via its Zenodo DOI: [10.5281/zenodo.21560332](https://doi.org/10.5281/zenodo.21560332) (version used in the paper) or [10.5281/zenodo.21560331](https://doi.org/10.5281/zenodo.21560331) (always the latest version). The same data are also on Hugging Face in tabular form: [emeierkeio/parliamentrag-leg19](https://huggingface.co/datasets/emeierkeio/parliamentrag-leg19).
 
 A machine-readable **semantic description** of the paper (approach, knowledge graph, evaluation, comparison with related systems) is available in the [Open Research Knowledge Graph](https://orkg.org/papers/R1909763).
 

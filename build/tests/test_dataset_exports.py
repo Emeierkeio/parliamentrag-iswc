@@ -128,7 +128,7 @@ def test_hf_card_tokens_all_filled():
     tokens = set(re.findall(r"\{\{([A-Z_]+)\}\}", template))
     known = set(export_hf.CARD_STAT_QUERIES) | {"MAX_DATE", "HF_REPO"}
     assert tokens <= known, tokens - known
-    assert "emeierkeio/parliamentrag-camera-leg19" not in template
+    assert "emeierkeio/parliamentrag-leg19" not in template
 
 
 def test_zenodo_metadata_filled_from_export_meta():
