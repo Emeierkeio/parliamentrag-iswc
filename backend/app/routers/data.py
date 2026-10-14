@@ -98,6 +98,32 @@ def _chamber_stats(client, totals: dict) -> dict:
         counts = {row["chamber"]: row["c"] for row in client.query(cypher)}
         for ch in CHAMBERS:
             by_chamber[ch][key] = counts.get(ch, 0)
+
+    # Who is behind `people`: members in office today (an open group), the
+    # ones who left during the term (resigned, died, replaced, appointed),
+    # and in the Senate the senators for life.
+    from ..config import get_config
+
+    life = get_config().load_config().get("life_senators") or []
+    rows = client.query(
+        "MATCH (p:Person)-[r:MEMBER_OF_GROUP]->(:ParliamentaryGroup) "
+        "WHERE coalesce(r.affiliation, false) = false AND coalesce(r.legislature, 19) = 19 "
+        "WITH p, coalesce(r.chamber, 'camera') AS chamber, "
+        "     max(CASE WHEN r.end_date IS NULL THEN 1 ELSE 0 END) AS open "
+        "RETURN chamber, sum(open) AS in_office, count(p) - sum(open) AS former, "
+        "       sum(CASE WHEN p.senato_id IN $life AND open = 1 THEN 1 ELSE 0 END) AS life_in_office, "
+        "       sum(CASE WHEN p.senato_id IN $life AND open = 0 THEN 1 ELSE 0 END) AS life_former",
+        {"life": life},
+    )
+    for row in rows:
+        ch = row["chamber"]
+        if ch not in by_chamber:
+            continue
+        by_chamber[ch]["people_in_office"] = row["in_office"]
+        by_chamber[ch]["people_former"] = row["former"]
+        if ch == "senato":
+            by_chamber[ch]["life_senators_in_office"] = row["life_in_office"]
+            by_chamber[ch]["life_senators_former"] = row["life_former"]
     return by_chamber
 
 
@@ -141,6 +167,13 @@ def _compute_stats() -> dict:
     last = result[0].get("last_date") if result else None
     data["last_update"] = str(last.to_native() if hasattr(last, "to_native") else last) if last else None
     data["by_chamber"] = _chamber_stats(client, data)
+    # Ministers and undersecretaries without a seat in either chamber.
+    gov = client.query(
+        "MATCH (p:Person)-[h:HOLDS_OFFICE]->(:Government) "
+        "WHERE coalesce(h.end_date, date()) >= date('2022-10-13') AND NOT EXISTS { (p)-[r:MEMBER_OF_GROUP]->() WHERE coalesce(r.affiliation, false) = false } "
+        "RETURN count(DISTINCT p) AS c"
+    )
+    data["government_without_seat"] = gov[0]["c"] if gov else None
 
     data["triples"] = None
     meta_path = RDF_DIR / "export_meta.json"

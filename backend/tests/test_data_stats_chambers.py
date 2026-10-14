@@ -17,8 +17,16 @@ GROUPED = {
 }
 
 
+PEOPLE = [
+    {"chamber": "camera", "in_office": 398, "former": 16, "life_in_office": 0, "life_former": 0},
+    {"chamber": "senato", "in_office": 205, "former": 7, "life_in_office": 5, "life_former": 1},
+]
+
+
 class FakeClient:
     def query(self, cypher, params=None):
+        if params and "life" in params:
+            return PEOPLE
         if params:
             label = cypher.split("`")[1]
             return [{"c": SENATE[(label, params["p"])]}]
@@ -45,3 +53,13 @@ def test_grouped_counts_and_missing_chamber():
     assert out["senato"]["votes"] == 90
     assert out["senato"]["people"] == 210
     assert out["senato"]["groups"] == 0
+
+
+def test_people_in_office_former_and_life_senators():
+    out = data_router._chamber_stats(FakeClient(), {})
+    assert out["camera"]["people_in_office"] == 398
+    assert out["camera"]["people_former"] == 16
+    assert "life_senators_in_office" not in out["camera"]
+    assert out["senato"]["people_in_office"] == 205
+    assert out["senato"]["life_senators_in_office"] == 5
+    assert out["senato"]["life_senators_former"] == 1

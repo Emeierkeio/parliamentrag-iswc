@@ -241,6 +241,16 @@ coalitions:
 # only is expected in answers ("tutti i gruppi") only when that chamber is
 # loaded; add "senato" when the Senate reaches production.
 chambers: ["camera"]
+# Senators for life of the XIX (senato.it, "Senatori attualmente in carica:
+# elettivi 200, a vita 5", 14/10/2026), plus Giorgio Napolitano (by right as
+# former President, died 22/09/2023). The graph has no flag for them.
+life_senators:
+  - "http://dati.senato.it/senatore/30510"  # Carlo Rubbia
+  - "http://dati.senato.it/senatore/30511"  # Elena Cattaneo
+  - "http://dati.senato.it/senatore/30512"  # Renzo Piano
+  - "http://dati.senato.it/senatore/32435"  # Liliana Segre
+  - "http://dati.senato.it/senatore/28543"  # Mario Monti
+  - "http://dati.senato.it/senatore/1672"   # Giorgio Napolitano
 chamber_only_groups:
   "Per le Autonomie (SVP-PATT, Campobase)": "senato"
 
