@@ -258,6 +258,7 @@ def _prepare_people(builder: DatabaseBuilder, legislature: int, skip_download: b
 def _finish_people(builder: DatabaseBuilder, legislature: int, chamber: str) -> None:
     builder.create_scope_vector_index(chamber, legislature)
     builder.merge_duplicate_people()
+    builder.drop_duplicate_memberships()
     builder.link_orphan_speeches()
     builder.relink_mismatched_speakers()
     builder.normalize_person_labels()

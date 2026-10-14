@@ -1670,6 +1670,22 @@ class DatabaseBuilder:
         print(f"Group memberships open at the end of their legislature: {n}")
         return n
 
+    def drop_duplicate_memberships(self) -> int:
+        """Delete exact duplicates among membership edges (same type, same
+        ends, same properties): two loaders reaching one person, or a merge,
+        leave them, and a duplicated open group reads as two current groups
+        (Roccella, 14/10/2026)."""
+        with self._driver.session() as neo_session:
+            n = neo_session.execute_write(lambda tx: tx.run("""
+                MATCH (p:Person)-[r:MEMBER_OF_GROUP|MEMBER_OF_COMMITTEE|HOLDS_OFFICE]->(o)
+                WITH p, o, type(r) AS t, properties(r) AS props, collect(r) AS rels
+                WHERE size(rels) > 1
+                FOREACH (dup IN tail(rels) | DELETE dup)
+                RETURN coalesce(sum(size(rels) - 1), 0) AS c
+            """).single()["c"])
+        print(f"Duplicate membership edges dropped: {n}")
+        return n
+
     def link_orphan_speeches(self) -> int:
         """Link speeches still without SPOKEN_BY to the person their
         transcript id names, when that person's node was created after the
