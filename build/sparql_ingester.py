@@ -154,12 +154,23 @@ def _to_int(row: dict, key: str) -> Optional[int]:
 # SPARQL HTTP helper
 # ---------------------------------------------------------------------------
 
-def _sparql_get(query: str, timeout: int = SPARQL_TIMEOUT, max_retries: int = 3) -> list[dict]:
+class SparqlUnavailable(RuntimeError):
+    """dati.camera.it kept failing: an empty answer would be indistinguishable
+    from 'no data', so strict callers get this instead."""
+
+
+def _sparql_get(
+    query: str,
+    timeout: int = SPARQL_TIMEOUT,
+    max_retries: int = 3,
+    strict: bool = False,
+) -> list[dict]:
     """Execute a SPARQL SELECT query and return the bindings list.
 
     Uses urllib (stdlib) to avoid additional dependencies.
     Retries with exponential backoff on transient failures (rate limiting, empty responses).
-    Returns an empty list on persistent failure — never raises.
+    Returns an empty list on persistent failure, or raises SparqlUnavailable
+    when strict.
     """
     import time as _time
 
@@ -194,6 +205,8 @@ def _sparql_get(query: str, timeout: int = SPARQL_TIMEOUT, max_retries: int = 3)
                 _time.sleep(wait)
             else:
                 logger.warning("SPARQL request failed after %d attempts: %s", max_retries, exc)
+                if strict:
+                    raise SparqlUnavailable(str(exc)) from exc
                 return []
         except (json.JSONDecodeError, ValueError) as exc:
             if attempt < max_retries:
@@ -203,6 +216,8 @@ def _sparql_get(query: str, timeout: int = SPARQL_TIMEOUT, max_retries: int = 3)
                 _time.sleep(wait)
             else:
                 logger.warning("SPARQL response not JSON after %d attempts: %s", max_retries, exc)
+                if strict:
+                    raise SparqlUnavailable(str(exc)) from exc
                 return []
         except Exception as exc:
             if attempt < max_retries:
@@ -212,6 +227,8 @@ def _sparql_get(query: str, timeout: int = SPARQL_TIMEOUT, max_retries: int = 3)
                 _time.sleep(wait)
             else:
                 logger.warning("Unexpected SPARQL error after %d attempts: %s", max_retries, exc)
+                if strict:
+                    raise SparqlUnavailable(str(exc)) from exc
                 return []
     return []  # Should not reach here
 
@@ -397,6 +414,7 @@ class SparqlIngester:
         person_to_neo4j: dict[str, str],
         chamber: str = "camera",
         legislature: int = 19,
+        strict: bool = False,
     ) -> tuple[int, int]:
         """Individual votes of one votazione. Returns (written, skipped)."""
         session_num, vote_num = parse_votazione_uri(votazione_uri)
@@ -406,7 +424,7 @@ class SparqlIngester:
         skipped = 0
         offset = 0
         while True:
-            bindings = self._get_votazione_individual_votes(votazione_uri, offset=offset)
+            bindings = self._get_votazione_individual_votes(votazione_uri, offset=offset, strict=strict)
             if not bindings:
                 break
             batch = []
@@ -648,7 +666,9 @@ OFFSET {offset}
 """
         return _sparql_get(query)
 
-    def _get_votazione_individual_votes(self, votazione_uri: str, offset: int = 0) -> list[dict]:
+    def _get_votazione_individual_votes(
+        self, votazione_uri: str, offset: int = 0, strict: bool = False,
+    ) -> list[dict]:
         """Fetch one page of individual vote records for a single votazione.
 
         DISTINCT: the triples sit in more than one graph, so every vote came
@@ -667,7 +687,7 @@ WHERE {{
 LIMIT {SPARQL_PAGE_SIZE}
 OFFSET {offset}
 """
-        return _sparql_get(query)
+        return _sparql_get(query, strict=strict)
 
     def _get_committee_roles(self, dep_sparql_uri: str) -> list[dict]:
         """Fetch committee officer roles for a deputy from the SPARQL endpoint."""
@@ -782,7 +802,7 @@ WHERE {{
 ORDER BY ?votazione
 LIMIT 10000
 """
-            bindings = _sparql_get(query)
+            bindings = _sparql_get(query, strict=True)
             if not bindings:
                 break
             for row in bindings:
@@ -797,50 +817,114 @@ LIMIT 10000
             raise RuntimeError("dati.camera.it returned no votazioni (endpoint down?)")
         return out
 
-    def find_camera_vote_gaps(self, legislature: int = 19) -> dict[int, dict[int, str]]:
-        """Votazioni published on dati.camera.it but missing from the graph,
-        as session number -> {vote number: votazione URI}."""
+    def _get_camera_votes_without_individuals(self, legislature: int) -> dict[int, set[int]]:
+        """Camera Vote nodes with no IndividualVote, as session number -> vote numbers.
+        A failed SPARQL page leaves a votazione like this, and the aggregate
+        comparison alone would never notice."""
+        with self._driver.session() as neo_session:
+            result = neo_session.run(
+                "MATCH (s:Session)-[:HAS_VOTE]->(v:Vote) "
+                "WHERE coalesce(s.chamber, 'camera') = 'camera' "
+                "AND s.legislature = $legislature AND v.number IS NOT NULL "
+                "AND NOT EXISTS { (v)<-[:ON_VOTE]-(:IndividualVote) } "
+                "RETURN s.number AS n, collect(DISTINCT toInteger(v.number)) AS votes",
+                legislature=legislature,
+            )
+            return {
+                record["n"]: set(record["votes"])
+                for record in result if record["n"] is not None
+            }
+
+    def find_camera_vote_gaps(
+        self, legislature: int = 19,
+    ) -> tuple[dict[int, dict[int, str]], dict[int, dict[int, str]]]:
+        """Compare the graph with dati.camera.it, votazione by votazione.
+
+        Returns (missing, without_individuals), both as
+        session number -> {vote number: votazione URI}: votazioni with no Vote
+        node, and Vote nodes with no individual votes."""
         published = self._get_camera_votazioni(legislature)
         existing = self._get_camera_vote_numbers(legislature)
-        gaps = {}
+        empty = self._get_camera_votes_without_individuals(legislature)
+        missing: dict[int, dict[int, str]] = {}
+        without_individuals: dict[int, dict[int, str]] = {}
         for num, votes in published.items():
             have = existing.get(num, set())
-            missing = {n: uri for n, uri in votes.items() if n not in have}
-            if missing:
-                gaps[num] = missing
-        return gaps
+            m = {n: uri for n, uri in votes.items() if n not in have}
+            if m:
+                missing[num] = m
+            e = {n: uri for n, uri in votes.items() if n in empty.get(num, ())}
+            if e:
+                without_individuals[num] = e
+        # Annulled votazioni are published with no votes: they are not gaps.
+        candidates = [uri for votes in without_individuals.values() for uri in votes.values()]
+        with_votes = self._get_votazioni_with_votes(candidates)
+        without_individuals = {
+            num: kept
+            for num, votes in without_individuals.items()
+            if (kept := {n: uri for n, uri in votes.items() if uri in with_votes})
+        }
+        return missing, without_individuals
+
+    def _get_votazioni_with_votes(self, uris: list[str]) -> set[str]:
+        """The votazioni among uris that have individual votes on dati.camera.it."""
+        out: set[str] = set()
+        for i in range(0, len(uris), 50):
+            values = " ".join(f"<{u}>" for u in uris[i:i + 50])
+            query = f"""
+PREFIX ocd: <http://dati.camera.it/ocd/>
+
+SELECT DISTINCT ?votazione
+WHERE {{
+  VALUES ?votazione {{ {values} }}
+  ?voto a ocd:voto ;
+        ocd:rif_votazione ?votazione .
+}}
+"""
+            out.update(row["votazione"]["value"] for row in _sparql_get(query, strict=True))
+        return out
 
     def fill_camera_vote_gaps(self, legislature: int = 19) -> dict:
         """Compare the whole legislature with dati.camera.it and write the
-        missing votazioni: aggregate Vote nodes, then their individual votes."""
-        gaps = self.find_camera_vote_gaps(legislature)
+        missing votazioni (aggregate Vote nodes, then their individual votes)
+        and the individual votes of Vote nodes that have none."""
+        missing, without_individuals = self.find_camera_vote_gaps(legislature)
         sittings_in_db = self._get_camera_sittings_in_db(legislature)
-        no_session = sorted(n for n in gaps if n not in sittings_in_db)
+        no_session = sorted(n for n in missing if n not in sittings_in_db)
         if no_session:
             logger.warning("Sittings with votes on dati.camera.it but no Session node: %s", no_session)
         logger.info(
-            "Camera vote gaps: %d votazioni in %d sittings",
-            sum(len(v) for v in gaps.values()), len(gaps),
+            "Camera vote gaps: %d votazioni missing in %d sittings, %d without individual votes",
+            sum(len(v) for v in missing.values()), len(missing),
+            sum(len(v) for v in without_individuals.values()),
         )
         agg = self.ingest_camera_aggregate_votes(
-            legislature=legislature, only_sessions=set(gaps),
+            legislature=legislature, only_sessions=set(missing),
         )
+        todo: dict[int, dict[int, str]] = {}
+        for gaps in (missing, without_individuals):
+            for num, votes in gaps.items():
+                if num in sittings_in_db:
+                    todo.setdefault(num, {}).update(votes)
+
         person_to_neo4j = self._camera_person_index()
         written = 0
         skipped = 0
-        for num in sorted(gaps):
-            if num not in sittings_in_db:
-                continue
-            for _, uri in sorted(gaps[num].items()):
+        # strict: if the endpoint goes down mid-run, stop here; the votazioni
+        # left without individual votes are picked up by the next run.
+        for num in sorted(todo):
+            for _, uri in sorted(todo[num].items()):
                 w, s = self._ingest_votazione_individual_votes(
                     uri, person_to_neo4j, chamber="camera", legislature=legislature,
+                    strict=True,
                 )
                 written += w
                 skipped += s
             logger.info("  sitting %d: individual votes written so far %d", num, written)
         return {
-            "gap_votazioni": sum(len(v) for v in gaps.values()),
-            "gap_sittings": len(gaps),
+            "gap_votazioni": sum(len(v) for v in missing.values()),
+            "gap_sittings": len(missing),
+            "without_individuals": sum(len(v) for v in without_individuals.values()),
             "sittings_without_session": no_session,
             "aggregate_written": agg["votes_written"],
             "individual_written": written,
@@ -1180,17 +1264,20 @@ if __name__ == "__main__":
         ingester = SparqlIngester(driver)
 
         if args.check_gaps:
-            gaps = ingester.find_camera_vote_gaps(legislature=args.legislature)
-            total = sum(len(v) for v in gaps.values())
-            print(f"==> Camera votazioni missing from the graph: {total} in {len(gaps)} sittings")
-            for num in sorted(gaps):
-                print(f"    sitting {num}: {sorted(gaps[num])}")
-            sys.exit(1 if gaps else 0)
+            missing, without_individuals = ingester.find_camera_vote_gaps(legislature=args.legislature)
+            for title, gaps in (("missing from the graph", missing),
+                                ("without individual votes", without_individuals)):
+                total = sum(len(v) for v in gaps.values())
+                print(f"==> Camera votazioni {title}: {total} in {len(gaps)} sittings")
+                for num in sorted(gaps):
+                    print(f"    sitting {num}: {sorted(gaps[num])}")
+            sys.exit(1 if missing or without_individuals else 0)
         elif args.fill_gaps:
             print(f"==> Filling Camera vote gaps against dati.camera.it (leg={args.legislature})...")
             stats = ingester.fill_camera_vote_gaps(legislature=args.legislature)
             print(
                 f"    Missing votazioni  : {stats['gap_votazioni']} in {stats['gap_sittings']} sittings\n"
+                f"    Without individual : {stats['without_individuals']}\n"
                 f"    Aggregate written  : {stats['aggregate_written']}\n"
                 f"    Individual written : {stats['individual_written']}\n"
                 f"    Individual skipped : {stats['individual_skipped']}"

@@ -637,16 +637,32 @@ class TestCameraVoteGaps:
             400: {1: uri(400, 1)},
         })
         ingester._get_camera_vote_numbers = MagicMock(return_value={33: {68}, 400: {1}})
+        ingester._get_camera_votes_without_individuals = MagicMock(return_value={400: {1}, 33: {68}})
+        # 33/68 is an annulled votazione: published without votes, not a gap
+        ingester._get_votazioni_with_votes = MagicMock(return_value={uri(400, 1)})
 
-        gaps = ingester.find_camera_vote_gaps(19)
+        missing, without_individuals = ingester.find_camera_vote_gaps(19)
 
-        assert gaps == {4: {1: uri(4, 1)}, 33: {69: uri(33, 69)}}
+        assert missing == {4: {1: uri(4, 1)}, 33: {69: uri(33, 69)}}
+        assert without_individuals == {400: {1: uri(400, 1)}}
+
+    def test_strict_sparql_raises_when_endpoint_fails(self):
+        """A 502 must not look like 'no votes' to the gap filler."""
+        import pytest
+        import urllib.error
+        from sparql_ingester import SparqlUnavailable, _sparql_get
+
+        err = urllib.error.HTTPError("u", 502, "Bad Gateway", None, None)
+        with patch("urllib.request.urlopen", side_effect=err), patch("time.sleep"):
+            assert _sparql_get("SELECT", max_retries=1) == []
+            with pytest.raises(SparqlUnavailable):
+                _sparql_get("SELECT", max_retries=1, strict=True)
 
     def test_votazioni_listing_uses_keyset_pagination(self):
         ingester = SparqlIngester(driver=MagicMock())
         captured: list[str] = []
 
-        def fake_sparql_get(query, timeout=30, max_retries=3):
+        def fake_sparql_get(query, timeout=30, max_retries=3, strict=False):
             captured.append(query)
             return [{"votazione": {"value": "http://dati.camera.it/ocd/votazione.rdf/vs19_004_001"}}]
 
