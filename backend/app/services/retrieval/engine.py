@@ -10,8 +10,6 @@ import time
 from typing import List, Dict, Any, Optional
 from datetime import date
 
-import openai
-
 from ..neo4j_client import Neo4jClient
 from ...key_pool import make_client
 from ...tracing import stage
@@ -84,7 +82,7 @@ class RetrievalEngine:
         Returns:
             Dictionary with evidence list and metadata
         """
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import ThreadPoolExecutor
 
         start_time = time.time()
         scope = normalize_scope(scope)

@@ -13,7 +13,6 @@ import json
 from typing import Optional
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 # Ensure build/ is on the path for direct imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -351,7 +350,6 @@ class TestSparqlTimeoutHandling:
 
     def test_valid_response_parsed(self):
         """_sparql_get must parse and return bindings on a valid JSON response."""
-        import io
         bindings = [{"s": {"value": "http://example.com/foo"}}]
         response_json = json.dumps({
             "results": {"bindings": bindings}

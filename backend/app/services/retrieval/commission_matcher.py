@@ -98,7 +98,6 @@ class CommissionMatcher:
 
         for commission_name, data in self.commissioni.items():
             keywords = data.get("keywords", [])
-            categories = data.get("topic_categories", [])
 
             matched_keywords = []
             query_words = set(query_normalized.split())

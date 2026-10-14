@@ -21,7 +21,6 @@ import unicodedata
 from typing import Optional
 
 import pandas as pd
-from neo4j.time import Date as Neo4jDate
 
 from build_config import BuildConfig
 from chunker import chunk_speech

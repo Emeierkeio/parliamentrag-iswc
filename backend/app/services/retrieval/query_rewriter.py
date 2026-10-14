@@ -10,7 +10,6 @@ Only rewrites queries up to `max_query_words` words; longer queries are
 considered already descriptive enough.
 """
 import logging
-from typing import Optional
 
 from ...key_pool import make_client
 from ...config import get_config

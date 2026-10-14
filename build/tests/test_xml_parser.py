@@ -9,7 +9,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import xml.etree.ElementTree as ET
-import pytest
 
 from xml_parser import StenograficoParser, classify_phase_type
 

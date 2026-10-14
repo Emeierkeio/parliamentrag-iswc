@@ -9,9 +9,7 @@ from __future__ import annotations
 import csv
 import os
 import tempfile
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from build_config import BuildConfig
 from db_builder import DatabaseBuilder
@@ -95,7 +93,7 @@ def test_batch_write_splits_at_batch_size():
 def test_create_votes_cypher_uses_session():
     """Vote Cypher must reference Session and HAS_VOTE (not Debate)."""
     driver, neo_session = _make_driver()
-    captured = _capture_cypher(neo_session)
+    _capture_cypher(neo_session)
 
     # Call the static transaction function directly via a fake tx
     tx = MagicMock()

@@ -227,7 +227,6 @@ def test_chunk_minimal_properties(session):
         pytest.skip("No Chunk nodes found — run make db-all first")
 
     keys = set(record["k"])
-    allowed_keys = {"id", "text", "index", "embedding"}
     forbidden_keys = {"charCount", "startCharRaw", "endCharRaw"}
 
     present_forbidden = keys & forbidden_keys

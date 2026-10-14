@@ -7,12 +7,10 @@ Tests cover: GET-only HTTP method, outcome derivation, URI parsing, Vote id form
 
 from __future__ import annotations
 
-import json
 import sys
 import os
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 # Ensure build/ is on the path for direct imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,7 +23,6 @@ from senate_sparql_ingester import (
     _derive_senate_outcome,
     _senate_outcome,
     _senate_vote_flags,
-    SENATO_USER_AGENT,
     SENATO_SPARQL_ENDPOINT,
 )
 
@@ -362,7 +359,7 @@ class TestPackRanges:
         return {"session": session, "vote": vote, "id": f"{session}-{vote}", "expected": 1}
 
     def test_width_counts_gaps(self):
-        from senate_sparql_ingester import _pack_ranges, INDIVIDUAL_CHUNK
+        from senate_sparql_ingester import _pack_ranges
         # votes 1 and 100 of one sitting: a single range 1..100 would exceed the budget
         chunks = _pack_ranges([self._p(300, 1), self._p(300, 100)])
         assert len(chunks) == 2

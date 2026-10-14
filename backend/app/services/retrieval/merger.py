@@ -117,8 +117,6 @@ class ChannelMerger:
         max_speaker_count = max(speaker_counts.values()) if speaker_counts else 1
         max_party_count = max(party_counts.values()) if party_counts else 1
 
-        all_parties = set(self.config.get_all_parties())
-
         for result in results:
             relevance = result.get("similarity", 0.5)
 

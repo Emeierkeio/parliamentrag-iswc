@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 from types import SimpleNamespace
-from typing import List
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +219,7 @@ class TestEnrichChunksWithNer:
 @pytest.mark.slow
 def test_load_ner_model_slow():
     """Integration test: load_ner_model() should return a usable spaCy pipeline."""
-    spacy = pytest.importorskip("spacy")
+    pytest.importorskip("spacy")
     from ner import load_ner_model
     nlp = load_ner_model()
     assert nlp is not None
@@ -231,7 +230,7 @@ def test_load_ner_model_slow():
 @pytest.mark.slow
 def test_enrich_chunks_real_model_slow():
     """Integration test: full pipeline with real spaCy model (no mock)."""
-    spacy = pytest.importorskip("spacy")
+    pytest.importorskip("spacy")
     from ner import enrich_chunks_with_ner, load_ner_model
     try:
         nlp = load_ner_model()

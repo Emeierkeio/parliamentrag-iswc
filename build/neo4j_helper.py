@@ -3,7 +3,7 @@ Minimal Neo4j client for scripts. Reads config from environment variables.
 """
 import os
 from typing import Any, Dict, List, Optional
-from neo4j import GraphDatabase, Driver
+from neo4j import GraphDatabase
 
 
 class Neo4jClient:

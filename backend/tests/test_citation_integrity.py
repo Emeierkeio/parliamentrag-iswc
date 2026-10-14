@@ -4,7 +4,6 @@ These cover the exact-substring contract (schema v2, invariant C8): spans are
 computed by exact match inside the speech text, and verification re-extracts
 the span and compares it verbatim with the stored quote.
 """
-import pytest
 
 from app.models.evidence import (
     compute_chunk_span,

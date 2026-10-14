@@ -39,7 +39,7 @@ import re
 import json
 import unicodedata
 import logging
-from datetime import datetime, date
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 

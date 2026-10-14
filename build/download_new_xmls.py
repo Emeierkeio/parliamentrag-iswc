@@ -1,7 +1,6 @@
 import requests
 import os
 import time
-from typing import Optional
 
 # Configurazione
 BASE_URL = "https://documenti.camera.it/apps/commonServices/getDocumento.ashx?sezione=assemblea&tipoDoc=formato_xml&tipologia=stenografico&idNumero={:04d}&idLegislatura=19"
