@@ -153,6 +153,43 @@ class Validator:
         self.check(diff == 0, f"voti individuali coerenti con gli aggregati ({tot} votazioni)",
                    f"{diff} votazioni con conteggi diversi", warn_only=diff <= tot * 0.01)
 
+    def check_amendments(self, n_amendments: int):
+        print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
+        rows = self.q("""
+            MATCH (a:Amendment) WITH a.id AS id, count(*) AS n WHERE n > 1
+            RETURN count(id) AS c, collect(id)[..5] AS ids
+        """)
+        self.check(rows[0]["c"] == 0, "0 id di emendamento duplicati", f"{rows[0]['c']}: {rows[0]['ids']}")
+
+        # Thresholds from the first load on staging (2026-10-14): Chamber 92%
+        # of amendments with their bill (49 bills missing from the graph),
+        # signatures ~100%, floor votes 87% Chamber and 97% Senate.
+        rows = self.q("""
+            MATCH (a:Amendment)
+            RETURN a.chamber AS ch, count(a) AS n,
+                   sum(CASE WHEN EXISTS { (a)-[:AMENDS]->() } THEN 1 ELSE 0 END) AS with_act,
+                   sum(a.member_signatories) AS signers,
+                   sum(COUNT { (a)<-[:SIGNED_AMENDMENT]-() }) AS signed
+        """)
+        for r in rows:
+            self.check(r["with_act"] >= 0.9 * r["n"], f"{r['ch']}: emendamenti con atto {r['with_act']}/{r['n']}",
+                       "sotto il 90%", warn_only=True)
+            self.check(r["signed"] >= 0.98 * r["signers"],
+                       f"{r['ch']}: firme collegate {r['signed']}/{r['signers']}", "sotto il 98%", warn_only=True)
+
+        rows = self.q("""
+            MATCH (s:Session)-[:HAS_VOTE]->(v:Vote)
+            WHERE (s.chamber = 'camera' AND (v.subject STARTS WITH 'Votazione Emendamento'
+                     OR (v.subject = 'Votazione' AND v.description =~ '(?i)^((DDL|PDL) \\d+\\S* - )?(EM|ART\\.? AGG|SUBEM) .*')))
+               OR (s.chamber = 'senato' AND v.subject =~ '^(DDL n\\. ?\\S+\\. )?(Em|Emm|ODG)\\.? .*')
+            RETURN s.chamber AS ch, count(v) AS n,
+                   sum(CASE WHEN EXISTS { (v)-[:ON_AMENDMENT]->() } THEN 1 ELSE 0 END) AS linked
+        """)
+        for r in rows:
+            self.check(r["linked"] >= 0.8 * r["n"],
+                       f"{r['ch']}: votazioni d'Aula su emendamenti collegate {r['linked']}/{r['n']}",
+                       "sotto l'80%", warn_only=True)
+
     def run_all(self):
         print("=== VALIDAZIONE SCHEMA V2 ===\n")
 
@@ -325,6 +362,10 @@ class Validator:
         rows = self.q("MATCH (s:Session {chamber: 'senato'}) RETURN count(s) AS c")
         if rows[0]["c"]:
             self.check_senate(rows[0]["c"])
+
+        rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
+        if rows[0]["c"]:
+            self.check_amendments(rows[0]["c"])
 
         # ------------------------------------------------------------------
         print(f"\n=== ESITO: {self.failures} FAIL, {self.warnings} WARN ===")

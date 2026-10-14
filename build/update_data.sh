@@ -7,6 +7,7 @@
 # Variabili (passate dal Makefile, con default identici):
 #   V2_DIR, DEMO_NEO4J, BACKEND_DIR, LOCAL_BOLT_PORT, LOCAL_SYNC, HF_DATASET_REPO
 #   SENATO_NEO4J (facoltativa: DB con il Senato da aggiornare, vedi update_senato.sh)
+#   EMENDAMENTI_GRAFO=1 (facoltativa: emendamenti nel grafo e nell'archivio)
 set -u -o pipefail
 
 cd "$(dirname "$0")/.."
@@ -294,7 +295,7 @@ fi
 # ── Emendamenti XIX (Camera e Senato) ────────────────────────────────────────
 # Scarica solo ciò che è nuovo o con l'iter cambiato negli ultimi giorni, poi
 # rigenera downloads/emendamenti/emendamenti_leg19.jsonl (circa un minuto).
-# Il caricamento nel DB arriverà con la decisione su dove tenere i testi.
+# Il caricamento nel grafo e nell'archivio è più sotto, dopo il Senato.
 EMEND_DAYS=14
 # senato.it blocca l'IP (403 su tutto il sito) dopo qualche ora a 0,5 s tra le
 # richieste: di notte le richieste sono poche, quindi si va piano.
@@ -336,6 +337,32 @@ if [ -z "$SENATO_NEO4J" ]; then
 else
 	run "Senato XIX → $SENATO_NEO4J" env BACKEND_DIR="$BACKEND_DIR" build/update_senato.sh "$SENATO_NEO4J" \
 		|| warn "Senato: aggiornamento incompleto (rc 3 = dati.senato.it rifiuta le richieste), riprende al prossimo giro"
+fi
+
+# ── Emendamenti XIX → grafo e archivio ───────────────────────────────────────
+# Spento di default: si accende con EMENDAMENTI_GRAFO=1 (ambiente o .env).
+# Dopo il Senato, così le sue votazioni nuove si collegano nello stesso giro.
+# Va nel DB che ha entrambe le camere (SENATO_NEO4J se impostato). Con
+# ARCHIVE_URL anche testi ed embedding nell'archivio Postgres: solo i testi
+# nuovi vanno a OpenAI, il resto si importa una volta dal dump (vedi
+# build/load_emendamenti.py). Idempotente: senza novità non scrive nulla.
+: "${EMENDAMENTI_GRAFO:=$(grep '^EMENDAMENTI_GRAFO=' .env | cut -d= -f2-)}"
+EMEND_JSONL="downloads/emendamenti/emendamenti_leg19.jsonl"
+if [ "${EMENDAMENTI_GRAFO:-0}" != "1" ]; then
+	note "Emendamenti nel grafo: EMENDAMENTI_GRAFO non attivo — saltato."
+elif [ ! -s "$EMEND_JSONL" ]; then
+	warn "Emendamenti nel grafo: $EMEND_JSONL mancante — saltato."
+else
+	EMEND_NEO4J="${SENATO_NEO4J:-$DEMO_NEO4J}"
+	EMEND_ARCHIVE="${ARCHIVE_URL:-$(grep '^ARCHIVE_URL=' .env | cut -d= -f2-)}"
+	emend_load() {
+		env NEO4J_PASSWORD="$NEO4J_PASS_VAL" OPENAI_API_KEY="$OPENAI_KEY_VAL" \
+			"$PY" build/load_emendamenti.py --input "$EMEND_JSONL" \
+			--neo4j-uri "$EMEND_NEO4J" --neo4j-user "${NEO4J_USER_VAL:-neo4j}" \
+			${EMEND_ARCHIVE:+--archive-url "$EMEND_ARCHIVE"}
+	}
+	run "Emendamenti → $EMEND_NEO4J${EMEND_ARCHIVE:+ + archivio}" emend_load \
+		|| warn "emendamenti nel grafo: caricamento incompleto, riprende al prossimo giro"
 fi
 
 # ── Fotografia del grafo per il sito del centro ──────────────────────────────
