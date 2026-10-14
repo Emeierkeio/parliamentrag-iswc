@@ -167,10 +167,12 @@ def _compute_stats() -> dict:
     last = result[0].get("last_date") if result else None
     data["last_update"] = str(last.to_native() if hasattr(last, "to_native") else last) if last else None
     data["by_chamber"] = _chamber_stats(client, data)
-    # Ministers and undersecretaries without a seat in either chamber.
+    # Ministers and undersecretaries without a seat in either chamber. The Draghi
+    # Government stayed in office until 22/10/2022, nine days into the XIX: offices
+    # ending by then belong to it.
     gov = client.query(
         "MATCH (p:Person)-[h:HOLDS_OFFICE]->(:Government) "
-        "WHERE coalesce(h.end_date, date()) >= date('2022-10-13') AND NOT EXISTS { (p)-[r:MEMBER_OF_GROUP]->() WHERE coalesce(r.affiliation, false) = false } "
+        "WHERE coalesce(h.end_date, date()) > date('2022-10-22') AND NOT EXISTS { (p)-[r:MEMBER_OF_GROUP]->() WHERE coalesce(r.affiliation, false) = false } "
         "RETURN count(DISTINCT p) AS c"
     )
     data["government_without_seat"] = gov[0]["c"] if gov else None
