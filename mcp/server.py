@@ -903,7 +903,7 @@ _HEMI_W, _HEMI_H = 1400, 970
 # Versione del renderer, nei query string degli URL immagine: i voti sono
 # immutabili ma la grafica evolve, e Cloudflare tiene la cache per max-age —
 # bump a ogni modifica visiva per non servire render vecchi.
-_RENDER_V = "3"
+_RENDER_V = "4"
 _HEMI_DISCLAIMER = ("Rappresentazione schematica: i punti mostrano i totali di "
                     "voto per gruppo, non il seggio reale dei singoli deputati.")
 
@@ -1155,6 +1155,49 @@ def _group_strip(ordered: list[dict]) -> list[tuple[str, dict]]:
     return strip
 
 
+# Componenti del Gruppo Misto alla Camera: nella fascia stanno dentro il Misto,
+# non accanto ai gruppi come se lo fossero.
+_MISTO_COMPONENTS = ("+Eu", "FN", "Min.Ling.")
+
+
+def _strip_entries(ordered: list[dict], ink, sep, outcome_color: dict) -> list[list[tuple[str, Any]]]:
+    """Voci della fascia gruppi come token (testo, colore), una per gruppo.
+
+    Il Misto è una voce sola con le componenti tra parentesi:
+    «Misto (+Eu 3, FN 9, altri 3 3)»; chi non ha componente sta in «altri»."""
+    def counts(oc: dict) -> list[tuple[str, Any]]:
+        return [(f"{oc[k]} ", outcome_color[k]) for k in ("favor", "against", "abstain") if oc[k]]
+
+    strip = _group_strip(ordered)
+    misto = [(a, oc) for a, oc in strip if a in _MISTO_COMPONENTS or a == "Misto"]
+    entries: list[list[tuple[str, Any]]] = []
+    misto_done = False
+    for abbr, oc in strip:
+        if abbr in _MISTO_COMPONENTS or (abbr == "Misto" and len(misto) > 1):
+            if misto_done:
+                continue
+            misto_done = True
+            tokens: list[tuple[str, Any]] = [("Misto (", ink)]
+            parts = [(a, o) for a, o in misto if a != "Misto"] + [("altri", o) for a, o in misto if a == "Misto"]
+            for j, (a, o) in enumerate(parts):
+                if j:
+                    # la virgola si attacca all'ultimo numero: «3, FN», non «3 , FN»
+                    last_text, last_color = tokens[-1]
+                    tokens[-1] = (last_text.rstrip(), last_color)
+                    tokens.append((", ", ink))
+                tokens.append((a + " ", ink))
+                tokens += counts(o)
+            last_text, last_color = tokens[-1]
+            tokens[-1] = (last_text.rstrip(), last_color)
+            tokens.append((") ", ink))
+            entries.append(tokens)
+        else:
+            entries.append([(abbr + " ", ink)] + counts(oc))
+    for i, e in enumerate(entries):
+        e.insert(0, ("  ·  " if i else "", sep))
+    return entries
+
+
 def _wrap_note(note: str) -> list[str]:
     """La nota può crescere (avviso incoerenza): a 18px stanno ~120 caratteri
     nella larghezza utile, oltre si va a capo invece di sbordare."""
@@ -1236,11 +1279,7 @@ def _render_hemicycle_png(
     draw.text((40, CY + 126), "Gruppi, da sinistra a destra dell'arco:",
               fill=(141, 135, 121), font=ImageFont.load_default(18))
     gx, gy = 40.0, CY + 156
-    for i, (abbr, oc) in enumerate(_group_strip(ordered)):
-        tokens = [(("  ·  " if i else ""), (176, 170, 156)), (abbr + " ", (28, 43, 65))]
-        for key in ("favor", "against", "abstain"):
-            if oc[key]:
-                tokens.append((f"{oc[key]} ", _OUTCOME_COLOR[key]))
+    for tokens in _strip_entries(ordered, (28, 43, 65), (176, 170, 156), _OUTCOME_COLOR):
         entry_w = sum(draw.textlength(t, font=f_grp) for t, _ in tokens)
         if gx + entry_w > W - 40:
             gx, gy = 40.0, gy + 34
@@ -1308,11 +1347,7 @@ def _render_hemicycle_svg(
                  "Gruppi, da sinistra a destra dell'arco:</text>")
     gx, gy = 40.0, CY + 172
     est = 12.0  # larghezza media glifo a 21px
-    for i, (abbr, oc) in enumerate(_group_strip(ordered)):
-        tokens = [(("  ·  " if i else ""), "#b0aa9c"), (abbr + " ", "#1c2b41")]
-        for key in ("favor", "against", "abstain"):
-            if oc[key]:
-                tokens.append((f"{oc[key]} ", hexc[key]))
+    for tokens in _strip_entries(ordered, "#1c2b41", "#b0aa9c", hexc):
         entry_w = sum(len(t) * est for t, _ in tokens)
         if gx + entry_w > _HEMI_W - 40:
             gx, gy = 40.0, gy + 34
