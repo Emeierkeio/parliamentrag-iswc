@@ -1,73 +1,134 @@
 <!DOCTYPE html>
-<!-- Brevo base layout for newsletter campaigns. Duplicate it in Brevo for
-     each mailing and replace the content block. {{ unsubscribe }} and
+<!-- Brevo base layout for newsletter campaigns (template ID 3), sent as
+     "ParliamentRAG" <news@parliamentrag.it> to list 4. Duplicate it in Brevo
+     for each mailing and replace the content blocks. {{ unsubscribe }} and
      {{ mirror }} are Brevo campaign tags; every campaign must keep the
-     unsubscribe link. Header image is served from
-     frontend/public/email/. Fraunces and Geist load only in clients that
-     accept web fonts (Apple Mail, iOS); Gmail and Outlook fall back to
-     Georgia and Helvetica. -->
+     unsubscribe link.
+     Style: "Resoconto" design system of www.parliamentrag.it (carta #f6f5f1,
+     inchiostro #12171a, blu #2d5f8f). The logo PNG is served by the centro repo
+     from public/email/logo-parliamentrag.png. Newsreader, Geist and Geist Mono
+     load only in clients that accept web fonts (Apple Mail, iOS); Gmail and
+     Outlook fall back to Georgia and Helvetica/Arial. -->
 <html lang="it" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
 <title>Novità da ParliamentRAG</title>
 <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
 <style>
-  body { margin: 0; padding: 0; background: #F6F2EC; }
-  .title { font-variation-settings: "opsz" 144; }
-  .url { font-variation-settings: "opsz" 24; }
-  @media (max-width: 600px) {
-    .card-pad { padding: 32px 24px !important; }
-    .title { font-size: 30px !important; line-height: 32px !important; }
+  :root { color-scheme: light only; supported-color-schemes: light only; }
+  body { margin: 0; padding: 0; background: #f6f5f1; -webkit-text-size-adjust: 100%; }
+  a { color: #2d5f8f; }
+  @media (max-width: 620px) {
+    .pad-x { padding-left: 16px !important; padding-right: 16px !important; }
+    .card-pad { padding: 28px 22px 30px 22px !important; }
+    .title { font-size: 32px !important; line-height: 36px !important; }
+    .item-title { font-size: 22px !important; line-height: 27px !important; }
+    .btn a { display: block !important; text-align: center !important; }
+  }
+  @media (max-width: 420px) {
+    .hide-sm { display: none !important; }
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background:#F6F2EC;">
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F6F2EC;">Testo di anteprima, sotto i 35 caratteri.&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F6F2EC;">
+<body style="margin:0;padding:0;background:#f6f5f1;">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f6f5f1;">Testo di anteprima, sotto i 90 caratteri.&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f6f5f1" style="background:#f6f5f1;">
   <tr>
-    <td align="center" style="padding:24px 12px 40px 12px;">
-      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;">
+    <td align="center" class="pad-x" style="padding:28px 24px 44px 24px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
 
+        <!-- Testata: marchio come nel sito, filetto scuro sotto -->
         <tr>
-          <td align="center" style="padding:0;">
-            <a href="https://www.parliamentrag.it" style="text-decoration:none;">
-              <img src="https://www.parliamentrag.it/email/header@2x.png" width="560" alt="ParliamentRAG" style="display:block;width:100%;max-width:560px;height:auto;border:0;font-family:Georgia,serif;font-size:26px;font-weight:600;color:#1B3A5C;text-align:center;">
-            </a>
+          <td style="padding:0 0 18px 0;border-bottom:1px solid #12171a;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="left" valign="middle">
+                  <a href="https://www.parliamentrag.it" style="text-decoration:none;">
+                    <img src="https://www.parliamentrag.it/email/logo-parliamentrag.png" width="200" height="35" alt="ParliamentRAG" style="display:block;width:200px;height:35px;border:0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:20px;font-weight:600;color:#12171a;">
+                  </a>
+                </td>
+                <td align="right" valign="middle" class="hide-sm" style="white-space:nowrap;font-family:'Geist Mono',Menlo,Consolas,monospace;font-size:11px;line-height:16px;letter-spacing:1px;text-transform:uppercase;color:#5b6469;">
+                  Newsletter &middot; Mese anno
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
+        <tr><td style="height:28px;line-height:28px;font-size:0;">&nbsp;</td></tr>
+
         <tr>
-          <td style="background:#FFFFFF;border:1px solid #E4E0D8;border-radius:14px;">
+          <td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #dcdad2;border-radius:6px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td class="card-pad" style="padding:40px 44px 40px 44px;">
 
-                  <h1 class="title" style="margin:0;font-family:'Fraunces',Georgia,'Times New Roman',serif;font-weight:600;font-size:34px;line-height:37px;letter-spacing:0;color:#111827;">
-                    Titolo della newsletter<br><span style="color:#1B3A5C;">seconda riga in navy</span>
+                  <!-- Apertura: una notizia per volta -->
+                  <p style="margin:0;font-family:'Geist Mono',Menlo,Consolas,monospace;font-size:11px;line-height:16px;letter-spacing:1px;text-transform:uppercase;color:#5b6469;">
+                    Occhiello breve
+                  </p>
+
+                  <h1 class="title" style="margin:14px 0 0 0;font-family:'Newsreader',Georgia,'Times New Roman',serif;font-weight:400;font-size:38px;line-height:42px;letter-spacing:-0.5px;color:#12171a;">
+                    Titolo della newsletter, <em style="font-style:italic;color:#2d5f8f;">una parola in blu</em>.
                   </h1>
 
-                  <p style="margin:20px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:25px;color:#111827;">
-                    Paragrafo di apertura: una notizia, un risultato o una richiesta per volta.
+                  <p style="margin:20px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:25px;color:#353d42;">
+                    Paragrafo di apertura: la notizia principale in due o tre frasi, con un fatto preciso (una data, un numero, un voto).
                   </p>
 
-                  <p style="margin:16px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:25px;color:#111827;">
-                    Secondo paragrafo, facoltativo.
-                  </p>
-
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 0 0;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="btn" style="margin:26px 0 0 0;">
                     <tr>
-                      <td align="center" bgcolor="#1B3A5C" style="border-radius:10px;background:#1B3A5C;">
-                        <a href="https://www.parliamentrag.it" style="display:inline-block;padding:15px 30px;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:10px;">Azione principale</a>
+                      <td align="center" bgcolor="#2d5f8f" style="border-radius:999px;background:#2d5f8f;">
+                        <a href="https://www.parliamentrag.it" style="display:inline-block;padding:14px 30px;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:500;color:#ffffff;text-decoration:none;border-radius:999px;">Azione principale&nbsp;&nbsp;&rarr;</a>
                       </td>
                     </tr>
                   </table>
 
-<p style="margin:28px 0 0 0;padding-top:20px;border-top:1px solid #E4E0D8;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#6B7280;">
+                  <!-- Voci: copia il blocco per ogni novità, come nella pagina Aggiornamenti -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 0 0;border-top:1px solid #12171a;">
+                    <tr>
+                      <td style="padding:22px 0 0 0;">
+                        <p style="margin:0;font-family:'Geist Mono',Menlo,Consolas,monospace;font-size:12px;line-height:18px;color:#5b6469;">
+                          14 ott. 2026 &nbsp;<span style="display:inline-block;padding:1px 6px;border:1px solid #c3c1b8;border-radius:3px;font-size:10px;line-height:15px;letter-spacing:1px;text-transform:uppercase;color:#353d42;">Sistemi</span>
+                        </p>
+                        <h2 class="item-title" style="margin:10px 0 0 0;font-family:'Newsreader',Georgia,'Times New Roman',serif;font-weight:400;font-size:24px;line-height:29px;color:#12171a;">
+                          Titolo della novità
+                        </h2>
+                        <p style="margin:8px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;line-height:23px;color:#353d42;">
+                          Una o due frasi su cosa cambia per chi legge.
+                        </p>
+                        <p style="margin:8px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;line-height:23px;">
+                          <a href="https://www.parliamentrag.it/aggiornamenti" style="color:#2d5f8f;text-decoration:underline;">Collegamento</a>
+                        </p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:22px 0 0 0;border-bottom:0;">
+                        <div style="border-top:1px solid #dcdad2;height:0;line-height:0;font-size:0;">&nbsp;</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:22px 0 0 0;">
+                        <p style="margin:0;font-family:'Geist Mono',Menlo,Consolas,monospace;font-size:12px;line-height:18px;color:#5b6469;">
+                          25-29 ott. 2026 &nbsp;<span style="display:inline-block;padding:1px 6px;border:1px solid #c3c1b8;border-radius:3px;font-size:10px;line-height:15px;letter-spacing:1px;text-transform:uppercase;color:#353d42;">Pubblicazioni</span>
+                        </p>
+                        <h2 class="item-title" style="margin:10px 0 0 0;font-family:'Newsreader',Georgia,'Times New Roman',serif;font-weight:400;font-size:24px;line-height:29px;color:#12171a;">
+                          Seconda novità, facoltativa
+                        </h2>
+                        <p style="margin:8px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;line-height:23px;color:#353d42;">
+                          Togli il blocco se la newsletter ha una sola notizia.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p style="margin:32px 0 0 0;padding-top:18px;border-top:1px solid #dcdad2;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#5b6469;">
                     Nota finale facoltativa, per esempio la scadenza di un sondaggio.
                   </p>
 
@@ -78,14 +139,15 @@
         </tr>
 
         <tr>
-          <td align="center" style="padding:28px 24px 0 24px;">
-            <a href="https://www.parliamentrag.it" class="url" style="font-family:'Fraunces',Georgia,serif;font-weight:500;font-size:16px;line-height:22px;color:#1B3A5C;text-decoration:none;">www.parliamentrag.it</a>
-            <p style="margin:8px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#6B7280;">
-              Progetto di ricerca dell'Università di Milano-Bicocca.<br>
-              Ricevi questa email perché hai confermato l'iscrizione su parliamentrag.it.<br>
-              <a href="{{ unsubscribe }}" style="color:#6B7280;text-decoration:underline;">Cancella l'iscrizione</a>
-              &nbsp;&nbsp;<a href="https://www.parliamentrag.it/privacy#newsletter" style="color:#6B7280;text-decoration:underline;">Informativa privacy</a>
-              &nbsp;&nbsp;<a href="{{ mirror }}" style="color:#6B7280;text-decoration:underline;">Apri nel browser</a>
+          <td align="left" style="padding:26px 2px 0 2px;">
+            <p style="margin:0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#5b6469;">
+              <strong style="font-weight:600;color:#353d42;">ParliamentRAG</strong>, progetto di ricerca dell'Università di Milano&#8209;Bicocca su Camera e Senato.<br>
+              Ricevi questa email perché hai confermato l'iscrizione alla newsletter su www.parliamentrag.it, www.fascicoli.it o www.stenografo.it.
+            </p>
+            <p style="margin:10px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#5b6469;">
+              <a href="{{ unsubscribe }}" style="color:#5b6469;text-decoration:underline;">Cancella l'iscrizione</a>
+              &nbsp;&middot;&nbsp;<a href="https://www.parliamentrag.it/privacy#newsletter" style="color:#5b6469;text-decoration:underline;">Informativa privacy</a>
+              &nbsp;&middot;&nbsp;<a href="{{ mirror }}" style="color:#5b6469;text-decoration:underline;">Apri nel browser</a>
             </p>
           </td>
         </tr>

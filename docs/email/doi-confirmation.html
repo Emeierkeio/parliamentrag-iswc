@@ -1,72 +1,99 @@
 <!DOCTYPE html>
-<!-- Brevo double opt-in template (ID 2). Source of truth: edit here, then push
-     with the Brevo API (PUT /v3/smtp/templates/2). {{ doubleoptin }} is
-     replaced by Brevo with the confirmation link. Header image is served from
-     frontend/public/email/. Fraunces and Geist load only in clients that
-     accept web fonts (Apple Mail, iOS); Gmail and Outlook fall back to
-     Georgia and Helvetica. -->
+<!-- Brevo double opt-in template (ID 2), sent as "ParliamentRAG"
+     <news@parliamentrag.it> by every site of the family (www.parliamentrag.it,
+     www.fascicoli.it, www.stenografo.it): one list (4), one confirmation email.
+     Source of truth: edit here, then push with the Brevo API
+     (PUT /v3/smtp/templates/2). {{ doubleoptin }} is replaced by Brevo with the
+     confirmation link.
+     Style: "Resoconto" design system of www.parliamentrag.it (carta #f6f5f1,
+     inchiostro #12171a, blu #2d5f8f). The logo PNG is served by the centro repo
+     from public/email/logo-parliamentrag.png. Newsreader, Geist and Geist Mono
+     load only in clients that accept web fonts (Apple Mail, iOS); Gmail and
+     Outlook fall back to Georgia and Helvetica/Arial. -->
 <html lang="it" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>Conferma l'iscrizione a ParliamentRAG</title>
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
+<title>Conferma l'iscrizione alla newsletter di ParliamentRAG</title>
 <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
 <style>
-  body { margin: 0; padding: 0; background: #F6F2EC; }
-  .title { font-variation-settings: "opsz" 144; }
-  .url { font-variation-settings: "opsz" 24; }
-  @media (max-width: 600px) {
-    .card-pad { padding: 32px 24px !important; }
-    .title { font-size: 30px !important; line-height: 32px !important; }
+  :root { color-scheme: light only; supported-color-schemes: light only; }
+  body { margin: 0; padding: 0; background: #f6f5f1; -webkit-text-size-adjust: 100%; }
+  a { color: #2d5f8f; }
+  @media (max-width: 620px) {
+    .pad-x { padding-left: 16px !important; padding-right: 16px !important; }
+    .card-pad { padding: 28px 22px 30px 22px !important; }
+    .title { font-size: 32px !important; line-height: 36px !important; }
+    .btn a { display: block !important; text-align: center !important; }
+  }
+  @media (max-width: 420px) {
+    .hide-sm { display: none !important; }
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background:#F6F2EC;">
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F6F2EC;">Un clic per confermare.&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F6F2EC;">
+<body style="margin:0;padding:0;background:#f6f5f1;">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f6f5f1;">Un clic e sei dentro: novità su Camera e Senato.&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f6f5f1" style="background:#f6f5f1;">
   <tr>
-    <td align="center" style="padding:24px 12px 40px 12px;">
-      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;">
+    <td align="center" class="pad-x" style="padding:28px 24px 44px 24px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
 
+        <!-- Testata: marchio come nel sito, filetto scuro sotto -->
         <tr>
-          <td align="center" style="padding:0;">
-            <a href="https://www.parliamentrag.it" style="text-decoration:none;">
-              <img src="https://www.parliamentrag.it/email/header@2x.png" width="560" alt="ParliamentRAG" style="display:block;width:100%;max-width:560px;height:auto;border:0;font-family:Georgia,serif;font-size:26px;font-weight:600;color:#1B3A5C;text-align:center;">
-            </a>
+          <td style="padding:0 0 18px 0;border-bottom:1px solid #12171a;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="left" valign="middle">
+                  <a href="https://www.parliamentrag.it" style="text-decoration:none;">
+                    <img src="https://www.parliamentrag.it/email/logo-parliamentrag.png" width="200" height="35" alt="ParliamentRAG" style="display:block;width:200px;height:35px;border:0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:20px;font-weight:600;color:#12171a;">
+                  </a>
+                </td>
+                <td align="right" valign="middle" class="hide-sm" style="white-space:nowrap;font-family:'Geist Mono',Menlo,Consolas,monospace;font-size:11px;line-height:16px;letter-spacing:1px;text-transform:uppercase;color:#5b6469;">
+                  Newsletter
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
+        <tr><td style="height:28px;line-height:28px;font-size:0;">&nbsp;</td></tr>
+
         <tr>
-          <td style="background:#FFFFFF;border:1px solid #E4E0D8;border-radius:14px;">
+          <td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #dcdad2;border-radius:6px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td class="card-pad" style="padding:40px 44px 40px 44px;">
 
-                  <h1 class="title" style="margin:0;font-family:'Fraunces',Georgia,'Times New Roman',serif;font-weight:600;font-size:34px;line-height:37px;letter-spacing:0;color:#111827;">
-                    Conferma l'iscrizione<br><span style="color:#1B3A5C;">a ParliamentRAG</span>
-                  </h1>
-
-                  <p style="margin:20px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:25px;color:#111827;">
-                    Hai chiesto di ricevere novità e sondaggi di valutazione di ParliamentRAG. Conferma il tuo indirizzo per attivare l'iscrizione.
+                  <p style="margin:0;font-family:'Geist Mono',Menlo,Consolas,monospace;font-size:11px;line-height:16px;letter-spacing:1px;text-transform:uppercase;color:#5b6469;">
+                    Conferma l'iscrizione
                   </p>
 
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 0 0;">
+                  <h1 class="title" style="margin:14px 0 0 0;font-family:'Newsreader',Georgia,'Times New Roman',serif;font-weight:400;font-size:38px;line-height:42px;letter-spacing:-0.5px;color:#12171a;">
+                    Manca un clic per&nbsp;iscriverti.
+                  </h1>
+
+                  <p style="margin:20px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:25px;color:#353d42;">
+                    Hai lasciato questo indirizzo su un sito di ParliamentRAG. Confermalo e ti scriveremo quando arrivano dati nuovi su Camera e Senato, strumenti nuovi o un sondaggio a cui rispondere.
+                  </p>
+
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="btn" style="margin:28px 0 0 0;">
                     <tr>
-                      <td align="center" bgcolor="#1B3A5C" style="border-radius:10px;background:#1B3A5C;">
-                        <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ doubleoptin }}" style="height:50px;v-text-anchor:middle;width:240px;" arcsize="20%" stroke="f" fillcolor="#1B3A5C"><w:anchorlock/><center style="color:#FFFFFF;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;">Conferma iscrizione</center></v:roundrect><![endif]-->
+                      <td align="center" bgcolor="#2d5f8f" style="border-radius:999px;background:#2d5f8f;">
+                        <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{ doubleoptin }}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="50%" stroke="f" fillcolor="#2d5f8f"><w:anchorlock/><center style="color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;">Confermo l'iscrizione</center></v:roundrect><![endif]-->
                         <!--[if !mso]><!-->
-                        <a href="{{ doubleoptin }}" style="display:inline-block;padding:15px 30px;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:10px;">Conferma iscrizione</a>
+                        <a href="{{ doubleoptin }}" style="display:inline-block;padding:14px 30px;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:500;color:#ffffff;text-decoration:none;border-radius:999px;">Confermo l'iscrizione&nbsp;&nbsp;&rarr;</a>
                         <!--<![endif]-->
                       </td>
                     </tr>
                   </table>
 
-                  <p style="margin:28px 0 0 0;padding-top:20px;border-top:1px solid #E4E0D8;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#6B7280;">
-                    Se non hai chiesto tu l'iscrizione, ignora questa email e non riceverai altro.
+                  <p style="margin:30px 0 0 0;padding-top:18px;border-top:1px solid #dcdad2;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#5b6469;">
+                    Non hai chiesto tu l'iscrizione? Ignora questa email: senza conferma non riceverai altro.
                   </p>
 
                 </td>
@@ -76,11 +103,14 @@
         </tr>
 
         <tr>
-          <td align="center" style="padding:28px 24px 0 24px;">
-            <a href="https://www.parliamentrag.it" class="url" style="font-family:'Fraunces',Georgia,serif;font-weight:500;font-size:16px;line-height:22px;color:#1B3A5C;text-decoration:none;">www.parliamentrag.it</a>
-            <p style="margin:8px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#6B7280;">
-              Progetto di ricerca dell'Università di Milano-Bicocca.<br>
-              <a href="https://www.parliamentrag.it/privacy#newsletter" style="color:#6B7280;text-decoration:underline;">Informativa privacy</a>
+          <td align="left" style="padding:26px 2px 0 2px;">
+            <p style="margin:0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#5b6469;">
+              <strong style="font-weight:600;color:#353d42;">ParliamentRAG</strong>, progetto di ricerca dell'Università di Milano&#8209;Bicocca su Camera e Senato.<br>
+              Ricevi questa email perché qualcuno ha inserito il tuo indirizzo nel modulo di iscrizione di www.parliamentrag.it, www.fascicoli.it o www.stenografo.it.
+            </p>
+            <p style="margin:10px 0 0 0;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#5b6469;">
+              <a href="https://www.parliamentrag.it" style="color:#2d5f8f;text-decoration:underline;">www.parliamentrag.it</a>
+              &nbsp;&middot;&nbsp;<a href="https://www.parliamentrag.it/privacy#newsletter" style="color:#5b6469;text-decoration:underline;">Informativa privacy</a>
             </p>
           </td>
         </tr>
