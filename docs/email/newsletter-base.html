@@ -43,7 +43,7 @@
     <td align="center" class="pad-x" style="padding:28px 24px 44px 24px;">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
 
-        <!-- Testata: emiciclo dei seggi e marchio (public/email/intestazione@2x.png
+        <!-- Testata: marchio (public/email/intestazione@2x.png
              nel sito del centro, sorgente in scripts/email/intestazione.html) -->
         <tr>
           <td align="center" style="padding:0;">
@@ -53,9 +53,11 @@
           </td>
         </tr>
 
-        <tr><td style="height:28px;line-height:28px;font-size:0;">&nbsp;</td></tr>
-
+        <!-- Seggi dell'emiciclo dietro il riquadro (public/email/seggi@2x.png,
+             sorgente scripts/email/seggi.html); senza immagini resta la carta -->
         <tr>
+          <td background="https://www.parliamentrag.it/email/seggi@2x.png" bgcolor="#f6f5f1" valign="top" style="background:#f6f5f1 url('https://www.parliamentrag.it/email/seggi@2x.png') no-repeat center top;background-size:600px auto;padding:104px 30px 0 30px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
           <td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #dcdad2;border-radius:6px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
@@ -127,6 +129,7 @@
                 </td>
               </tr>
             </table>
+          </td></tr></table>
           </td>
         </tr>
 
