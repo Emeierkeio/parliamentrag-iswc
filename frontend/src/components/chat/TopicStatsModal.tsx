@@ -89,7 +89,9 @@ function buildSessionUrl(sessionNumber: number): string {
   return `https://www.camera.it/leg19/410?idSeduta=${padded}&tipo=stenografico#sed${padded}`;
 }
 
-function buildSpeechUrl(speechId: string): string | null {
+function buildSpeechUrl(speechId: string, url?: string | null): string | null {
+  // The backend sends the senato.it page of Senate speeches.
+  if (url) return url;
   if (!speechId) return null;
   if (speechId.startsWith("sen_")) return "https://www.senato.it/lavori/assemblea/resoconti-elenco-cronologico";
   const match = speechId.match(/leg\d+_sed(\d+)_(.+)/);
@@ -166,7 +168,7 @@ export function TopicStatsModal({
             <ScrollArea className="flex-1 h-0 [&_[data-radix-scroll-area-viewport]>div]:!block">
               <div className="px-6 py-4 space-y-2 w-full">
                 {stats.interventions_detail.map((intervention, i) => {
-                  const speechUrl = buildSpeechUrl(intervention.speech_id);
+                  const speechUrl = buildSpeechUrl(intervention.speech_id, intervention.url);
                   const Wrapper = speechUrl ? "a" : "div";
                   const wrapperProps = speechUrl
                     ? { href: speechUrl, target: "_blank" as const, rel: "noopener noreferrer", title: t("openIntervention") }
@@ -373,8 +375,8 @@ export function TopicStatsModal({
             <ScrollArea className="flex-1 h-0 [&_[data-radix-scroll-area-viewport]>div]:!block">
               <div className="px-6 py-4 space-y-2 w-full">
                 {stats.sessions_detail.map((session, i) => {
-                  const sessionUrl = (session as { chamber?: string }).chamber === "senato"
-                    ? "https://www.senato.it/lavori/assemblea/resoconti-elenco-cronologico"
+                  const sessionUrl = session.chamber === "senato"
+                    ? session.url || "https://www.senato.it/lavori/assemblea/resoconti-elenco-cronologico"
                     : buildSessionUrl(session.session_number);
                   return (
                     <a

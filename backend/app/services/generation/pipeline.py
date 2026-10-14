@@ -731,6 +731,8 @@ class GenerationPipeline:
                 continue
             seen_speeches[speech_id] = {
                 "speech_id": speech_id,
+                # Official page of the speech (Senate); None for the Camera.
+                "url": e.get("url"),
                 "speaker_id": e.get("speaker_id", ""),
                 "speaker_name": e.get("speaker_name", ""),
                 "party": e.get("party", ""),
@@ -757,6 +759,8 @@ class GenerationPipeline:
                 "session_number": sn,
                 "session_id": e.get("doc_id", ""),
                 "chamber": "senato" if str(e.get("doc_id", "")).startswith("sen_") else "camera",
+                # Sitting page on senato.it: the speech link without its anchor.
+                "url": (e.get("url") or "").split("&part=", 1)[0] or None,
                 "date": str(e.get("date", "")),
                 "debate_title": e.get("debate_title", ""),
             }

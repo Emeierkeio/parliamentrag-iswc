@@ -89,6 +89,10 @@ class UnifiedEvidence(BaseModel):
     doc_id: str = Field(description="Session ID")
     speech_id: str = Field(description="Speech ID")
     speaker_id: str = Field(description="Deputy or GovernmentMember ID")
+    # Official page of the speech, when the graph has one (Senate: the
+    # intervention on senato.it, or its sitting). None for the Camera, whose
+    # links the frontends build from speech_id.
+    url: Optional[str] = Field(default=None, description="Official URL of the speech")
 
     # Speaker info
     speaker_name: str = Field(description="Full speaker name")

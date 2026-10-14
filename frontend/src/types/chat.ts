@@ -23,6 +23,8 @@ export interface Citation {
   debate?: string;
   debate_id?: string;
   intervention_id?: string;
+  /** Pagina ufficiale dell'intervento (Senato); assente per la Camera */
+  url?: string | null;
   camera_profile_url?: string;
   photo?: string;
   translated_text?: string;
@@ -98,11 +100,16 @@ export interface InterventionDetail {
   date: string;
   debate_title: string;
   session_number: number;
+  /** Pagina ufficiale dell'intervento (Senato); assente per la Camera */
+  url?: string | null;
   photo?: string;
 }
 
 export interface SessionDetail {
   session_number: number;
+  chamber?: string;
+  /** Pagina della seduta su senato.it; assente per la Camera */
+  url?: string | null;
   date: string;
   debate_title: string;
 }

@@ -28,6 +28,8 @@ class EvidenceResponse(BaseModel):
     chunk_id: str
     speech_id: str
     doc_id: str
+    # Official page of the speech (Senate); None for the Camera.
+    url: Optional[str] = None
 
     # Speaker info
     speaker_id: str
@@ -100,6 +102,7 @@ async def get_evidence(
            c.text AS chunk_text,
            i.id AS speech_id,
            i.text AS text,
+           i.url AS url,
            speaker.id AS speaker_id,
            speaker.first_name AS first_name,
            speaker.last_name AS last_name,
@@ -156,6 +159,7 @@ async def get_evidence(
             chunk_id=data.get("chunk_id", evidence_id),
             speech_id=data.get("speech_id", ""),
             doc_id=data.get("doc_id", ""),
+            url=data.get("url"),
             speaker_id=data.get("speaker_id", ""),
             speaker_name=speaker_name,
             speaker_role=data.get("speaker_role", "Deputy"),

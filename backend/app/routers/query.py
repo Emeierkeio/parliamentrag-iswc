@@ -579,6 +579,7 @@ async def process_query_streaming(
                                c.text AS chunk_text,
                                i.id AS speech_id,
                                i.text AS text,
+                               i.url AS url,
                                speaker.id AS speaker_id,
                                speaker.first_name AS speaker_first_name,
                                speaker.last_name AS speaker_last_name,
@@ -625,6 +626,7 @@ async def process_query_streaming(
                         "chunk_text": row.get("chunk_text", ""),
                         "quote_text": row.get("chunk_text", ""),
                         "speech_id": row.get("speech_id", ""),
+                        "url": row.get("url"),
                         "speaker_id": row.get("speaker_id", ""),
                         "speaker_name": normalize_speaker_name(
                             row.get("speaker_first_name", ""),
@@ -1297,6 +1299,8 @@ def _build_citations_for_frontend(
             "similarity": round(e.get("similarity", 0), 2),
             "debate": e.get("debate_title", ""),
             "intervention_id": e.get("speech_id", ""),
+            # Official page of the speech (Senate); None for the Camera.
+            "url": e.get("url"),
             "camera_profile_url": _dep_info.get("url"),
             "photo": _dep_info.get("photo"),
         }
@@ -1386,6 +1390,8 @@ def _build_verified_citations(
             "span_end": cit.get("span_end", 0),
             "debate": evidence.get("debate_title", ""),
             "intervention_id": evidence.get("speech_id", ""),
+            # Official page of the speech (Senate); None for the Camera.
+            "url": evidence.get("url"),
             "camera_profile_url": _dep_info.get("url"),
             "photo": _dep_info.get("photo"),
             "verified": True,

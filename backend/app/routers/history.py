@@ -181,6 +181,33 @@ async def save_chat(chat: ChatHistoryItem) -> ChatHistoryItem:
         raise HTTPException(status_code=500, detail=f"Failed to save chat: {str(e)}")
 
 
+def _add_senate_links(client, citations: List[Dict[str, Any]], topic_stats: Optional[Dict[str, Any]]) -> None:
+    """Official links of Senate speeches in chats saved before the graph had
+    them: the url stored on the Speech (the intervention on senato.it)."""
+    items = [c for c in citations if isinstance(c, dict)]
+    items += [i for i in (topic_stats or {}).get("interventions_detail") or [] if isinstance(i, dict)]
+    pending = {
+        str(i.get("intervention_id") or i.get("speech_id")): i for i in items
+        if not i.get("url") and str(i.get("intervention_id") or i.get("speech_id") or "").startswith("sen_")
+    }
+    if not pending:
+        return
+    try:
+        rows = client.query(
+            "UNWIND $ids AS sid MATCH (i:Speech {id: sid}) WHERE i.url IS NOT NULL "
+            "RETURN i.id AS id, i.url AS url",
+            {"ids": list(pending)},
+        )
+    except Exception as e:
+        logger.warning(f"Senate links lookup failed: {e}")
+        return
+    urls = {r["id"]: r["url"] for r in rows}
+    for item in items:
+        sid = str(item.get("intervention_id") or item.get("speech_id") or "")
+        if not item.get("url") and sid in urls:
+            item["url"] = urls[sid]
+
+
 @router.get("/history/{chat_id}")
 async def get_chat(chat_id: str) -> Dict[str, Any]:
     """Get a specific chat session by ID."""
@@ -199,17 +226,20 @@ async def get_chat(chat_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Chat not found")
 
     r = result[0]
+    citations = json.loads(r["citations"]) if r.get("citations") else []
+    topic_stats = json.loads(r["topic_stats"]) if r.get("topic_stats") else None
+    _add_senate_links(client, citations, topic_stats)
     return {
         "id": r["id"],
         "query": r["query"],
         "answer": r["answer"],
         "timestamp": r["timestamp"],
-        "citations": json.loads(r["citations"]) if r.get("citations") else [],
+        "citations": citations,
         "experts": json.loads(r["experts"]) if r.get("experts") else [],
         "commissioni": json.loads(r["commissioni"]) if r.get("commissioni") else [],
         "balance": json.loads(r["balance"]) if r.get("balance") else None,
         "compass": json.loads(r["compass"]) if r.get("compass") else None,
-        "topic_stats": json.loads(r["topic_stats"]) if r.get("topic_stats") else None,
+        "topic_stats": topic_stats,
         "trace": json.loads(r["trace"]) if r.get("trace") else None,
         "baseline_answer": r.get("baseline_answer") or None,
         "ab_assignment": json.loads(r["ab_assignment"]) if r.get("ab_assignment") else None,

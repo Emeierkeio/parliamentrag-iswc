@@ -149,6 +149,7 @@ class DenseChannel:
                c.index AS chunk_index,
                i.id AS speech_id,
                i.text AS text,
+               i.url AS url,
                speaker.id AS speaker_id,
                speaker.first_name AS speaker_first_name,
                speaker.last_name AS speaker_last_name,
@@ -239,6 +240,9 @@ class DenseChannel:
                     "evidence_id": row.get("chunk_id", ""),
                     "doc_id": row.get("session_id", ""),
                     "speech_id": row.get("speech_id", ""),
+                    # senato.it link to the speech (Senate only; Camera links
+                    # are built by the frontends from the id)
+                    "url": row.get("url"),
                     "speaker_id": row.get("speaker_id", ""),
                     "speaker_name": normalize_speaker_name(row.get('speaker_first_name', ''), row.get('speaker_last_name', '')),
                     "speaker_role": row.get("speaker_type", "Deputy"),

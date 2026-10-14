@@ -15,6 +15,8 @@ export interface SearchResultItem {
   text: string;
   date: string;
   session_number: number | null;
+  /** Pagina ufficiale dell'intervento (Senato); assente per la Camera */
+  url?: string | null;
   debate_title: string | null;
   first_name: string;
   last_name: string;
@@ -309,9 +311,9 @@ function SpeechCard({
             <Calendar className="h-3 w-3" />
             {formatDate(item.date)}
           </div>
-          {item.session_number && (
+          {(item.url || item.session_number) && (
             <a
-              href={`https://www.camera.it/leg19/410?idSeduta=${item.session_number}&tipo=seduta`}
+              href={item.url || `https://www.camera.it/leg19/410?idSeduta=${item.session_number}&tipo=seduta`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-primary hover:underline flex items-center gap-1"

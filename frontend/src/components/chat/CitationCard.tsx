@@ -24,11 +24,13 @@ import { useTranslations } from "next-intl";
 import { config } from "@/config";
 import type { Citation } from "@/types";
 
+const SENATE_SITTINGS = "https://www.senato.it/lavori/assemblea/resoconti-elenco-cronologico";
+
 function getCameraUrl(id: string | undefined): string | null {
   if (!id) return null;
-  // Senate speeches (sen_leg19_...): a single sitting record needs an internal
-  // senato.it document id, so the link opens the list of sittings.
-  if (id.startsWith("sen_")) return "https://www.senato.it/lavori/assemblea/resoconti-elenco-cronologico";
+  // Senate ids carry no senato.it document id: without the url from the
+  // backend the link can only open the list of sittings.
+  if (id.startsWith("sen_")) return SENATE_SITTINGS;
   // Match legXX_sedY_... where Y is the seduta number
   // Example: leg19_sed2_tit00040
   // Example: leg19_sed3_tit00080.int00060
@@ -39,6 +41,17 @@ function getCameraUrl(id: string | undefined): string | null {
   const sedutaId = sedutaStr.padStart(4, '0');
   
   return `https://www.camera.it/leg19/410?idSeduta=${sedutaId}&tipo=stenografico#sed${sedutaId}.stenografico.${rest}`;
+}
+
+/** Link to the speech: the url from the backend (Senate) wins. */
+function getSpeechUrl(citation: Citation): string | null {
+  return citation.url || getCameraUrl(citation.intervention_id);
+}
+
+/** Link to the debate: for the Senate, the sitting page (speech url without its anchor). */
+function getContextUrl(citation: Citation): string | null {
+  if (citation.url) return citation.url.split("&part=")[0];
+  return getCameraUrl(citation.debate_id);
 }
 
 interface CitationCardProps {
@@ -142,9 +155,9 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
                     <p className="[font-family:var(--font-display)] italic text-sm text-muted-foreground line-clamp-2 mb-3 leading-relaxed break-words cursor-help">
                       &ldquo;{displayText}&rdquo;
                       <Globe className="inline h-3 w-3 ml-1 text-muted-foreground/50" />
-                      {getCameraUrl(citation.intervention_id || citation.intervention_id) && (
+                      {getSpeechUrl(citation) && (
                            <a
-                              href={getCameraUrl(citation.intervention_id || citation.intervention_id) || "#"}
+                              href={getSpeechUrl(citation) || "#"}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex align-middle ml-1 text-primary/60 hover:text-primary transition-colors"
@@ -164,9 +177,9 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
               ) : (
                 <p className="[font-family:var(--font-display)] italic text-sm text-muted-foreground line-clamp-2 mb-3 leading-relaxed break-words">
                   &ldquo;{displayText}&rdquo;
-                  {getCameraUrl(citation.intervention_id || citation.intervention_id) && (
+                  {getSpeechUrl(citation) && (
                        <a
-                          href={getCameraUrl(citation.intervention_id || citation.intervention_id) || "#"}
+                          href={getSpeechUrl(citation) || "#"}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex align-middle ml-1 text-primary/60 hover:text-primary transition-colors"
@@ -188,9 +201,9 @@ export function CitationCard({ citation, index, className, isHighlighted }: Cita
                 {citation.debate && (
                   <span className="flex items-center gap-1 min-w-0 flex-wrap max-w-full">
                     <MapPin className="h-3 w-3 shrink-0" />
-                    {getCameraUrl(citation.debate_id || citation.debate_id) ? (
+                    {getContextUrl(citation) ? (
                         <a 
-                            href={getCameraUrl(citation.debate_id || citation.debate_id) || "#"}
+                            href={getContextUrl(citation) || "#"}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:underline hover:text-foreground cursor-pointer transition-colors break-words"
@@ -292,8 +305,8 @@ function CitationModal({ citation, isOpen, onClose }: CitationModalProps) {
   }, [isOpen]);
   const displayText = displayFullText;
 
-  const contextUrl = getCameraUrl(citation.debate_id || citation.debate_id);
-  const interventionUrl = getCameraUrl(citation.intervention_id || citation.intervention_id);
+  const contextUrl = getContextUrl(citation);
+  const interventionUrl = getSpeechUrl(citation);
 
   // Highlighting logic: only highlight if we have a specific quote_text that differs from full_text
   // Don't try to highlight the entire chunk - it doesn't make sense

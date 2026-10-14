@@ -33,6 +33,8 @@ interface SpeechDetail {
   type: "speech";
   id: string;
   speech_id: string;
+  /** Pagina ufficiale dell'intervento (Senato); assente per la Camera */
+  url?: string | null;
   full_text: string;
   chunk_text: string;
   date: string;
@@ -215,9 +217,9 @@ function SpeechDetailContent({
               {formatDate(detail.date, locale)}
             </div>
           )}
-          {detail.session_number && (
+          {(detail.url || detail.session_number) && (
             <a
-              href={`https://www.camera.it/leg19/410?idSeduta=${detail.session_number}&tipo=seduta`}
+              href={detail.url || `https://www.camera.it/leg19/410?idSeduta=${detail.session_number}&tipo=seduta`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-primary hover:underline flex items-center gap-1"
