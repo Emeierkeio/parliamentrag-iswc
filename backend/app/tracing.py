@@ -49,10 +49,11 @@ def init_tracing() -> bool:
     os.environ.setdefault("LANGSMITH_API_KEY", api_key)
     os.environ.setdefault("LANGSMITH_TRACING", "true")
     os.environ.setdefault("LANGSMITH_PROJECT", settings.langsmith_project)
+    os.environ.setdefault("LANGSMITH_ENDPOINT", settings.langsmith_endpoint)
     _enabled = True
     logger.info(
-        "LangSmith tracing attivo (project=%s)",
-        os.environ["LANGSMITH_PROJECT"],
+        "LangSmith tracing attivo (project=%s, endpoint=%s)",
+        os.environ["LANGSMITH_PROJECT"], os.environ["LANGSMITH_ENDPOINT"],
     )
     return True
 

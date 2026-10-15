@@ -66,6 +66,11 @@ class Settings(BaseSettings):
         default="parliamentrag",
         description="LangSmith project name"
     )
+    # EU instance (decision 2026-10-15): traces stay in the EU.
+    langsmith_endpoint: str = Field(
+        default="https://eu.api.smith.langchain.com",
+        description="LangSmith API endpoint"
+    )
 
     # Brevo mailing list (newsletter opt-in is hidden when the key is empty)
     brevo_api_key: str = Field(default="", description="Brevo API key")
