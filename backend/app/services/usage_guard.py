@@ -13,6 +13,9 @@ the rest of the site keeps working. Limits are env-tunable:
     QUERY_LIMIT_PER_HOUR  (default 6)
     QUERY_LIMIT_PER_DAY   (default 20)
     QUOTA_RETRY_SECONDS   (default 1800)
+    QUERY_EVENT           "2026-10-24..2026-10-30:60:300" raises the hourly
+                          and daily limits on those days (Europe/Rome), for
+                          a live demo where everyone shares the venue's IP
 
 Counters are in-memory per worker: they reset on redeploy, which is fine —
 this is abuse protection, not accounting.
@@ -22,11 +25,33 @@ from __future__ import annotations
 import os
 import threading
 import time
+from datetime import date, datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 QUERY_LIMIT_PER_HOUR = int(os.environ.get("QUERY_LIMIT_PER_HOUR", "6"))
 QUERY_LIMIT_PER_DAY = int(os.environ.get("QUERY_LIMIT_PER_DAY", "20"))
 QUOTA_RETRY_SECONDS = int(os.environ.get("QUOTA_RETRY_SECONDS", "1800"))
+
+
+def _parse_event(raw: str) -> Optional[tuple[date, date, int, int]]:
+    try:
+        days, per_hour, per_day = raw.strip().split(":")
+        first, last = days.split("..")
+        return date.fromisoformat(first), date.fromisoformat(last), int(per_hour), int(per_day)
+    except ValueError:
+        return None
+
+
+_EVENT = _parse_event(os.environ.get("QUERY_EVENT", ""))
+
+
+def limits(today: Optional[date] = None) -> tuple[int, int]:
+    """(per hour, per day): the event limits on the event days, else the usual ones."""
+    today = today or datetime.now(ZoneInfo("Europe/Rome")).date()
+    if _EVENT and _EVENT[0] <= today <= _EVENT[1]:
+        return _EVENT[2], _EVENT[3]
+    return QUERY_LIMIT_PER_HOUR, QUERY_LIMIT_PER_DAY
 
 _lock = threading.Lock()
 _hits: dict[str, list[float]] = {}
@@ -51,14 +76,15 @@ def check_and_register(ip: str) -> tuple[bool, str, int]:
     "daily" when blocked.
     """
     now = time.time()
+    per_hour, per_day = limits()
     with _lock:
         hits = [t for t in _hits.get(ip, []) if now - t < 86400]
         hour_hits = [t for t in hits if now - t < 3600]
-        if len(hits) >= QUERY_LIMIT_PER_DAY:
+        if len(hits) >= per_day:
             retry_min = int((86400 - (now - min(hits))) // 60) + 1 if hits else 1440
             _hits[ip] = hits
             return False, "daily", retry_min
-        if len(hour_hits) >= QUERY_LIMIT_PER_HOUR:
+        if len(hour_hits) >= per_hour:
             retry_min = int((3600 - (now - min(hour_hits))) // 60) + 1 if hour_hits else 60
             _hits[ip] = hits
             return False, "hourly", retry_min
@@ -131,5 +157,5 @@ _MESSAGES: dict[str, dict[str, str]] = {
 def block_message(kind: str, locale: str, retry_minutes: int = 0) -> str:
     msgs = _MESSAGES[kind]
     text = msgs.get(locale, msgs["en"])
-    n = QUERY_LIMIT_PER_HOUR if kind == "hourly" else QUERY_LIMIT_PER_DAY
+    n = limits()[0] if kind == "hourly" else limits()[1]
     return text.format(n=n, m=max(1, retry_minutes))
