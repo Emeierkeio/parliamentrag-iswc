@@ -64,6 +64,10 @@ senato_step() {
 }
 senato_step "voti aggregati (sedute nuove e ultimi 30 giorni)" votes --aggregate-only
 senato_step "voti individuali (votazioni che non li hanno ancora)" votes --individual-only
+senato_step "motivo dell'assenza (votazioni caricate prima: missione, presente non votante)" votes --reasons-only
+# Offline: i senatori in carica che la fonte non nomina in una votazione.
+step "assenti nelle votazioni" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/senate_absent.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
 step "interrogazioni, mozioni, ordini del giorno (aic.camera.it)" \
 	"$PY" build/download_senate_aic.py --legislature 19
 step "atti di controllo e indirizzo → grafo" env NEO4J_PASSWORD="$PASS_VAL" \
@@ -87,6 +91,27 @@ if [ -n "$ARCHIVE_VAL" ]; then
 	step "testo e vettori → archivio Postgres" archive load
 	step "oratori e gruppi riallineati nell'archivio" archive meta
 	step "testo e vettori archiviati tolti dal grafo" archive strip
+fi
+
+# Riassunti delle sedute nuove: come per la Camera si parte dalla frontiera
+# (data più recente del Senato con recap) e non si recupera l'arretrato.
+# Il testo lo legge dall'archivio Postgres, quindi gira dopo lo strip.
+OPENAI_VAL="${OPENAI_API_KEY:-$(grep '^OPENAI_API_KEY=' .env | cut -d= -f2-)}"
+SUM_FRONTIER=$(env NEO4J_PASSWORD="$PASS_VAL" "$PY" -c '
+import os, sys
+from neo4j import GraphDatabase
+d = GraphDatabase.driver(sys.argv[1], auth=(sys.argv[2], os.environ["NEO4J_PASSWORD"]))
+m = d.execute_query("MATCH (n:Session {chamber: \"senato\"}) WHERE n.recapIt IS NOT NULL "
+                    "RETURN toString(max(n.date)) AS m").records[0]["m"]
+print(m or "")
+d.close()' "$URI" "$USER_VAL" 2>/dev/null)
+if [ -z "$OPENAI_VAL" ] || [ -z "$SUM_FRONTIER" ]; then
+	echo "── Senato: riassunti saltati (manca OPENAI_API_KEY o nessuna seduta ha un recap)"
+else
+	step "riassunti delle sedute dal $SUM_FRONTIER" env OPENAI_API_KEY="$OPENAI_VAL" \
+		ARCHIVE_URL="$ARCHIVE_VAL" NEO4J_PASSWORD="$PASS_VAL" \
+		"$PY" build/generate_summaries.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" \
+		--from-date "$SUM_FRONTIER" --chamber senato
 fi
 
 # Link al singolo intervento su senato.it: la pagina della seduta per tutti,

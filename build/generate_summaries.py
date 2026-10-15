@@ -144,6 +144,7 @@ class SummaryGenerator:
         date_filter: Optional[str] = None,
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
+        chamber: Optional[str] = None,
     ) -> None:
         self._driver = driver
         self._client = openai_client
@@ -151,6 +152,7 @@ class SummaryGenerator:
         self._date_filter = date_filter  # YYYY-MM-DD or None
         self._from_date = from_date      # YYYY-MM-DD or None
         self._to_date = to_date          # YYYY-MM-DD or None
+        self._chamber = chamber          # 'camera' | 'senato' | None (both)
 
     # ------------------------------------------------------------------
     # Public API
@@ -418,18 +420,20 @@ class SummaryGenerator:
             cypher = """
 MATCH (s:Session)
 WHERE toString(s.date) = $target_date
+  AND ($chamber IS NULL OR coalesce(s.chamber, 'camera') = $chamber)
 RETURN s.id AS id, s.date AS date
 ORDER BY s.date
 """
             with self._driver.session() as neo_session:
-                result = neo_session.run(cypher, target_date=self._date_filter)
+                result = neo_session.run(cypher, target_date=self._date_filter, chamber=self._chamber)
                 return [{"id": r["id"], "date": r["date"]} for r in result]
         elif self._from_date or self._to_date:
             # Unlike --date, range mode stays incremental: sessions that already
             # have a recap are skipped, so re-running over the same range only
             # fills the gaps instead of regenerating (and re-paying) everything.
-            clauses = ["s.recapIt IS NULL"]
-            params: dict = {}
+            clauses = ["s.recapIt IS NULL",
+                       "($chamber IS NULL OR coalesce(s.chamber, 'camera') = $chamber)"]
+            params: dict = {"chamber": self._chamber}
             if self._from_date:
                 clauses.append("s.date >= date($from_date)")
                 params["from_date"] = self._from_date
@@ -450,11 +454,12 @@ ORDER BY s.date
             cypher = """
 MATCH (s:Session)
 WHERE s.recapIt IS NULL
+  AND ($chamber IS NULL OR coalesce(s.chamber, 'camera') = $chamber)
 RETURN s.id AS id, s.date AS date
 ORDER BY s.date
 """
             with self._driver.session() as neo_session:
-                result = neo_session.run(cypher)
+                result = neo_session.run(cypher, chamber=self._chamber)
                 return [{"id": r["id"], "date": r["date"]} for r in result]
 
     def _fetch_debates_for_session(self, session_id: str) -> list[dict]:
@@ -652,6 +657,12 @@ if __name__ == "__main__":
         default=None,
         help="Generate summaries only for this date (YYYY-MM-DD). Overwrites existing summaries for that date.",
     )
+    parser.add_argument(
+        "--chamber",
+        choices=["camera", "senato"],
+        default=None,
+        help="Only sessions of this chamber (default: both)",
+    )
     args = parser.parse_args()
 
     # Validate dependencies
@@ -704,6 +715,7 @@ if __name__ == "__main__":
         date_filter=args.date,
         from_date=args.from_date,
         to_date=args.to_date,
+        chamber=args.chamber,
     )
 
     try:

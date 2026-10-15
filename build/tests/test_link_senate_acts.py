@@ -93,3 +93,57 @@ def test_three_part_and_sub_amendment_keys():
     assert vote_keys("Em. 18.0.6, Patton e altri") == {"item:18.0.6"}
     assert vote_keys("Em. 5.0.100/102, Cataldi") == {"item:5.0.100/102"}
     assert vote_keys("dell'emendamento 3-bis.0.106, presentato") == {"item:3-bis.0.106"}
+
+
+# --- initiative and presenters (decision D3) ---
+
+from link_senate_acts import deputy_persona, government_on, initiative_of, match_minister  # noqa: E402
+
+MELONI_I = [
+    {"id": "gov_nordio_carlo", "first_name": "CARLO", "last_name": "NORDIO"},
+    {"id": "p_meloni", "first_name": "GIORGIA", "last_name": "MELONI"},
+    {"id": "p_pichetto", "first_name": "GILBERTO", "last_name": "PICHETTO FRATIN"},
+    {"id": "p_santanche", "first_name": "DANIELA", "last_name": "GARNERO SANTANCHE'"},
+]
+
+
+def test_initiative_of():
+    assert initiative_of({"Governativa"}) == "governo"
+    assert initiative_of({"Parlamentare", "Governativa"}) == "mista"
+    assert initiative_of({"CNEL"}) == "cnel"
+    assert initiative_of(set()) is None
+
+
+def test_minister_matched_by_name_in_presenter_string():
+    assert match_minister("Ministro della giustizia Carlo Nordio (Gov. Meloni-I)", MELONI_I) == "gov_nordio_carlo"
+    assert match_minister("Pres. Consiglio Giorgia Meloni (Gov. Meloni-I)", MELONI_I) == "p_meloni"
+    assert match_minister("Ministro dell'ambiente e sicurezza energetica Gilberto Pichetto Fratin "
+                          "(Gov. Meloni-I)", MELONI_I) == "p_pichetto"
+    assert match_minister("Ministro del turismo Daniela Garnero Santanchè (Gov. Meloni-I)", MELONI_I) == "p_santanche"
+
+
+def test_minister_not_in_government_is_none():
+    assert match_minister("Ministro dell'interno Matteo Piantedosi (Gov. Meloni-I)", MELONI_I) is None
+
+
+def test_deputy_persona_and_government_on():
+    assert deputy_persona("http://dati.camera.it/ocd/deputato.rdf/d302838_19") == \
+        "http://dati.camera.it/ocd/persona.rdf/p302838"
+    assert deputy_persona("") is None
+    govs = [{"id": "draghi_1", "start": "2021-02-12", "end": "2022-10-21"},
+            {"id": "meloni_1", "start": "2022-10-21", "end": None}]
+    assert government_on(govs, "2022-10-20")["id"] == "draghi_1"
+    assert government_on(govs, "2022-10-21")["id"] == "meloni_1"
+
+
+def test_official_vote_acts_keeps_senate_bills_only():
+    from link_senate_acts import official_vote_acts
+    rows = pd.DataFrame({
+        "votazione": ["http://dati.senato.it/votazione/19-27-5", "http://dati.senato.it/votazione/19-27-5",
+                      "http://dati.senato.it/votazione/19-213-140"],
+        "atto": ["http://dati.senato.it/ddl/1", "http://dati.senato.it/documento/9",
+                 "http://dati.senato.it/ddl/2"],
+    })
+    out = official_vote_acts(rows, {"http://dati.senato.it/ddl/1", "http://dati.senato.it/ddl/2"})
+    assert out == {"senato_leg19_sed027_v005": ["http://dati.senato.it/ddl/1"],
+                   "senato_leg19_sed213_v140": ["http://dati.senato.it/ddl/2"]}

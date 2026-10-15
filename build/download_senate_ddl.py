@@ -3,8 +3,14 @@
 Download the Senate bills (osr:Ddl) of a legislature and their signatories.
 
 Produces:
-  - data/senato_{roman}_ddl.csv            one row per Ddl (a bill's passage in the Senate)
-  - data/senato_{roman}_ddl_firmatari.csv  one row per (Ddl, senator)
+  - data/senato_{roman}_ddl.csv               one row per Ddl (a bill's passage in the Senate)
+  - data/senato_{roman}_ddl_firmatari.csv     one row per (Ddl, senator)
+  - data/senato_{roman}_ddl_presentatori.csv  one row per presenter who is not a
+    senator, Senate branch only: ministers (a string, "Ministro della giustizia
+    Carlo Nordio (Gov. Meloni-I)"), deputies (ocd:rif_deputato), regions, CNEL,
+    popular initiative
+  - data/senato_{roman}_voti_atti.csv         one row per (votazione, act) from
+    osr:oggetto -> osr:OggettoTrattazione -> osr:relativoA
 
 Each Ddl URI is one "fase": a bill read twice in the Senate has two
 (S.1468, S.1468-B), sharing idDdl. Signatories come from osr:iniziativa,
@@ -42,7 +48,7 @@ def _value(binding: dict, key: str) -> str:
 
 def download_ddl(legislature: int) -> list[dict]:
     query = PREFIX + f"""
-SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo WHERE {{
+SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo ?descr WHERE {{
   ?ddl a osr:Ddl ; osr:legislatura {legislature} ;
        osr:idDdl ?idDdl ; osr:numeroFase ?numero .
   OPTIONAL {{ ?ddl osr:titolo ?titolo }}
@@ -50,6 +56,7 @@ SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo WHERE {{
   OPTIONAL {{ ?ddl osr:natura ?natura }}
   OPTIONAL {{ ?ddl osr:statoDdl ?stato }}
   OPTIONAL {{ ?ddl osr:ramo ?ramo }}
+  OPTIONAL {{ ?ddl osr:descrIniziativa ?descr }}
 }}
 """
     rows = _senato_sparql_get(query, strict=True)
@@ -68,6 +75,7 @@ SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo WHERE {{
             "natura": _value(b, "natura"),
             "stato": _value(b, "stato"),
             "ramo": _value(b, "ramo"),
+            "descrIniziativa": _value(b, "descr"),
         })
     return list(seen.values())
 
@@ -75,11 +83,12 @@ SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo WHERE {{
 def _signers_query(legislature: int, lo: int, hi: int) -> str:
     # numeroFase is a string ("1468", "1468-B"): the integer prefix selects the range
     return PREFIX + f"""
-SELECT ?ddl ?senatore ?primo WHERE {{
+SELECT ?ddl ?senatore ?primo ?tipo WHERE {{
   ?ddl a osr:Ddl ; osr:legislatura {legislature} ; osr:numeroFase ?numero ;
        osr:iniziativa ?i .
   ?i osr:senatore ?senatore .
   OPTIONAL {{ ?i osr:primoFirmatario ?primo }}
+  OPTIONAL {{ ?i osr:tipoIniziativa ?tipo }}
   FILTER(xsd:integer(?numero) >= {lo} && xsd:integer(?numero) < {hi})
 }}
 """
@@ -101,7 +110,65 @@ def download_signers(legislature: int, max_number: int) -> list[dict]:
                 "ddl": _value(b, "ddl"),
                 "senatore": _value(b, "senatore"),
                 "primoFirmatario": "1" if _value(b, "primo") in ("1", "true") else "0",
+                "tipo": _value(b, "tipo"),
             })
+    return out
+
+
+def download_presenters(legislature: int) -> list[dict]:
+    """Presenters with no osr:senatore, Senate branch only (~2,000 rows in
+    the XIX: 1,690 ministers on 349 government bills, deputies on bills
+    passed by the Camera, regions, CNEL, popular initiative)."""
+    query = PREFIX + f"""
+SELECT ?ddl ?pres ?tipo ?dep ?primo WHERE {{
+  ?ddl a osr:Ddl ; osr:legislatura {legislature} ; osr:ramo ?r ; osr:iniziativa ?i .
+  FILTER(str(?r) = "S")
+  ?i osr:tipoIniziativa ?tipo ; osr:presentatore ?pres .
+  OPTIONAL {{ ?i osr:senatore ?sen }}
+  FILTER(!bound(?sen))
+  OPTIONAL {{ ?i <http://dati.camera.it/ocd/rif_deputato> ?dep }}
+  OPTIONAL {{ ?i osr:primoFirmatario ?primo }}
+}}
+"""
+    rows = _senato_sparql_get(query, strict=True)
+    if len(rows) >= ROW_CAP:
+        raise RuntimeError("Presenter list hit the endpoint's row cap: split the query")
+    return [{
+        "ddl": _value(b, "ddl"),
+        "presentatore": " ".join(_value(b, "pres").split()),
+        "tipo": _value(b, "tipo"),
+        "deputato": _value(b, "dep"),
+        "primoFirmatario": "1" if _value(b, "primo") in ("1", "true") else "0",
+    } for b in rows]
+
+
+# Sittings per vote-object request: ~18 votazioni per sitting, some objects
+# relate to several acts; a range that hits the cap is split.
+SITTING_STEP = 120
+
+
+def download_vote_objects(legislature: int, max_sitting: int = 1000) -> list[dict]:
+    """The act each votazione is about, as the Senate records it (audit
+    14/10/2026: 7,769 votazioni of the XIX to a Ddl, 727 to a Documento)."""
+    out: list[dict] = []
+    ranges = [(lo, lo + SITTING_STEP) for lo in range(0, max_sitting + 1, SITTING_STEP)]
+    while ranges:
+        lo, hi = ranges.pop(0)
+        rows = _senato_sparql_get(PREFIX + f"""
+SELECT ?v ?atto WHERE {{
+  ?v a osr:Votazione ; osr:legislatura {legislature} ; osr:seduta ?s ; osr:oggetto ?o .
+  ?s osr:numeroSeduta ?n .
+  FILTER(xsd:integer(?n) >= {lo} && xsd:integer(?n) < {hi})
+  ?o osr:relativoA ?atto .
+}}
+""", strict=True)
+        if len(rows) >= ROW_CAP and hi - lo > 1:
+            mid = (lo + hi) // 2
+            ranges[:0] = [(lo, mid), (mid, hi)]
+            continue
+        if rows:
+            logger.info("  sittings %d-%d: %d vote objects", lo, hi - 1, len(rows))
+        out += [{"votazione": _value(b, "v"), "atto": _value(b, "atto")} for b in rows]
     return out
 
 
@@ -132,11 +199,17 @@ def main() -> int:
 
     ddl = download_ddl(args.legislature)
     write_csv(os.path.join(DATA_DIR, f"senato_{roman}_ddl.csv"), ddl,
-              ["ddl", "idDdl", "numero", "titolo", "dataPresentazione", "natura", "stato", "ramo"])
+              ["ddl", "idDdl", "numero", "titolo", "dataPresentazione", "natura", "stato", "ramo",
+               "descrIniziativa"])
     max_number = max((_number_prefix(d["numero"]) for d in ddl), default=0)
     signers = download_signers(args.legislature, max_number)
     write_csv(os.path.join(DATA_DIR, f"senato_{roman}_ddl_firmatari.csv"), signers,
-              ["ddl", "senatore", "primoFirmatario"])
+              ["ddl", "senatore", "primoFirmatario", "tipo"])
+    write_csv(os.path.join(DATA_DIR, f"senato_{roman}_ddl_presentatori.csv"),
+              download_presenters(args.legislature),
+              ["ddl", "presentatore", "tipo", "deputato", "primoFirmatario"])
+    write_csv(os.path.join(DATA_DIR, f"senato_{roman}_voti_atti.csv"),
+              download_vote_objects(args.legislature), ["votazione", "atto"])
     return 0
 
 

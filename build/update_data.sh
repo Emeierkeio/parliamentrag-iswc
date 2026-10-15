@@ -134,6 +134,8 @@ run "Repair speaker links" "$PY" "$BACKEND_DIR/scripts/repair_speaker_links.py" 
 # Il DB ha un backlog storico di sessioni senza recap (646 al 2026-07) che NON
 # va backfillato: si parte dalla frontiera (data più recente con recap) e
 # generate_summaries.py --from-date salta le sessioni già coperte (idempotente).
+# Solo Camera: il Senato ha la sua frontiera in update_senato.sh, perché le sue
+# sedute arrivano più tardi nel giro e una frontiera comune le scavalcherebbe.
 # Gira PRIMA del replay locale così sync_local_snapshot.py copia anche i recap.
 if [ -z "$OPENAI_KEY_VAL" ]; then
 	warn "OPENAI_API_KEY not found in .env — summaries skipped."
@@ -142,7 +144,8 @@ else
 from neo4j import GraphDatabase
 d = GraphDatabase.driver(os.environ["NEO4J_TARGET"], auth=("neo4j", os.environ["NEO4J_PASSWORD"]))
 with d.session() as s:
-    m = s.run("MATCH (n:Session) WHERE n.recapIt IS NOT NULL RETURN toString(max(n.date)) AS m").single()["m"]
+    m = s.run("MATCH (n:Session) WHERE n.recapIt IS NOT NULL AND coalesce(n.chamber, \"camera\") = \"camera\" "
+              "RETURN toString(max(n.date)) AS m").single()["m"]
 print(m or "")
 d.close()')
 	if [ -z "$FRONTIER" ]; then
@@ -151,7 +154,7 @@ d.close()')
 		gen_summaries() {
 			OPENAI_API_KEY="$OPENAI_KEY_VAL" "$PY" build/generate_summaries.py \
 				--neo4j-uri "$DEMO_NEO4J" --neo4j-user neo4j --neo4j-password "$NEO4J_PASS_VAL" \
-				--from-date "$FRONTIER"
+				--from-date "$FRONTIER" --chamber camera
 		}
 		run "AI summaries (frontiera: $FRONTIER)" gen_summaries || die
 	fi

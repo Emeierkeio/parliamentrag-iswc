@@ -35,7 +35,8 @@ READ_INDIVIDUAL = """
 UNWIND $vote_ids AS vid
 MATCH (v:Vote {id: vid})<-[:ON_VOTE]-(iv:IndividualVote)
 OPTIONAL MATCH (p:Person)-[:VOTED]->(iv)
-RETURN vid AS vote_id, iv.id AS id, iv.outcome AS outcome, p.senato_id AS senato_id, p.id AS person_id
+RETURN vid AS vote_id, iv.id AS id, iv.outcome AS outcome, iv.reason AS reason,
+       p.senato_id AS senato_id, p.id AS person_id
 """
 
 WRITE_VOTES = """
@@ -50,7 +51,7 @@ WRITE_INDIVIDUAL = """
 UNWIND $rows AS row
 MATCH (v:Vote {id: row.vote_id})
 MERGE (iv:IndividualVote {id: row.id})
-SET iv.outcome = row.outcome
+SET iv.outcome = row.outcome, iv.reason = row.reason
 MERGE (iv)-[:ON_VOTE]->(v)
 WITH iv, row
 OPTIONAL MATCH (bySenate:Person {senato_id: row.senato_id})

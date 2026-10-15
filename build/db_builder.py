@@ -171,6 +171,13 @@ _GOV_NAME_SPLITS = {
 }
 
 
+# Names that dati.camera.it gets wrong in the government composition, by persona
+# URI: (nome, cognome). The Senate has "Maria Elisabetta Alberti" / "Casellati".
+_GOV_OFFICIAL_NAME_FIXES = {
+    "http://dati.camera.it/ocd/persona.rdf/p200012": ("MARIA ELISABETTA", "ALBERTI CASELLATI"),
+}
+
+
 def _split_gov_full_name(full_name: str, dep_df=None) -> tuple[str, str]:
     """Split di una chiave GOVERNMENT_GROUPS "COGNOME NOME" in (cognome, nome).
 
@@ -1497,6 +1504,9 @@ class DatabaseBuilder:
               .drop_duplicates("persona", keep="last")[["persona", "nome", "cognome"]]
               .to_dict("records")
         )
+        for person in people:
+            if person["persona"] in _GOV_OFFICIAL_NAME_FIXES:
+                person["nome"], person["cognome"] = _GOV_OFFICIAL_NAME_FIXES[person["persona"]]
         offices = [{
             "uri": r["membro"],
             "persona": r["persona"],

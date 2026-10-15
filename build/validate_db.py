@@ -153,6 +153,36 @@ class Validator:
         self.check(diff == 0, f"voti individuali coerenti con gli aggregati ({tot} votazioni)",
                    f"{diff} votazioni con conteggi diversi", warn_only=diff <= tot * 0.01)
 
+        # build/senate_absent.py: who is in office and not named is absent,
+        # so those on leave are a subset of the absent.
+        rows = self.q("""
+            MATCH (s:Session {chamber: 'senato'})-[:HAS_VOTE]->(v:Vote)<-[:ON_VOTE]-(iv:IndividualVote)
+            WITH v, sum(CASE iv.outcome WHEN 'absent' THEN 1 ELSE 0 END) AS ab
+            WHERE ab < coalesce(v.onMission, 0)
+            RETURN count(v) AS c, collect(v.id)[..3] AS ids
+        """)
+        self.check(rows[0]["c"] == 0, "votazioni del Senato con gli assenti (almeno quelli in missione)",
+                   f"{rows[0]['c']} senza: {rows[0]['ids']} (build/senate_absent.py)")
+
+        # Decision D3 (15/10/2026): every Senate bill says who presented it.
+        rows = self.q("""
+            MATCH (a:ParliamentaryAct {chamber: 'senato', type: 'Disegno di legge'})
+            RETURN count(a) AS tot,
+                   sum(CASE WHEN a.initiative IS NULL THEN 1 ELSE 0 END) AS no_init,
+                   sum(CASE WHEN a.initiative IN ['governo', 'mista']
+                             AND NOT (a)-[:PRESENTED_BY]->(:Government) THEN 1 ELSE 0 END) AS gov_no_pres,
+                   sum(CASE WHEN NOT ()-[:PRIMARY_SIGNATORY|CO_SIGNATORY|PRESENTED]->(a)
+                             AND NOT coalesce(a.initiative, '') IN ['regionale', 'cnel', 'popolare']
+                        THEN 1 ELSE 0 END) AS nobody
+        """)
+        r = rows[0]
+        self.check(r["no_init"] == 0, f"ddl del Senato con l'iniziativa ({r['tot']})",
+                   f"{r['no_init']} senza (download_senate_ddl.py + link_senate_acts.py)")
+        self.check(r["gov_no_pres"] == 0, "ddl del governo con PRESENTED_BY",
+                   f"{r['gov_no_pres']} senza")
+        self.check(r["nobody"] == 0, "ddl del Senato con firmatari o presentatori",
+                   f"{r['nobody']} senza nessuno")
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""

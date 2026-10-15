@@ -291,7 +291,7 @@ class TestSenatorLinksBulk:
     def test_groups_rows_by_votazione_and_outcome(self):
         v1, v2 = (f"http://dati.senato.it/votazione/19-300-{n}" for n in (1, 2))
         rows = [_row(v1, "favorevole", "s/1"), _row(v1, "astenuto", "s/2"),
-                _row(v2, "contrario", "s/1")]
+                _row(v1, "inCongedoMissione", "s/3"), _row(v2, "contrario", "s/1")]
         seduta = "http://dati.senato.it/sedutaassemblea/24207"
         with patch("senate_sparql_ingester._senato_sparql_get", return_value=rows) as get:
             links = SenateVoteIngester(None)._get_senate_senator_links_bulk([(seduta, 1, 2)])
@@ -299,8 +299,18 @@ class TestSenatorLinksBulk:
         assert get.call_args.kwargs["strict"] is True
         query = get.call_args.args[0]
         assert f"?v osr:seduta <{seduta}>" in query and "?n >= 1 && ?n <= 2" in query
-        assert links[v1] == {"favor": ["s/1"], "against": [], "abstain": ["s/2"]}
-        assert links[v2]["against"] == ["s/1"]
+        assert "?p = osr:inCongedoMissione" in query and "?p = osr:presenteNonVotante" in query
+        assert links[v1] == {("favor", None): ["s/1"], ("abstain", None): ["s/2"],
+                             ("absent", "mission"): ["s/3"]}
+        assert links[v2] == {("against", None): ["s/1"]}
+
+    def test_reasons_only_asks_two_predicates(self):
+        from senate_sparql_ingester import REASON_PREDICATES
+        seduta = "http://dati.senato.it/sedutaassemblea/24207"
+        with patch("senate_sparql_ingester._senato_sparql_get", return_value=[]) as get:
+            SenateVoteIngester(None)._get_senate_senator_links_bulk([(seduta, 1, 2)], REASON_PREDICATES)
+        query = get.call_args.args[0]
+        assert "osr:favorevole" not in query and "?p = osr:presenteNonVotante" in query
 
 
 def _pending(n_votes, session=300):
@@ -315,8 +325,10 @@ class TestIndividualIngest:
         ing._get_senate_seduta_uris = MagicMock(
             return_value={n: f"http://dati.senato.it/sedutaassemblea/{n}" for n in range(1, 500)}
         )
+        ing._get_votes_without_reasons = MagicMock(return_value=pending)
         ing._write_senate_individual_votes = MagicMock(side_effect=lambda b: len(b))
         ing._mark_individual_missing = MagicMock()
+        ing._mark_reasons_checked = MagicMock()
         return ing
 
     def test_packs_votes_across_sittings(self):
@@ -332,11 +344,37 @@ class TestIndividualIngest:
         ing = self._ingester(_pending(2))
         v1 = "http://dati.senato.it/votazione/19-300-1"
         ing._get_senate_senator_links_bulk = MagicMock(
-            return_value={v1: {"favor": ["http://dati.senato.it/senatore/1"], "against": [], "abstain": []}}
+            return_value={v1: {("favor", None): ["http://dati.senato.it/senatore/1"]}}
         )
         stats = ing.ingest_individual_votes(19)
         assert stats["ivotes_written"] == 1
         ing._mark_individual_missing.assert_called_once_with(["senato_leg19_sed300_v002"])
+        ing._mark_reasons_checked.assert_called_once_with(["senato_leg19_sed300_v001"])
+
+    def test_only_leave_counts_as_without_names(self):
+        # Names of senators on leave alone do not make a roll call
+        ing = self._ingester(_pending(1))
+        v1 = "http://dati.senato.it/votazione/19-300-1"
+        ing._get_senate_senator_links_bulk = MagicMock(
+            return_value={v1: {("absent", "mission"): ["http://dati.senato.it/senatore/1"]}}
+        )
+        ing.ingest_individual_votes(19)
+        ing._mark_individual_missing.assert_called_once_with(["senato_leg19_sed300_v001"])
+
+    def test_reasons_only_writes_reason_on_ingester_id(self):
+        ing = self._ingester(_pending(2))
+        v1 = "http://dati.senato.it/votazione/19-300-1"
+        ing._get_senate_senator_links_bulk = MagicMock(
+            return_value={v1: {("absent", "mission"): ["http://dati.senato.it/senatore/7"]}}
+        )
+        ing.ingest_individual_votes(19, reasons_only=True)
+        ing._get_votes_without_individual_votes.assert_not_called()
+        batch = ing._write_senate_individual_votes.call_args.args[0]
+        assert batch == [{"id": "iv_senato_leg19_7_300_1", "senatorUri": "http://dati.senato.it/senatore/7",
+                          "voteId": "senato_leg19_sed300_v001", "outcome": "absent", "reason": "mission"}]
+        ing._mark_individual_missing.assert_not_called()
+        ing._mark_reasons_checked.assert_called_once_with(
+            ["senato_leg19_sed300_v001", "senato_leg19_sed300_v002"])
 
     def test_failed_request_marks_nothing(self):
         from senate_sparql_ingester import SenateRequestFailed

@@ -5,16 +5,23 @@ Senate bills in the graph, linked to signatories, debates and roll-call votes.
 Reads data/senato_{roman}_ddl*.csv (download_senate_ddl.py) and the sitting
 transcripts in data/senate_xml (Akoma Ntoso); no network.
 
-  (:ParliamentaryAct {uri: Ddl URI, chamber: 'senato'})
-  (:Person)-[:PRIMARY_SIGNATORY|CO_SIGNATORY]->(act)   from osr:iniziativa
+  (:ParliamentaryAct {uri: Ddl URI, chamber: 'senato', initiative})
+  (:Person)-[:PRIMARY_SIGNATORY|CO_SIGNATORY]->(act)   senators, from osr:iniziativa
+  (act)-[:PRESENTED_BY]->(:Government)                  government bills (decision D3)
+  (:Person)-[:PRESENTED {role}]->(act)                  ministers and deputies who
+                                                        presented it: kept apart from
+                                                        the signatures, which feed
+                                                        the authority score
   (:Debate)-[:DISCUSSES]->(act)                         from the section's <block name="Atto">
-  (:Vote)-[:ON_ACT]->(act)                              see vote_act()
+  (:Vote)-[:ON_ACT]->(act)                              official link, else vote_act()
 
-osr:Votazione carries no link to the bill, only a label ("Em. 1.3, Parrini e
-altri", "Articolo 21", "Votazione finale"). The transcript announces each vote
-inside the section of the bill under discussion ("Indìco la votazione nominale
-con scrutinio simultaneo dell'emendamento 1.3, presentato dal senatore
-Parrini"), which gives the bill.
+The official link is osr:Votazione -> osr:oggetto -> osr:relativoA
+(senato_{roman}_voti_atti.csv); it replaces any other ON_ACT of that vote.
+Votes it does not cover are matched through the transcript: the label alone
+("Em. 1.3, Parrini e altri", "Articolo 21", "Votazione finale") does not name
+the bill, but the transcript announces each vote inside the section of the
+bill under discussion ("Indìco la votazione nominale con scrutinio simultaneo
+dell'emendamento 1.3, presentato dal senatore Parrini").
 """
 
 import argparse
@@ -22,6 +29,7 @@ import logging
 import os
 import re
 import sys
+import unicodedata
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from typing import Optional
@@ -32,6 +40,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from csv_loader import parse_date_to_neo4j  # noqa: E402
 from senate_parser import _slug  # noqa: E402
+from senate_sparql_ingester import parse_senate_votazione_uri  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +178,73 @@ def link_sitting_votes(votes: list[tuple[str, str]], sitting: dict) -> dict[str,
 
 
 # ---------------------------------------------------------------------------
+# Initiative and presenters (decision D3)
+# ---------------------------------------------------------------------------
+
+INITIATIVE = {
+    "Parlamentare": "parlamentare", "Governativa": "governo", "Regionale": "regionale",
+    "CNEL": "cnel", "Popolare": "popolare",
+}
+GOV_SUFFIX_RE = re.compile(r"\(Gov\.[^)]*\)\s*$")
+DEPUTY_URI_RE = re.compile(r"/deputato\.rdf/d(\d+)_\d+$")
+
+
+def initiative_of(types) -> Optional[str]:
+    """osr:tipoIniziativa values of a bill -> initiative; 'mista' when they differ."""
+    kinds = {INITIATIVE[t] for t in types if t in INITIATIVE}
+    if not kinds:
+        return None
+    return kinds.pop() if len(kinds) == 1 else "mista"
+
+
+def _tokens(text: str) -> list[str]:
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return re.sub(r"[^A-Z ]", " ", text.upper()).split()
+
+
+def match_minister(presenter: str, members: list[dict]) -> Optional[str]:
+    """Id of the government member named in an osr:presentatore string.
+
+    "Ministro della giustizia Carlo Nordio (Gov. Meloni-I)": the person is
+    whoever of the members of that government has every surname token and the
+    first given name in the string. None when nobody or more than one does.
+    """
+    text = set(_tokens(GOV_SUFFIX_RE.sub("", presenter)))
+    hits = [m["id"] for m in members
+            if set(_tokens(m["last_name"])) <= text and _tokens(m["first_name"])[:1]
+            and _tokens(m["first_name"])[0] in text]
+    return hits[0] if len(hits) == 1 else None
+
+
+def deputy_persona(uri: str) -> Optional[str]:
+    """ocd:rif_deputato (d302838_19) -> the persona URI kept as camera_id."""
+    m = DEPUTY_URI_RE.search(uri or "")
+    return f"http://dati.camera.it/ocd/persona.rdf/p{m.group(1)}" if m else None
+
+
+def government_on(governments: list[dict], day: str) -> Optional[dict]:
+    """The government in office on an ISO day (start <= day < end)."""
+    for g in governments:
+        if g["start"] <= day and (not g["end"] or day < g["end"]):
+            return g
+    return None
+
+
+def official_vote_acts(rows: pd.DataFrame, senate_uris: set[str]) -> dict[str, list[str]]:
+    """{Vote id: [Ddl URIs]} from osr:relativoA, Senate-branch bills only."""
+    out: dict[str, list[str]] = defaultdict(list)
+    for vz, atto in zip(rows["votazione"], rows["atto"]):
+        leg, sitting, number = parse_senate_votazione_uri(vz or "")
+        if leg is None or atto not in senate_uris:
+            continue
+        vote_id = f"senato_leg{leg}_sed{sitting:03d}_v{number:03d}"
+        if atto not in out[vote_id]:
+            out[vote_id].append(atto)
+    return dict(out)
+
+
+# ---------------------------------------------------------------------------
 # Bill numbers -> Ddl URIs
 # ---------------------------------------------------------------------------
 
@@ -194,7 +270,8 @@ def bill_index(ddl: pd.DataFrame) -> dict[str, str]:
 # Graph writes
 # ---------------------------------------------------------------------------
 
-def write_acts(session, ddl: pd.DataFrame, legislature: int) -> int:
+def write_acts(session, ddl: pd.DataFrame, legislature: int,
+               initiatives: dict[str, str]) -> int:
     rows = [{
         "uri": r.ddl,
         "number": r.numero,
@@ -203,6 +280,9 @@ def write_acts(session, ddl: pd.DataFrame, legislature: int) -> int:
         "idDdl": r.idDdl,
         "status": r.stato if isinstance(r.stato, str) else None,
         "nature": r.natura if isinstance(r.natura, str) else None,
+        "initiative": initiatives.get(r.ddl),
+        "descr": getattr(r, "descrIniziativa", None)
+        if isinstance(getattr(r, "descrIniziativa", None), str) else None,
     } for r in ddl[ddl["ramo"] == "S"].itertuples()]
     session.run("""
         UNWIND $rows AS row
@@ -210,9 +290,80 @@ def write_acts(session, ddl: pd.DataFrame, legislature: int) -> int:
         SET a.chamber = 'senato', a.legislature = $leg, a.type = $type,
             a.number = row.number, a.title = row.title,
             a.presentation_date = row.date, a.id_ddl = row.idDdl,
-            a.status = row.status, a.nature = row.nature
+            a.status = row.status, a.nature = row.nature,
+            a.initiative = row.initiative, a.initiative_descr = row.descr
     """, rows=rows, leg=legislature, type=ACT_TYPE)
     return len(rows)
+
+
+def write_presenters(session, ddl: pd.DataFrame, signers: pd.DataFrame,
+                     presenters: pd.DataFrame, initiatives: dict[str, str]) -> Counter:
+    """PRESENTED_BY the government in office on the presentation day, and
+    PRESENTED {role: proponente|concerto} from each minister or deputy.
+
+    Ministers come as strings (presenters file) or, when they are senators,
+    as signatures of a government initiative (osr:senatore): those keep their
+    PRIMARY_SIGNATORY as before and get PRESENTED too.
+    """
+    stats = Counter()
+    governments = [dict(r) for r in session.run("""
+        MATCH (g:Government) RETURN g.id AS id, toString(g.start_date) AS start,
+               toString(g.end_date) AS end ORDER BY g.start_date
+    """)]
+    members: dict[str, list[dict]] = {}
+    for r in session.run("""
+        MATCH (p:Person)-[:HOLDS_OFFICE]->(g:Government)
+        RETURN DISTINCT g.id AS gov, p.id AS id, p.first_name AS first_name, p.last_name AS last_name
+    """):
+        members.setdefault(r["gov"], []).append(dict(r))
+
+    day = {r.ddl: str(r.dataPresentazione)[:10] for r in ddl.itertuples()
+           if isinstance(r.dataPresentazione, str)}
+    by_gov, presented = [], []
+    for uri, kind in initiatives.items():
+        if kind not in ("governo", "mista") or uri not in day:
+            continue
+        gov = government_on(governments, day[uri])
+        if gov is None:
+            stats["government_bill_no_government"] += 1
+            continue
+        by_gov.append({"uri": uri, "gov": gov["id"]})
+
+    gov_of = {row["uri"]: row["gov"] for row in by_gov}
+    for r in presenters.itertuples():
+        role = "proponente" if r.primoFirmatario == "1" else "concerto"
+        if r.tipo == "Governativa":
+            person = match_minister(r.presentatore, members.get(gov_of.get(r.ddl), []))
+            if person:
+                presented.append({"uri": r.ddl, "key": "id", "value": person, "role": role})
+            else:
+                stats["minister_unmatched"] += 1
+                logger.debug("minister not matched: %s (%s)", r.presentatore, r.ddl)
+        elif isinstance(r.deputato, str) and deputy_persona(r.deputato):
+            presented.append({"uri": r.ddl, "key": "camera_id",
+                              "value": deputy_persona(r.deputato), "role": role})
+    if "tipo" in signers.columns:
+        for r in signers[signers["tipo"] == "Governativa"].itertuples():
+            presented.append({"uri": r.ddl, "key": "senato_id", "value": r.senatore,
+                              "role": "proponente" if r.primoFirmatario == "1" else "concerto"})
+
+    session.run("""
+        UNWIND $rows AS row
+        MATCH (a:ParliamentaryAct {uri: row.uri}) MATCH (g:Government {id: row.gov})
+        MERGE (a)-[:PRESENTED_BY]->(g)
+    """, rows=by_gov)
+    for key in ("id", "camera_id", "senato_id"):
+        rows = [p for p in presented if p["key"] == key]
+        n = session.run(f"""
+            UNWIND $rows AS row
+            MATCH (a:ParliamentaryAct {{uri: row.uri}}) MATCH (p:Person {{{key}: row.value}})
+            MERGE (p)-[r:PRESENTED]->(a) SET r.role = row.role
+            RETURN count(r) AS n
+        """, rows=rows).single()["n"]
+        stats[f"presented_{key}"] = n
+        stats[f"presented_{key}_unmatched"] = len(rows) - n
+    stats["presented_by_government"] = len(by_gov)
+    return stats
 
 
 def write_signatories(session, signers: pd.DataFrame, senate_uris: set[str]) -> int:
@@ -250,23 +401,48 @@ def main() -> int:
     data = os.path.join(REPO, "data")
     ddl = pd.read_csv(os.path.join(data, f"senato_{roman}_ddl.csv"), dtype=str)
     signers = pd.read_csv(os.path.join(data, f"senato_{roman}_ddl_firmatari.csv"), dtype=str)
+    presenters_path = os.path.join(data, f"senato_{roman}_ddl_presentatori.csv")
+    presenters = (pd.read_csv(presenters_path, dtype=str) if os.path.exists(presenters_path)
+                  else pd.DataFrame(columns=["ddl", "presentatore", "tipo", "deputato",
+                                             "primoFirmatario"]))
+    types: dict[str, set] = defaultdict(set)
+    for frame in (signers, presenters):
+        if "tipo" in frame.columns:
+            for uri, tipo in zip(frame["ddl"], frame["tipo"]):
+                if isinstance(tipo, str):
+                    types[uri].add(tipo)
+    initiatives = {uri: kind for uri, t in types.items() if (kind := initiative_of(t))}
     index = bill_index(ddl)
     senate_uris = set(ddl.loc[ddl["ramo"] == "S", "ddl"])
+    official_path = os.path.join(data, f"senato_{roman}_voti_atti.csv")
+    official = (official_vote_acts(pd.read_csv(official_path, dtype=str), senate_uris)
+                if os.path.exists(official_path) else {})
 
     driver = GraphDatabase.driver(args.neo4j_uri, auth=(args.neo4j_user, args.neo4j_password))
     stats = Counter()
     with driver.session() as s:
-        stats["acts"] = write_acts(s, ddl, args.legislature)
+        stats["acts"] = write_acts(s, ddl, args.legislature, initiatives)
         stats["signatures"] = write_signatories(s, signers, senate_uris)
+        stats.update(write_presenters(s, ddl, signers, presenters, initiatives))
 
         sittings = {r["n"]: r["id"] for r in s.run(
             "MATCH (x:Session {chamber: 'senato', legislature: $leg}) RETURN x.number AS n, x.id AS id",
             leg=args.legislature)}
         discusses, on_act = [], []
         for num, session_id in sorted(sittings.items()):
+            votes = [(r["id"], r["label"]) for r in s.run("""
+                MATCH (:Session {id: $sid})-[:HAS_VOTE]->(v:Vote)
+                WHERE v.type <> 'verifica numero legale' OR v.type IS NULL
+                RETURN v.id AS id, v.subject AS label ORDER BY v.number
+            """, sid=session_id)]
+            for vote_id, _ in votes:
+                on_act += [{"vote": vote_id, "uri": uri} for uri in official.get(vote_id, [])]
+            stats["votes_linked_official"] += sum(1 for v, _ in votes if v in official)
+
             path = os.path.join(data, "senate_xml", f"resaula_leg{args.legislature}_{num:04d}.akn")
             if not os.path.exists(path):
                 stats["sittings_without_transcript"] += 1
+                stats["votes_unresolved"] += sum(1 for v, _ in votes if v not in official)
                 continue
             sitting = parse_sitting(path)
 
@@ -281,14 +457,15 @@ def main() -> int:
                     else:
                         stats["debate_bill_unknown"] += 1
 
-            votes = [(r["id"], r["label"]) for r in s.run("""
-                MATCH (:Session {id: $sid})-[:HAS_VOTE]->(v:Vote)
-                WHERE v.type <> 'verifica numero legale' OR v.type IS NULL
-                RETURN v.id AS id, v.subject AS label ORDER BY v.number
-            """, sid=session_id)]
+            # The whole sitting goes through the alignment, so that a vote
+            # with an official link still anchors the ones around it.
             linked = link_sitting_votes(votes, sitting)
-            stats["votes_unresolved"] += len(votes) - len(linked)
+            stats["votes_unresolved"] += sum(1 for v, _ in votes
+                                             if v not in official and v not in linked)
             for vote_id, bill in linked.items():
+                if vote_id in official:
+                    stats["transcript_agrees_official"] += index.get(bill) in official[vote_id]
+                    continue
                 if bill in index:
                     on_act.append({"vote": vote_id, "uri": index[bill]})
                 else:
@@ -299,6 +476,13 @@ def main() -> int:
             MATCH (d:Debate {id: row.debate}) MATCH (a:ParliamentaryAct {uri: row.uri})
             MERGE (d)-[:DISCUSSES]->(a)
         """, rows=discusses)
+        stats["stale_on_act_removed"] = s.run("""
+            UNWIND $rows AS row
+            MATCH (v:Vote {id: row.vote})-[r:ON_ACT]->(a)
+            WHERE NOT a.uri IN row.uris
+            DELETE r
+            RETURN count(r) AS n
+        """, rows=[{"vote": v, "uris": u} for v, u in official.items()]).single()["n"]
         s.run("""
             UNWIND $rows AS row
             MATCH (v:Vote {id: row.vote}) MATCH (a:ParliamentaryAct {uri: row.uri})

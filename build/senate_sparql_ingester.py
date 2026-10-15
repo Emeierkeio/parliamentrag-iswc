@@ -154,13 +154,29 @@ _consecutive_failures = 0
 # Politeness delay after each successful request. 2026-07-05: 0.5s got the
 # run rate-banned mid-flight (886 sittings x 2+ queries) — keep >= 1.5s.
 _POLITENESS_DELAY = 1.5
-# Votazioni per individual-vote request: 45 x ~200 senators stays under the
-# endpoint's 10,000-row cap. Requests select them by sitting and vote-number
+# Votazioni per individual-vote request: 45 x ~206 senators (every one named:
+# voted, on leave or present without voting) stays under the endpoint's
+# 10,000-row cap. Requests select them by sitting and vote-number
 # range, because listing votazione URIs hits the WAF's URL size limit
 # (40 URIs got a 403, 2026-10-11).
 INDIVIDUAL_CHUNK = 45
+# Reasons-only requests return ~25-50 rows per votazione (on leave, present
+# without voting), so they can span more votes.
+REASONS_CHUNK = 150
 # Sittings packed into one individual-vote request (URL size, as above).
 INDIVIDUAL_SITTINGS = 7
+# Per-senator predicates of osr:Votazione. There is no "absent" predicate:
+# senate_absent.py adds the senators in office who are named by none of these,
+# and the reason (on leave, present without voting) goes on the same node.
+VOTE_PREDICATES = {
+    "favorevole": ("favor", None),
+    "contrario": ("against", None),
+    "astenuto": ("abstain", None),
+    "inCongedoMissione": ("absent", "mission"),
+    "presenteNonVotante": ("absent", "present_not_voting"),
+}
+REASON_PREDICATES = ("inCongedoMissione", "presenteNonVotante")
+
 # Sittings per aggregate request: same URL size limit, ~150 votazioni each at most.
 SITTING_CHUNK = 8
 # The WAF answers 403 to longer GET URLs: 1,792 chars passed and 2,244 did not
@@ -306,7 +322,7 @@ def _int_or_none(binding: dict, key: str) -> Optional[int]:
 # ---------------------------------------------------------------------------
 
 
-def _pack_ranges(pending: list[dict]) -> list[list[dict]]:
+def _pack_ranges(pending: list[dict], budget: int = INDIVIDUAL_CHUNK) -> list[list[dict]]:
     """Split pending votes (sorted by sitting, vote) into request-sized chunks.
 
     A request asks for vote-number ranges, which may also span votes already
@@ -319,12 +335,12 @@ def _pack_ranges(pending: list[dict]) -> list[list[dict]]:
     lo = None          # first vote of the open range (same sitting as cur[-1])
     for p in pending:
         same = cur and cur[-1]["session"] == p["session"]
-        if same and width - (cur[-1]["vote"] - lo + 1) + (p["vote"] - lo + 1) <= INDIVIDUAL_CHUNK:
+        if same and width - (cur[-1]["vote"] - lo + 1) + (p["vote"] - lo + 1) <= budget:
             width += p["vote"] - cur[-1]["vote"]
             cur.append(p)
             continue
         n_ranges = len({q["session"] for q in cur})
-        if cur and (width + 1 > INDIVIDUAL_CHUNK or same or n_ranges >= INDIVIDUAL_SITTINGS):
+        if cur and (width + 1 > budget or same or n_ranges >= INDIVIDUAL_SITTINGS):
             chunks.append(cur)
             cur, width = [], 0
         cur.append(p)
@@ -509,6 +525,31 @@ class SenateVoteIngester:
             )
             return [r.data() for r in result]
 
+    def _get_votes_without_reasons(self, legislature: int) -> list[dict]:
+        """Senate votes loaded before the ingester asked for leave and
+        present-without-voting: named votes, someone on leave or present
+        without voting per the totals, never checked for reasons."""
+        with self._driver.session() as neo_session:
+            result = neo_session.run(
+                """
+                MATCH (s:Session {chamber:'senato', legislature:$legislature})-[:HAS_VOTE]->(v:Vote)
+                WHERE v.reasons_checked IS NULL
+                  AND (coalesce(v.onMission, 0) > 0 OR coalesce(v.present, 0) > coalesce(v.voters, 0))
+                  AND EXISTS { (v)<-[:ON_VOTE]-(:IndividualVote) }
+                RETURN s.number AS session, v.number AS vote, v.id AS id, 0 AS expected
+                ORDER BY session, vote
+                """,
+                legislature=legislature,
+            )
+            return [r.data() for r in result]
+
+    def _mark_reasons_checked(self, vote_ids: list[str]) -> None:
+        with self._driver.session() as neo_session:
+            neo_session.run(
+                "MATCH (v:Vote) WHERE v.id IN $ids SET v.reasons_checked = true",
+                ids=vote_ids,
+            )
+
     # ------------------------------------------------------------------
     # SPARQL query methods
     # ------------------------------------------------------------------
@@ -555,7 +596,9 @@ WHERE {{
 """
         return _senato_sparql_get(query, strict=True)
 
-    def _get_senate_senator_links_bulk(self, ranges: list[tuple[str, int, int]]) -> dict:
+    def _get_senate_senator_links_bulk(
+        self, ranges: list[tuple[str, int, int]], predicates=tuple(VOTE_PREDICATES),
+    ) -> dict:
         """Per-senator votes for (seduta URI, first vote, last vote) ranges, one request.
 
         The endpoint (an old Virtuoso: no BIND/VALUES) caps results at 10,000
@@ -563,14 +606,10 @@ WHERE {{
         keeps each request under INDIVIDUAL_CHUNK votazioni. Strict: raises
         SenateRequestFailed instead of returning a partial answer.
 
-        Returns {votazione_uri: {"favor": [...], "against": [...], "abstain": [...]}}.
+        Returns {votazione_uri: {(outcome, reason): [senatore URI, ...]}}, with
+        (outcome, reason) from VOTE_PREDICATES.
         """
-        outcome_of = {
-            f"http://dati.senato.it/osr/{prop}": outcome
-            for prop, outcome in (
-                ("favorevole", "favor"), ("contrario", "against"), ("astenuto", "abstain"),
-            )
-        }
+        outcome_of = {f"http://dati.senato.it/osr/{p}": VOTE_PREDICATES[p] for p in predicates}
         # One UNION branch per sitting with the seduta URI as a constant: an
         # OR of sittings in a single FILTER makes Virtuoso scan every
         # votazione and the gateway times out (502 after ~37 s, 2026-10-11).
@@ -583,7 +622,7 @@ WHERE {{
 PREFIX osr: <http://dati.senato.it/osr/>
 SELECT ?v ?p ?senatore WHERE {{
   {branches}
-  FILTER(?p = osr:favorevole || ?p = osr:contrario || ?p = osr:astenuto)
+  FILTER({" || ".join(f"?p = osr:{p}" for p in predicates)})
 }}
 """
         links: dict = {}
@@ -591,10 +630,8 @@ SELECT ?v ?p ?senatore WHERE {{
             outcome = outcome_of.get(b["p"]["value"])
             if outcome is None:
                 continue
-            per_vote = links.setdefault(
-                b["v"]["value"], {"favor": [], "against": [], "abstain": []}
-            )
-            per_vote[outcome].append(b["senatore"]["value"])
+            links.setdefault(b["v"]["value"], {}).setdefault(outcome, []).append(
+                b["senatore"]["value"])
         return links
 
     # ------------------------------------------------------------------
@@ -605,6 +642,7 @@ SELECT ?v ?p ?senatore WHERE {{
         self,
         legislature: int = 19,
         limit_sessions: int = 0,
+        reasons_only: bool = False,
     ) -> dict:
         """Ingest per-senator IndividualVote nodes for the Vote nodes in the graph.
 
@@ -615,9 +653,18 @@ SELECT ?v ?p ?senatore WHERE {{
         Args:
             legislature: Legislature number (18 or 19).
             limit_sessions: If > 0, only votes of the first N pending sittings.
+            reasons_only: Votes that already have IndividualVote nodes but were
+                loaded without the leave / present-without-voting predicates:
+                fetch only those and set the reason.
         """
-        logger.info("Starting Senate individual vote ingest — legislature %d", legislature)
-        pending = self._get_votes_without_individual_votes(legislature)
+        logger.info("Starting Senate individual vote ingest — legislature %d%s",
+                    legislature, " (reasons only)" if reasons_only else "")
+        if reasons_only:
+            pending = self._get_votes_without_reasons(legislature)
+            predicates, budget = REASON_PREDICATES, REASONS_CHUNK
+        else:
+            pending = self._get_votes_without_individual_votes(legislature)
+            predicates, budget = tuple(VOTE_PREDICATES), INDIVIDUAL_CHUNK
         if limit_sessions:
             keep = sorted({p["session"] for p in pending})[:limit_sessions]
             pending = [p for p in pending if p["session"] in keep]
@@ -636,7 +683,7 @@ SELECT ?v ?p ?senatore WHERE {{
         pending = [p for p in pending if p["session"] in seduta_uris]
 
         sittings_seen: set[int] = set()
-        for chunk in _pack_ranges(pending):
+        for chunk in _pack_ranges(pending, budget):
             by_uri = {
                 f"http://dati.senato.it/votazione/{legislature}-{p['session']}-{p['vote']}": p
                 for p in chunk
@@ -647,7 +694,7 @@ SELECT ?v ?p ?senatore WHERE {{
                 ranges[p["session"]] = (min(lo, p["vote"]), max(hi, p["vote"]))
             try:
                 links = self._get_senate_senator_links_bulk(
-                    [(seduta_uris[n], lo, hi) for n, (lo, hi) in ranges.items()]
+                    [(seduta_uris[n], lo, hi) for n, (lo, hi) in ranges.items()], predicates
                 )
             except SenateEndpointBlocked as exc:
                 logger.error("ABORTING run at leg%d sed%d: %s",
@@ -662,15 +709,15 @@ SELECT ?v ?p ?senatore WHERE {{
             batch: list[dict] = []
             missing: list[str] = []
             for vz_uri, p in by_uri.items():
-                got = links.get(vz_uri)
-                if not got:
+                got = links.get(vz_uri, {})
+                n = sum(len(v) for (outcome, _), v in got.items() if outcome != "absent")
+                if not reasons_only and not n:
                     missing.append(p["id"])
                     continue
-                n = sum(len(v) for v in got.values())
-                if n != p["expected"]:
+                if not reasons_only and n != p["expected"]:
                     logger.warning("  %s: %d individual votes, aggregate says %d",
                                    p["id"], n, p["expected"])
-                for outcome, uris in got.items():
+                for (outcome, reason), uris in got.items():
                     for sen_uri in uris:
                         sen_id = _senator_id_from_uri(sen_uri)
                         if not sen_id:
@@ -682,12 +729,14 @@ SELECT ?v ?p ?senatore WHERE {{
                             "senatorUri": sen_uri,
                             "voteId": p["id"],
                             "outcome": outcome,
+                            "reason": reason,
                         })
             if missing:
                 logger.warning("  %d votes without names at the source: %s",
                                len(missing), missing[:5])
                 self._mark_individual_missing(missing)
             stats["ivotes_written"] += self._write_senate_individual_votes(batch)
+            self._mark_reasons_checked([p["id"] for p in chunk if p["id"] not in missing])
             sittings_seen.update(p["session"] for p in chunk)
             logger.info("  up to leg%d sed%d: %d individual votes so far",
                         legislature, chunk[-1]["session"], stats["ivotes_written"])
@@ -761,7 +810,7 @@ RETURN count(*) AS written
         MERGEs IndividualVote node and both relationships idempotently.
 
         Args:
-            batch: List of dicts with keys: id, senatorUri, voteId, outcome.
+            batch: List of dicts with keys: id, senatorUri, voteId, outcome, reason.
 
         Returns:
             Number of IndividualVote nodes merged in this batch.
@@ -774,7 +823,7 @@ UNWIND $batch AS row
 MATCH (d:Person {senato_id: row.senatorUri})
 MATCH (v:Vote {id: row.voteId})
 MERGE (iv:IndividualVote {id: row.id})
-SET iv.outcome = row.outcome
+SET iv.outcome = row.outcome, iv.reason = row.reason
 MERGE (d)-[:VOTED]->(iv)
 MERGE (iv)-[:ON_VOTE]->(v)
 RETURN count(*) AS written
@@ -833,6 +882,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Ingest only individual senator IndividualVote nodes per sitting (mutually exclusive with --aggregate-only)",
     )
+    mode.add_argument(
+        "--reasons-only",
+        action="store_true",
+        help="Votes loaded before leave and present-without-voting were read: "
+             "fetch those and set IndividualVote.reason (run senate_absent.py first)",
+    )
     parser.add_argument(
         "--delay",
         type=float,
@@ -858,10 +913,11 @@ if __name__ == "__main__":
     try:
         ingester = SenateVoteIngester(driver)
 
-        if args.individual_only:
+        if args.individual_only or args.reasons_only:
             stats = ingester.ingest_individual_votes(
                 legislature=args.legislature,
                 limit_sessions=args.limit_sessions,
+                reasons_only=args.reasons_only,
             )
             print(
                 f"Done — sittings_processed={stats['sittings_processed']}, "
