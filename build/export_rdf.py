@@ -346,6 +346,7 @@ class RdfExporter:
         self.amendment_text_coverage = TextCoverage(unit="amendments")
         self.amendment_count = 0
         self.chambers = set()
+        self.session_dates = []
         self.PRO = Namespace(base + "ontology#")   # classes and properties
         self.PRR = Namespace(base + "resource/")   # minted entity URIs
         self.g = Graph()
@@ -652,6 +653,8 @@ class RdfExporter:
             })
             if props.get("chamber"):
                 self.chambers.add(props["chamber"])
+            if props.get("date") is not None:
+                self.session_dates.append(self.to_literal(props["date"]).toPython())
 
         for rec in self.node_rows("Debate"):
             props = dict(rec["n"])
@@ -701,6 +704,12 @@ class RdfExporter:
                 "onMission": PRO.onMission,
                 "majority": PRO.majority,
             })
+
+    def coverage(self) -> dict:
+        """First and last sitting date in the export (Zenodo 'collected' dates)."""
+        if not self.session_dates:
+            return {}
+        return {"start": str(min(self.session_dates)), "end": str(max(self.session_dates))}
 
     def export_provenance(self):
         PRO = self.PRO
@@ -1085,6 +1094,7 @@ def main():
             "speech_text": exporter.text_coverage.as_dict(),
             "amendments": exporter.amendment_count,
             "amendment_text": exporter.amendment_text_coverage.as_dict(),
+            "coverage": exporter.coverage(),
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         meta_path = out_dir / "export_meta.json"

@@ -26,11 +26,12 @@ What this script does
    first, otherwise you would re-upload stale dumps.
 4. Sets the publication_date of the draft to today and applies
    build/zenodo_metadata.json (title, description, license, keywords,
-   related identifiers), filling {{TRIPLES}}, {{INDIVIDUAL_VOTES}} and
-   {{AMENDMENTS}} from dumps/rdf/export_meta.json. A new-version draft
-   otherwise inherits the previous version's metadata, which described the
-   Chamber only and carried CC BY 4.0 (wrong since the Chamber data are
-   CC BY-SA).
+   related identifiers, collected dates), filling {{TRIPLES}},
+   {{INDIVIDUAL_VOTES}}, {{AMENDMENTS}} and {{COVERAGE_START}}/{{COVERAGE_END}}
+   from dumps/rdf/export_meta.json. A new-version draft otherwise inherits the
+   previous version's metadata, which described the Chamber only, carried
+   CC BY 4.0 (wrong since the Chamber data are CC BY-SA) and a collected
+   period ending 2026-07-21.
 5. Leaves the draft UNPUBLISHED and prints its URL: you review it in the
    browser and press Publish yourself — a published DOI is permanent.
    With --publish it publishes the draft right away instead (used by the
@@ -41,7 +42,7 @@ deposit:write + deposit:actions, from zenodo.org/account/settings/applications).
 
 Usage:
     python build/zenodo_update.py [--dry-run] [--skip-votes] [--publish]
-                                  [--metadata FILE | --keep-metadata]
+                                  [--metadata FILE | --keep-metadata] [--dir DIR]
 """
 import argparse
 import json
@@ -68,10 +69,13 @@ def die(msg: str):
 
 def render_metadata(template_path: Path, export_meta: dict) -> dict:
     """Load the metadata overrides and fill their {{TOKENS}} from export_meta.json."""
+    coverage = export_meta.get("coverage") or {}
     values = {
         "TRIPLES": export_meta.get("triples"),
         "INDIVIDUAL_VOTES": export_meta.get("individual_votes"),
         "AMENDMENTS": export_meta.get("amendments"),
+        "COVERAGE_START": coverage.get("start"),
+        "COVERAGE_END": coverage.get("end"),
     }
     text = template_path.read_text(encoding="utf-8")
     for token, value in values.items():
@@ -79,7 +83,8 @@ def render_metadata(template_path: Path, export_meta: dict) -> dict:
             if value is None:
                 die(f"{token} missing from export_meta.json — rerun the export "
                     "(with --votes for INDIVIDUAL_VOTES)")
-            text = text.replace("{{" + token + "}}", f"{value:,}")
+            text = text.replace("{{" + token + "}}",
+                                f"{value:,}" if isinstance(value, int) else str(value))
     leftover = re.findall(r"\{\{[A-Z_]+\}\}", text)
     if leftover:
         die(f"unfilled tokens in {template_path.name}: {leftover}")
@@ -98,11 +103,15 @@ def main():
                         help="JSON with the metadata fields to set on the new version")
     parser.add_argument("--keep-metadata", action="store_true",
                         help="keep the previous version's metadata unchanged")
+    parser.add_argument("--dir", default=str(RDF_DIR),
+                        help="directory with the dumps and export_meta.json "
+                             "(default: dumps/rdf)")
     args = parser.parse_args()
+    rdf_dir = Path(args.dir)
 
     overrides = {}
     if not args.keep_metadata:
-        meta_path = RDF_DIR / "export_meta.json"
+        meta_path = rdf_dir / "export_meta.json"
         export_meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
         overrides = render_metadata(Path(args.metadata), export_meta)
         print(f"Metadata from {Path(args.metadata).name}: {', '.join(overrides)}")
@@ -116,9 +125,9 @@ def main():
     auth = {"access_token": token}
 
     wanted = DUMP_FILES[:1] if args.skip_votes else DUMP_FILES
-    to_upload = [RDF_DIR / name for name in wanted if (RDF_DIR / name).is_file()]
+    to_upload = [rdf_dir / name for name in wanted if (rdf_dir / name).is_file()]
     if not to_upload:
-        die(f"no dump files in {RDF_DIR} — run `make export-rdf` first")
+        die(f"no dump files in {rdf_dir} — run `make export-rdf` first")
     print("Files to upload:")
     for p in to_upload:
         print(f"  {p.name}  ({p.stat().st_size / 1e6:,.0f} MB)")

@@ -123,6 +123,16 @@ def test_provenance_names_both_sources():
     assert isinstance(title, Literal)
 
 
+def test_coverage_spans_first_and_last_sitting():
+    from datetime import date
+    exporter = FakeExporter({"Session": [
+        (["Session"], {"id": "leg19_sed2", "chamber": "camera", "date": date(2026, 10, 14)}),
+        (["Session"], {"id": "sen_leg19_sed1", "chamber": "senato", "date": date(2022, 10, 13)}),
+    ]}, include_text=True)
+    exporter.export_proceedings()
+    assert exporter.coverage() == {"start": "2022-10-13", "end": "2026-10-14"}
+
+
 def test_hf_card_tokens_all_filled():
     template = (BUILD / "hf_dataset_card.md").read_text()
     tokens = set(re.findall(r"\{\{([A-Z_]+)\}\}", template))
@@ -134,12 +144,15 @@ def test_hf_card_tokens_all_filled():
 def test_zenodo_metadata_filled_from_export_meta():
     meta = zenodo_update.render_metadata(
         BUILD / "zenodo_metadata.json",
-        {"triples": 1234567, "individual_votes": 8200000, "amendments": 224173})
+        {"triples": 1234567, "individual_votes": 8200000, "amendments": 224173,
+         "coverage": {"start": "2022-10-13", "end": "2026-10-14"}})
     assert meta["license"] == "cc-by-sa-4.0"
     assert "1,234,567 triples" in meta["description"]
     assert "8,200,000 individual votes" in meta["description"]
     assert "224,173 amendments" in meta["description"]
     assert "Senate" in meta["title"]
+    assert meta["dates"][0]["end"] == "2026-10-14"
+    assert "www.senato.it" in meta["description"]
     assert json.dumps(meta).count("{{") == 0
 
 

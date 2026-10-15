@@ -107,6 +107,8 @@ Known limits:
   title     = {Who Speaks Matters: Authority-Aware Multi-View RAG over Italian Parliamentary Proceedings},
   author    = {Tritella, Mirko and Pozzi, Riccardo and Palmonari, Matteo},
   booktitle = {The Semantic Web -- ISWC 2026},
-  year      = {2026}
+  publisher = {Springer},
+  year      = {2026},
+  doi       = {10.1007/978-3-032-42029-9_24}
 }
 ```
