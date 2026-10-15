@@ -40,7 +40,7 @@ from ..config import get_config
 logger = logging.getLogger(__name__)
 
 from ..log_context import new_query_id  # noqa: E402
-from ..services.retrieval.scope import ScopeItem, resolve_scope, scope_key
+from ..services.retrieval.scope import ScopeItem, resolve_scope, scope_key, set_answer_scope
 router = APIRouter(prefix="/api", tags=["Query"])
 
 # Pipeline concurrency limiter, shared across all requests in the same
@@ -335,13 +335,16 @@ async def process_query_streaming(
 
         # Step 2: retrieval (locale: non-Italian queries are translated by
         # the rewriter before embedding, the corpus is Italian)
+        scope = resolve_scope(request.scope, request.query)
+        # Groups expected in the answer: those of the chambers asked about
+        set_answer_scope(scope)
         retrieval_result = await services["retrieval"].retrieve(
             query=request.query,
             top_k=request.top_k,
             date_start=request.date_start,
             date_end=request.date_end,
             locale=request_locale,
-            scope=resolve_scope(request.scope, request.query),
+            scope=scope,
         )
 
         evidence_list = retrieval_result["evidence"]
@@ -1441,12 +1444,14 @@ async def query_endpoint(request: QueryRequest, http_request: Request):
         services = get_services()
 
         try:
+            scope = resolve_scope(request.scope, request.query)
+            set_answer_scope(scope)
             retrieval_result = await services["retrieval"].retrieve(
                 query=request.query,
                 top_k=request.top_k,
                 date_start=request.date_start,
                 date_end=request.date_end,
-                scope=resolve_scope(request.scope, request.query),
+                scope=scope,
             )
 
             evidence_list = retrieval_result["evidence"]

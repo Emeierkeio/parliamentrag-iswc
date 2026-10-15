@@ -43,6 +43,26 @@ PARTY_DISPLAY_NAMES: dict[str, str] = {
     "PER LE AUTONOMIE (SVP-PATT, CAMPOBASE)": "Per le Autonomie (SVP-PATT, Campobase)",
 }
 
+# Political components of the Gruppo Misto (MistoComponent.name, Camera and
+# Senate). The Misto holds opposed parties (+Europa and Futuro Nazionale
+# Vannacci): a speaker of the Misto speaks for their component, which is a
+# party of its own in coverage, sections and experts ("tutti i gruppi", as
+# the public verifier counts them). A component named after a group counts
+# for that group: the Senate has no AVS or Azione group, their senators sit
+# in the Misto as components (as AVS and Noi Moderati did at the Camera
+# until 27/10/2022).
+MISTO_COMPONENT_PARTY: dict[str, str] = {
+    "ALLEANZA VERDI E SINISTRA": "Alleanza Verdi e Sinistra",
+    "AZIONE-RENEW EUROPE": "Azione - Popolari Europeisti Riformatori - Renew Europe",
+    "NOI MODERATI - MAIE": "Noi Moderati (Noi con l'Italia, Coraggio Italia, UDC e Italia al Centro) - MAIE - Centro Popolare",
+    "+EUROPA - STATI UNITI D'EUROPA": "+Europa - Stati Uniti d'Europa",
+    "FUTURO NAZIONALE VANNACCI - FREE": "Futuro Nazionale Vannacci - Free",
+    "MINORANZE LINGUISTICHE": "Minoranze Linguistiche",
+    "SUD CHIAMA NORD": "Sud chiama Nord",
+    "AVANTI PSI": "Avanti PSI",
+}
+PARTY_DISPLAY_NAMES.update(MISTO_COMPONENT_PARTY)
+
 
 def _party_key(name: str) -> str:
     return " ".join(name.upper().replace(" - ", "-").replace("- ", "-").replace(" -", "-").split())
@@ -64,6 +84,22 @@ def normalize_party_name(raw_party: str) -> str:
     if not raw_party:
         return "Misto"
     return _PARTY_BY_KEY.get(_party_key(raw_party), raw_party.title())
+
+
+def speaking_party(group: Optional[str], misto_component: Optional[str]) -> Optional[str]:
+    """The party a speech counts for: the Misto component at the speech date
+    when the speaker sat in the Misto, else the group (raw names in, raw or
+    display name out: pass the result to normalize_party_name)."""
+    if misto_component and group and normalize_party_name(group) == "Misto":
+        return misto_component
+    return group
+
+
+def misto_components_of(party_display: str) -> List[str]:
+    """Component names (lowercase) whose speakers count for the party."""
+    target = _party_key(party_display)
+    return [k.lower() for k, v in MISTO_COMPONENT_PARTY.items()
+            if _party_key(v) == target]
 
 
 class IdeologyScore(BaseModel):

@@ -21,7 +21,7 @@ from .query_rewriter import QueryRewriter
 from ...models.evidence import UnifiedEvidence
 from ...config import get_config, get_settings
 
-from .scope import Scope, normalize_scope, scope_param, session_clause, vector_indexes
+from .scope import Scope, chambers_of_scope, normalize_scope, scope_param, session_clause, vector_indexes
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class RetrievalEngine:
             r.get("party") for r in merged_results
             if r.get("party") and r.get("speaker_role") != "GovernmentMember"
         )
-        all_parties = set(self.config.get_all_parties())
+        all_parties = set(self.config.get_all_parties(chambers_of_scope(scope)))
         under_represented = {
             p for p in all_parties if party_counts.get(p, 0) < min_per_party
         }
@@ -543,7 +543,7 @@ class RetrievalEngine:
         # Reverse of the display->DB map: DB names may carry suffixes that
         # the mechanical transformation cannot reconstruct (e.g. the rename
         # "ITALIA VIVA-CASA RIFORMISTA (IV-CR)" with the acronym at the end).
-        from ...models.evidence import PARTY_DISPLAY_NAMES
+        from ...models.evidence import PARTY_DISPLAY_NAMES, misto_components_of
         db_names_by_display: Dict[str, str] = {}
         for db_name, display in PARTY_DISPLAY_NAMES.items():
             db_names_by_display.setdefault(display, db_name)
@@ -565,16 +565,21 @@ class RetrievalEngine:
                 // at speech date and today (for a closed legislature: on its
                 // last day).
                 MATCH (speaker)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
-                WHERE toLower(g.name) = toLower($party_name)
-                AND mg.start_date <= s.date
+                WHERE mg.start_date <= s.date
                 AND (mg.end_date IS NULL OR mg.end_date >= s.date)
                 AND (mg.end_date IS NULL OR mg.end_date >= date()
                      OR (mg.final_in_legislature AND mg.legislature = s.legislature)){date_filter}
+                OPTIONAL MATCH (speaker)-[mcp:MEMBER_OF_COMPONENT]->(mcomp:MistoComponent)
+                WHERE mcp.start_date <= s.date AND (mcp.end_date IS NULL OR mcp.end_date >= s.date)
+                // The party's group, or a Misto component that counts for
+                // it (Senate AVS); the Misto itself only without a component
+                WITH c, score, i, s, d, speaker, g, mcomp
+                WHERE (toLower(g.name) = toLower($party_name)
+                       AND (mcomp IS NULL OR toLower(g.name) <> 'misto'))
+                   OR toLower(mcomp.name) IN $component_names
                 // Current party (used to compute party_changed in _process_results)
                 OPTIONAL MATCH (speaker)-[mg_now:MEMBER_OF_GROUP]->(g_now:ParliamentaryGroup)
                 WHERE mg_now.end_date IS NULL
-                OPTIONAL MATCH (speaker)-[mcp:MEMBER_OF_COMPONENT]->(mcomp:MistoComponent)
-                WHERE mcp.start_date <= s.date AND (mcp.end_date IS NULL OR mcp.end_date >= s.date)
                 RETURN c.id AS chunk_id,
                        c.text AS chunk_text,
                        c.embedding AS embedding,
@@ -604,6 +609,7 @@ class RetrievalEngine:
                     "top_k": 500,  # Search wider to find this party's chunks
                     "query_embedding": query_embedding,
                     "party_name": normalized_party,
+                    "component_names": misto_components_of(party),
                     "limit": chunks_per_party,
                     **date_params
                 }

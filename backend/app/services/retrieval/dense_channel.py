@@ -14,7 +14,7 @@ from datetime import datetime
 
 from ..neo4j_client import Neo4jClient
 from ...models.evidence import (
-    normalize_speaker_name, normalize_party_name, compute_chunk_span,
+    normalize_speaker_name, normalize_party_name, compute_chunk_span, speaking_party,
 )
 from ...config import get_config
 
@@ -193,7 +193,9 @@ class DenseChannel:
                 # Determine coalition using the historical party (group at speech time).
                 # current_party is the group the speaker belongs to TODAY — used only
                 # to compute party_changed, never for attribution or coalition assignment.
-                party = row.get("party")           # historical (at speech date)
+                group = row.get("party")           # historical (at speech date)
+                # A Misto speaker counts for their component (+Europa, AVS…)
+                party = speaking_party(group, row.get("misto_component"))
                 current_party_raw = row.get("current_party")  # today's group
                 speaker_role = row.get("speaker_type", "Deputy")
 
@@ -212,7 +214,9 @@ class DenseChannel:
                     current_party_display = None
                 else:
                     coalition = config.get_coalition(party) if party else "opposizione"
-                    historical_display = normalize_party_name(party)
+                    # Group, not component: a Misto senator still in the
+                    # Misto has not changed party
+                    historical_display = normalize_party_name(group)
                     current_party_display = normalize_party_name(current_party_raw) if current_party_raw else None
                     # Changed if today's group differs from the historical one
                     party_changed = bool(

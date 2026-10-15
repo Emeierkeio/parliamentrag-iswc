@@ -15,7 +15,7 @@ import numpy as np
 
 from ..neo4j_client import Neo4jClient
 from ...models.evidence import (
-    normalize_speaker_name, normalize_party_name, compute_chunk_span,
+    normalize_speaker_name, normalize_party_name, compute_chunk_span, speaking_party,
 )
 from ...config import get_config
 
@@ -367,7 +367,8 @@ class GraphChannel:
                 # this session date (e.g. they switched group after the debate).
                 # Skip the result — the deputy should only be cited for speeches
                 # made while in their current group.
-                party = row.get("party")
+                # A Misto speaker counts for their component (+Europa, AVS…)
+                party = speaking_party(row.get("party"), row.get("misto_component"))
                 speaker_role = row.get("speaker_type", "Deputy")
                 if party is None and speaker_role != "GovernmentMember":
                     logger.debug(

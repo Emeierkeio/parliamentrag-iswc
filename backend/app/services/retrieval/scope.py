@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from contextvars import ContextVar
 from typing import Any, Iterable, List, Literal, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field
@@ -50,6 +51,27 @@ def loaded_chambers() -> Tuple[str, ...]:
     chambers = [c.strip() for c in env.split(",") if c.strip()] if env else (
         get_config().load_config().get("chambers") or ["camera"])
     return tuple(c for c in CHAMBERS if c in chambers)
+
+
+# Chambers of the question being answered: groups of a chamber outside it
+# (Per le Autonomie, the Camera components of the Misto for a Senate
+# question) are not expected in the answer. Set by the routers before
+# generation; asyncio tasks created afterwards inherit it.
+_ANSWER_CHAMBERS: ContextVar[Optional[Tuple[str, ...]]] = ContextVar("answer_chambers", default=None)
+
+
+def chambers_of_scope(scope: Optional[Iterable[Any]]) -> Tuple[str, ...]:
+    pairs = normalize_scope(scope)
+    return tuple(c for c in CHAMBERS if any(ch == c for ch, _ in pairs))
+
+
+def set_answer_scope(scope: Optional[Iterable[Any]]) -> None:
+    _ANSWER_CHAMBERS.set(chambers_of_scope(scope))
+
+
+def answer_chambers() -> Tuple[str, ...]:
+    """Chambers of the current answer, or every loaded chamber."""
+    return _ANSWER_CHAMBERS.get() or loaded_chambers()
 
 
 def default_scope() -> Scope:

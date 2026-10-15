@@ -165,7 +165,6 @@ dipendenti già soggetti ad aliquote proporzionali» [CIT:abc]
         )
         self._position_brief_builder = PositionBriefBuilder()
 
-        self.all_parties = self.config.get_all_parties()
 
         brief_config = gen_config.get("position_brief", {})
         self._context_chars = brief_config.get("context_chars", 500)
@@ -422,8 +421,12 @@ dipendenti già soggetti ad aliquote proporzionali» [CIT:abc]
                 query_context=query_context,
             ))
 
-        for party in self.all_parties:
+        for party in self.config.get_all_parties():
             evidence = evidence_by_party.get(party, [])
+            # The Misto proper holds only those without a component (senators
+            # for life, technical ministers): a section only when they spoke
+            if not evidence and party == "Misto":
+                continue
             tasks.append(self._write_section(
                 query=query,
                 party=party,

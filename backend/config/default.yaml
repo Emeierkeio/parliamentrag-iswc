@@ -236,6 +236,16 @@ coalitions:
   # It gets its own section in the summary and is excluded from the binary balance.
   misto:
     - "Misto"
+    # Political components of the Misto (MistoComponent, models/evidence.py
+    # MISTO_COMPONENT_PARTY): each one is a party of its own in coverage,
+    # sections and experts; the Misto above keeps those without a component
+    # (senators for life, technical ministers). The Senate AVS and Azione
+    # components count for those groups.
+    - "+Europa - Stati Uniti d'Europa"
+    - "Futuro Nazionale Vannacci - Free"
+    - "Minoranze Linguistiche"
+    - "Sud chiama Nord"
+    - "Avanti PSI"
 
 # Chambers whose sittings the graph holds. A group that exists in one chamber
 # only is expected in answers ("tutti i gruppi") only when that chamber is
@@ -253,6 +263,11 @@ life_senators:
   - "http://dati.senato.it/senatore/1672"   # Giorgio Napolitano
 chamber_only_groups:
   "Per le Autonomie (SVP-PATT, Campobase)": "senato"
+  "+Europa - Stati Uniti d'Europa": "camera"
+  "Futuro Nazionale Vannacci - Free": "camera"
+  "Minoranze Linguistiche": "camera"
+  "Sud chiama Nord": "camera"
+  "Avanti PSI": "senato"
 
 # Scopes whose speech text and chunk embeddings live in the Postgres archive
 # (decision 2026-10-12; tables in build/pg_archive.py) instead of Neo4j.

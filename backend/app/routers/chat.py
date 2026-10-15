@@ -29,7 +29,7 @@ from ..services.response_cache import (
 )
 from ..services.deps import get_services
 from ..config import get_config
-from ..services.retrieval.scope import ScopeItem, scope_key, resolve_scope
+from ..services.retrieval.scope import ScopeItem, scope_key, resolve_scope, set_answer_scope
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Chat"])
@@ -244,9 +244,13 @@ async def process_chat_background(
         logger.info("[RETRIEVAL] Starting dual-channel retrieval...")
         retrieval_start = time.time()
 
+        scope = resolve_scope(request.scope, request.query)
+        # Groups expected in the answer: those of the chambers asked about
+        set_answer_scope(scope)
+
         def _do_retrieval():
             return services["retrieval"].retrieve_sync(
-                query=request.query, top_k=100, scope=resolve_scope(request.scope, request.query),
+                query=request.query, top_k=100, scope=scope,
             )
 
         retrieval_result = await asyncio.get_running_loop().run_in_executor(None, _do_retrieval)

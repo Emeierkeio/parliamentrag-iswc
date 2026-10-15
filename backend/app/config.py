@@ -317,17 +317,19 @@ class ConfigLoader:
                     return coalition
         return "opposizione"
 
-    def get_all_parties(self) -> List[str]:
+    def get_all_parties(self, chambers: Optional[Any] = None) -> List[str]:
         """Groups expected in an answer: every coalition member, except groups
-        of a chamber whose data is not loaded (see chambers in default.yaml)."""
-        from .services.retrieval.scope import loaded_chambers
+        of a chamber outside the answer (the chambers given, else those of
+        the question being answered, else the loaded ones: see chambers in
+        default.yaml)."""
+        from .services.retrieval.scope import answer_chambers
 
         cfg = self.load_config()
-        chambers = set(loaded_chambers())
+        chambers = set(chambers) if chambers else set(answer_chambers())
         only_in = cfg.get("chamber_only_groups", {}) or {}
         all_parties = []
         for groups in self.coalitions.values():
-            all_parties.extend(g for g in groups if only_in.get(g, "camera") in chambers)
+            all_parties.extend(g for g in groups if g not in only_in or only_in[g] in chambers)
         return all_parties
 
 
