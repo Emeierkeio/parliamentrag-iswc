@@ -527,7 +527,8 @@ async def get_vote_detail(
                  THEN componentName
                  ELSE groupName
                END AS party,
-               iv.outcome AS outcome
+               iv.outcome AS outcome,
+               p.senato_id AS senato_id
         ORDER BY last_name, first_name
         """,
         {"vote_id": vote_id},
@@ -540,6 +541,7 @@ async def get_vote_detail(
             last_name=r["last_name"] or "",
             party=r["party"],
             outcome=r["outcome"] or "absent",
+            senato_id=r["senato_id"] if meta["chamber"] == "senato" else None,
         )
         for r in participant_rows
     ]

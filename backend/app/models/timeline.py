@@ -72,6 +72,8 @@ class VoteParticipant(BaseModel):
     last_name: str
     party: Optional[str] = None
     outcome: str  # "favor" | "against" | "abstain" | "absent"
+    # Ministers and former deputies keep another id (gov_*, Camera persona URI)
+    senato_id: Optional[str] = None
 
 
 class VotePartyBreakdown(BaseModel):
