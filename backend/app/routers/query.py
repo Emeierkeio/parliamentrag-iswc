@@ -24,6 +24,7 @@ from ..services.translation import translate_citation_batch, translate_response_
 from ..services.domain_check import check_domain
 from ..services.relevance_gate import gate_payload, domain_notice
 from ..services.response_cache import (
+    LEGISLATURE,
     build_cache_key,
     config_fingerprint,
     get_data_version,
@@ -39,7 +40,7 @@ from ..config import get_config
 logger = logging.getLogger(__name__)
 
 from ..log_context import new_query_id  # noqa: E402
-from ..services.retrieval.scope import ScopeItem, resolve_scope
+from ..services.retrieval.scope import ScopeItem, resolve_scope, scope_key
 router = APIRouter(prefix="/api", tags=["Query"])
 
 # Pipeline concurrency limiter, shared across all requests in the same
@@ -121,6 +122,8 @@ async def _rate_limited_query(
                 mode="standard",
                 data_version=data_version,
                 config_fingerprint=config_fingerprint(get_config().load_config()),
+                # Camera, Senato or both: same key as /api/chat
+                legislature=scope_key(resolve_scope(request.scope, request.query)) or LEGISLATURE,
                 extra={
                     "top_k": request.top_k,
                     "date_start": request.date_start,
