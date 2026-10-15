@@ -96,7 +96,7 @@ Known limits:
 - Plenary sittings only; committee proceedings are not included.
 - {{ACTS_PLACEHOLDERS}} acts are placeholders (`is_placeholder = true`): they are referenced by debates or votes but not yet resolved to their full record (mostly number-format variants and committee versions of bills; a small share of chamber documents has no machine-readable record at the source).
 - Speaker attribution is missing for {{SPEECHES_NO_SPEAKER}} speeches where the stenographic report does not identify the speaker.
-- Recaps are generated for sessions ingested after summarization was introduced (mid-2026): {{SESSIONS_WITH_RECAP}} of {{ROWS_SESSIONS}} sessions and {{DEBATES_WITH_RECAP}} of {{ROWS_DEBATES}} debates have them; the rest have `null` recaps.
+- Recaps are not yet available for every sitting: {{SESSIONS_WITH_RECAP}} of {{ROWS_SESSIONS}} sessions and {{DEBATES_WITH_RECAP}} of {{ROWS_DEBATES}} debates have them; the rest have `null` recaps.
 
 ## License and attribution
 

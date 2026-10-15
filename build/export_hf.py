@@ -86,6 +86,23 @@ def s(value):
     return None if value is None else str(value)
 
 
+def source_chamber(props: dict):
+    """Chamber of an act or Misto component, falling back on its source URI.
+
+    Camera acts and Misto components were ingested before the Senate and carry
+    no `chamber` property (15/10/2026: 37,352 acts, all dati.camera.it URIs or
+    Camera placeholders); Senate nodes always have it.
+    """
+    if props.get("chamber"):
+        return props["chamber"]
+    uri = str(props.get("uri") or "")
+    if "senato.it" in uri:
+        return "senato"
+    if "camera.it" in uri or uri.startswith("placeholder:"):
+        return "camera"
+    return None
+
+
 MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July",
              "August", "September", "October", "November", "December"]
 
@@ -207,7 +224,7 @@ class HfExporter:
                 p = dict(rec["n"])
                 records.append({
                     "org_type": org_type,
-                    "chamber": p.get("chamber"),
+                    "chamber": source_chamber(p) if org_type != "government" else None,
                     "name": p["name"],
                     "acronym": p.get("acronym") or p.get("short_name"),
                     "uri": p.get("uri") or p.get("id"),
@@ -371,7 +388,7 @@ class HfExporter:
             p = dict(rec["n"])
             records.append({
                 "act_uri": p.get("uri"),
-                "chamber": p.get("chamber"),
+                "chamber": source_chamber(p),
                 "number": s(p.get("number")),
                 "act_type": p.get("type"),
                 "kind": p.get("kind"),

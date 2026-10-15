@@ -159,3 +159,11 @@ def test_zenodo_metadata_filled_from_export_meta():
 def test_zenodo_metadata_refuses_missing_counts():
     with pytest.raises(SystemExit):
         zenodo_update.render_metadata(BUILD / "zenodo_metadata.json", {"triples": 1})
+
+
+def test_source_chamber_falls_back_on_uri():
+    assert export_hf.source_chamber({"chamber": "senato", "uri": "x"}) == "senato"
+    assert export_hf.source_chamber({"uri": "http://dati.camera.it/ocd/aic.rdf/aic4_00001_19"}) == "camera"
+    assert export_hf.source_chamber({"uri": "placeholder:pdl:5-A"}) == "camera"
+    assert export_hf.source_chamber({"uri": "http://dati.senato.it/ddl/1"}) == "senato"
+    assert export_hf.source_chamber({"id": "gov_meloni"}) is None
