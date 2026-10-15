@@ -221,9 +221,15 @@ class CitabilityClassifier:
 
     def write_batch(self, records: list[dict]) -> None:
         # execute_write retries transient errors (deadlocks with the nightly
-        # job, which strips text from the same Chunk nodes).
-        with self._driver.session() as s:
-            s.execute_write(lambda tx: tx.run(
+        # job, which strips text from the same Chunk nodes). The server-side
+        # timeout matters because prod has db.transaction.timeout=0: a
+        # connection lost mid-commit left a transaction holding the locks of
+        # its chunks for over an hour, blocking every later run (15/10/2026).
+        from neo4j import unit_of_work
+
+        @unit_of_work(timeout=120)
+        def write(tx):
+            tx.run(
                 """
                 UNWIND $records AS rec
                 MATCH (c:Chunk {id: rec.id})
@@ -235,7 +241,10 @@ class CitabilityClassifier:
                 """,
                 records=records,
                 v=CITABILITY_V,
-            ).consume())
+            ).consume()
+
+        with self._driver.session() as s:
+            s.execute_write(write)
 
     # ------------------------------------------------------------------
     # OpenAI
