@@ -105,11 +105,11 @@ m = d.execute_query("MATCH (n:Session {chamber: \"senato\"}) WHERE n.recapIt IS 
                     "RETURN toString(max(n.date)) AS m").records[0]["m"]
 print(m or "")
 d.close()' "$URI" "$USER_VAL" 2>/dev/null)
-if [ -z "$OPENAI_VAL" ] || [ -z "$SUM_FRONTIER" ]; then
-	echo "── Senato: riassunti saltati (manca OPENAI_API_KEY o nessuna seduta ha un recap)"
+if [ -z "$OPENAI_VAL" ] || [ -z "$SUM_FRONTIER" ] || [ -z "$ARCHIVE_VAL" ]; then
+	echo "── Senato: riassunti saltati (manca OPENAI_API_KEY o ARCHIVE_URL, o nessuna seduta ha un recap)"
 else
 	step "riassunti delle sedute dal $SUM_FRONTIER" env OPENAI_API_KEY="$OPENAI_VAL" \
-		ARCHIVE_URL="$ARCHIVE_VAL" NEO4J_PASSWORD="$PASS_VAL" \
+		ARCHIVE_URL="$ARCHIVE_VAL" ARCHIVE_SCOPES=senato_19 NEO4J_PASSWORD="$PASS_VAL" \
 		"$PY" build/generate_summaries.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" \
 		--from-date "$SUM_FRONTIER" --chamber senato
 fi

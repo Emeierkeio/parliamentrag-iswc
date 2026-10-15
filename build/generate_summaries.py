@@ -213,10 +213,14 @@ class SummaryGenerator:
                 speeches = self._fetch_speeches_for_debate(d_id)
 
                 # Skip short debates (fewer than 3 speeches)
+                combined = " ".join(s["text"] for s in speeches if s.get("text"))[:4000]
                 if len(speeches) < 3:
                     logger.debug("Debate %s has %d speech(es) — skipping AI summary", d_id, len(speeches))
+                elif not combined.strip():
+                    # Archived text with the archive off (ARCHIVE_URL and
+                    # ARCHIVE_SCOPES): the model would write "no text was given".
+                    logger.warning("Debate %s: speeches without text — skipped", d_id)
                 else:
-                    combined = " ".join(s["text"] for s in speeches if s.get("text"))[:4000]
                     recap_it, recap_en = await self._generate_pair(
                         _debate_prompt_it(d_title, combined),
                         _debate_prompt_en(d_title, combined),
