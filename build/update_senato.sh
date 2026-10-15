@@ -62,6 +62,10 @@ senato_step() {
 	if [ "$blocked" -eq 1 ]; then echo "── Senato: $1 saltato (senato.it bloccato)"; return; fi
 	step "$@"
 }
+# Componenti del Gruppo Misto (AVS, Azione, Avanti PSI): una pagina di
+# senato.it. Senza, i senatori del Misto finirebbero sotto il «Misto» intero.
+senato_step "componenti del Gruppo Misto (senato.it)" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/ingest_misto_senato.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL"
 senato_step "voti aggregati (sedute nuove e ultimi 30 giorni)" votes --aggregate-only
 senato_step "voti individuali (votazioni che non li hanno ancora)" votes --individual-only
 senato_step "motivo dell'assenza (votazioni caricate prima: missione, presente non votante)" votes --reasons-only

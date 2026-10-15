@@ -136,6 +136,31 @@ class Validator:
         self.check(not rows, "0 senatori con più gruppi aperti nella stessa legislatura",
                    f"{rows}")
 
+        # Gruppo Misto: each senator goes to their political component (AVS,
+        # Azione, Avanti PSI), never to the whole Misto. Those without one
+        # (senators for life) must at least be listed by the source page
+        # (build/ingest_misto_senato.py): otherwise the ingest has not seen them.
+        rows = self.q("""
+            MATCH (p:Senator)-[m:MEMBER_OF_GROUP {chamber: 'senato'}]->(g:ParliamentaryGroup {name: 'Misto'})
+            WHERE m.end_date IS NULL
+            OPTIONAL MATCH (p)-[mc:MEMBER_OF_COMPONENT]->(:MistoComponent {chamber: 'senato'})
+            WHERE mc.end_date IS NULL
+            WITH p, count(mc) AS comps
+            RETURN count(p) AS tot, sum(CASE WHEN comps > 0 THEN 1 ELSE 0 END) AS with_comp,
+                   [x IN collect(CASE WHEN comps = 0 AND p.misto_page_seen IS NULL
+                                      THEN p.last_name END) WHERE x IS NOT NULL] AS unseen,
+                   [x IN collect(CASE WHEN comps = 0 AND p.misto_page_seen IS NOT NULL
+                                      THEN p.last_name END) WHERE x IS NOT NULL] AS without
+        """)
+        r = rows[0]
+        if r["tot"]:
+            self.check(r["with_comp"] > 0 and not r["unseen"],
+                       f"senatori del Misto con componente: {r['with_comp']}/{r['tot']}"
+                       + (f" (senza componente per la fonte: {', '.join(sorted(r['without']))})"
+                          if r["without"] else ""),
+                       f"mai visti da build/ingest_misto_senato.py: {r['unseen']}" if r["unseen"]
+                       else "nessuna componente: lanciare build/ingest_misto_senato.py")
+
         # dati.senato.it publishes both the totals and the per-senator votes;
         # a gap means a half-loaded sitting (the per-sitting resume skips it).
         rows = self.q("""

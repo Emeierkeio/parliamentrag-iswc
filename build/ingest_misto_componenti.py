@@ -154,7 +154,8 @@ def ingest(rows: list[dict], driver) -> None:
             UNWIND $rows AS row
             MERGE (mc:MistoComponent {uri: row.comp_uri})
             SET mc.name = row.name,
-                mc.short_name = row.short_name
+                mc.short_name = row.short_name,
+                mc.chamber = 'camera'
             WITH mc, row
             MATCH (d:Deputy {id: row.deputy_id})
             MERGE (d)-[m:MEMBER_OF_COMPONENT {start_date: date(row.start_date)}]->(mc)
