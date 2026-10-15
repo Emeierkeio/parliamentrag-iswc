@@ -13,3 +13,11 @@ def test_proper_nouns_keep_capital():
     assert lead_body("Giorgia Meloni ha detto") == "Giorgia Meloni ha detto"
     assert lead_body("Italia Viva sostiene") == "Italia Viva sostiene"
     assert lead_body("IV sostiene") == "IV sostiene"
+
+
+def test_group_named_per_reads_naturally():
+    from app.services.generation.integrator import readable_party_leads
+    text = "Per Lega, il gruppo.\n\nPer Per le Autonomie (SVP-PATT, Campobase), il gruppo."
+    assert readable_party_leads(text) == (
+        "Per Lega, il gruppo.\n\n"
+        "Per il gruppo Per le Autonomie (SVP-PATT, Campobase), il gruppo.")

@@ -16,7 +16,7 @@ from datetime import datetime
 from .analyst import ClaimAnalyst
 from .sectional import SectionalWriter
 from .evidence_first_writer import EvidenceFirstWriter
-from .integrator import NarrativeIntegrator, lead_body, party_lead
+from .integrator import NarrativeIntegrator, lead_body, party_lead, readable_party_leads
 from .surgeon import CitationSurgeon
 from .citation_registry import CitationRegistry
 from .coherence_validator import CoherenceValidator
@@ -585,6 +585,9 @@ class GenerationPipeline:
             pipeline_metadata["stages"]["attribution_enforcement"] = {
                 "names_anonymized": attribution_fixes,
             }
+
+        # Last pass on the wording: nothing below looks for "Per {party},"
+        final_text = readable_party_leads(final_text)
 
         # Replace unresolved [CIT:id] placeholders with an error marker
         remaining_placeholders = re.findall(r'\[CIT:([^\]]+)\]', final_text)

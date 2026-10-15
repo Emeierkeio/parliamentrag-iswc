@@ -44,6 +44,13 @@ def party_lead(party: str, body: str) -> str:
     return f"Per {party}, {lead_body(body)}"
 
 
+def readable_party_leads(text: str) -> str:
+    """Final wording of the leads, once no pass looks for "Per {party}," any
+    more: a group whose name starts with "Per" (Per le Autonomie) reads
+    "Per il gruppo Per le Autonomie, ..." instead of "Per Per le Autonomie"."""
+    return re.sub(r"(?m)^Per (?=Per )", "Per il gruppo ", text)
+
+
 
 
 def _members_word() -> str:
