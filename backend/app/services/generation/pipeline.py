@@ -16,7 +16,7 @@ from datetime import datetime
 from .analyst import ClaimAnalyst
 from .sectional import SectionalWriter
 from .evidence_first_writer import EvidenceFirstWriter
-from .integrator import NarrativeIntegrator
+from .integrator import NarrativeIntegrator, lead_body, party_lead
 from .surgeon import CitationSurgeon
 from .citation_registry import CitationRegistry
 from .coherence_validator import CoherenceValidator
@@ -816,7 +816,7 @@ class GenerationPipeline:
         party_escaped = re.escape(party).replace(r"'", "['’]").replace("’", "['’]")
         # Strict match: canonical "Per {party}," format
         pattern = rf'(Per {party_escaped},\s+).*?(?=\n\nPer |\n\n##|\Z)'
-        new_text, n = re.subn(pattern, rf'\g<1>{new_body}', text, flags=re.DOTALL)
+        new_text, n = re.subn(pattern, lambda m: m.group(1) + lead_body(new_body), text, flags=re.DOTALL)
         if n > 0:
             logger.info(f"Rewrote citation-free paragraph for '{party}'")
             return new_text
@@ -832,7 +832,7 @@ class GenerationPipeline:
                 continue
             first_sentence = stripped.split('.')[0].replace("’", "'")
             if party_norm in first_sentence:
-                parts[i] = f"Per {party}, {new_body}"
+                parts[i] = party_lead(party, new_body)
                 logger.info(f"Rewrote citation-free paragraph for '{party}' (loose match)")
                 return '\n\n'.join(parts)
 
@@ -1105,7 +1105,7 @@ class GenerationPipeline:
         misto_injections: list = []
 
         for party, body in rewritten.items():
-            para = f"Per {party}, {body}"
+            para = party_lead(party, body)
             if party in MAGGIORANZA:
                 magg_injections.append(para)
             elif party in MISTO:

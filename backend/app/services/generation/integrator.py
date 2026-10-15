@@ -18,6 +18,32 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Words a section body may open with that are not proper nouns: after the
+# "Per {party}, " lead they continue the sentence, so they go lower case
+# ("Per Lega, il gruppo..." rather than "Per Lega, Il gruppo...").
+_LEAD_LOWER = {
+    "il", "lo", "la", "i", "gli", "le", "l", "un", "uno", "una",
+    "nel", "nello", "nella", "nei", "negli", "nelle", "in", "durante",
+    "secondo", "anche", "per", "con", "su", "sul", "sulla", "da", "dal",
+    "dalla", "dopo", "pur", "sebbene", "questo", "questa", "tale",
+}
+
+
+def lead_body(body: str) -> str:
+    """Body that follows "Per {party}, ": an opening article or preposition
+    goes to lower case so the sentence reads on after the comma."""
+    body = body.lstrip()
+    m = re.match(r"([A-Z][a-zà-ù]*)(['’\s])", body)
+    if m and m.group(1).lower() in _LEAD_LOWER:
+        body = body[0].lower() + body[1:]
+    return body
+
+
+def party_lead(party: str, body: str) -> str:
+    """Paragraph "Per {party}, {body}"."""
+    return f"Per {party}, {lead_body(body)}"
+
+
 
 
 def _members_word() -> str:
@@ -551,7 +577,7 @@ Scrivi le 2 frasi dell'introduzione."""
         for party in self.MAGGIORANZA:
             content = self._get_section_by_party(sections, party)
             if content:
-                magg_parts.append(f"Per {party}, " + strip_party_header(content))
+                magg_parts.append(party_lead(party, strip_party_header(content)))
         if magg_parts:
             parts.append("## Posizioni della Maggioranza\n\n" + "\n\n".join(magg_parts))
 
@@ -560,7 +586,7 @@ Scrivi le 2 frasi dell'introduzione."""
         for party in self.OPPOSIZIONE:
             content = self._get_section_by_party(sections, party)
             if content:
-                opp_parts.append(f"Per {party}, " + strip_party_header(content))
+                opp_parts.append(party_lead(party, strip_party_header(content)))
         if opp_parts:
             parts.append("## Posizioni dell'Opposizione\n\n" + "\n\n".join(opp_parts))
 
@@ -569,7 +595,7 @@ Scrivi le 2 frasi dell'introduzione."""
         for party in self.MISTO:
             content = self._get_section_by_party(sections, party)
             if content:
-                misto_parts.append(f"Per {party}, " + strip_party_header(content))
+                misto_parts.append(party_lead(party, strip_party_header(content)))
         if misto_parts:
             parts.append("## Gruppo Misto\n\n" + "\n\n".join(misto_parts))
 
