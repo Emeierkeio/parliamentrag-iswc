@@ -151,16 +151,16 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
           su: " su ", senza: "senza punteggio", res: "Resoconto", sbagliato: "scritto come",
           stati: { exact: "Esatta", omissions: "Salta delle parole", modified: "Non coincide", not_found: "Non trovata" },
           vicino: "il nome di chi parla non compare vicino", detta: "Detta da",
-          piede: "Controllo deterministico sui dati ufficiali della Camera, senza modelli di AI.",
-          sito: "Verifica una risposta su www.parliamentrag.it/verifica", ambito: "Camera · XIX legislatura" },
+          piede: "Controllo deterministico sui dati ufficiali di Camera e Senato, senza modelli di AI.",
+          sito: "Verifica una risposta su www.parliamentrag.it/verifica", ambito: "Parlamento · XIX legislatura" },
     en: { attesa: "Checking…", gruppi: "All groups", voci: "Authoritative voices", cit: "Exact quotes",
           presenti: "present", mancano: "Missing", tutti: "Every voice is there.", autorevoli: "authoritative",
           esatte: "exact", nessuna: "none", gov: "Government", rel: "rapporteur", nom: "named",
           su: " of ", senza: "not ranked", res: "Record", sbagliato: "written as",
           stati: { exact: "Exact", omissions: "Skips words", modified: "Does not match", not_found: "Not found" },
           vicino: "the speaker's name is not near the quote", detta: "Said by",
-          piede: "Deterministic check on the Chamber's official data, with no AI model.",
-          sito: "Check an answer at www.parliamentrag.it/verifica", ambito: "Chamber · 19th legislature" }
+          piede: "Deterministic check on the official data of the Chamber and the Senate, with no AI model.",
+          sito: "Check an answer at www.parliamentrag.it/verifica", ambito: "Italian Parliament · 19th legislature" }
   };
   var L = function () { return T[window.lingua()]; };
   var M = { pass: "✓", fail: "✕", na: "–" };
@@ -230,15 +230,39 @@ HEMICYCLE_VIEW = """<!doctype html><html lang="it"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Emiciclo ParliamentRAG</title>
 <style>""" + _STILE + r"""
-h1 { font: 600 16px/1.3 var(--serif); margin: 0 0 2px; }
-.sotto { font-size: 12px; color: var(--inchiostro-2); margin: 0 0 10px; }
-.grafico { background: #fbfaf7; border: 1px solid var(--filetto); border-radius: 10px; overflow: hidden; }
-.grafico img, .grafico svg { display: block; width: 100%; height: auto; }
-.numeri { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 4px; font: 13px var(--mono); }
-.numeri b { font-weight: 700; }
-.fav b { color: var(--si); } .con b { color: var(--no); } .ast b { color: var(--forse); }
-.esito { font-weight: 600; }
-.piede { margin-top: 8px; font-size: 12px; color: var(--inchiostro-3); }
+:root { --assente: #cfc9bd; } :root[data-theme="dark"] { --assente: #4a5054; }
+h1 { font: 600 17px/1.3 var(--serif); margin: 0; }
+.sotto { font-size: 12.5px; color: var(--inchiostro-2); margin: 3px 0 0; }
+.capo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.esito { flex: none; font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  padding: 6px 9px; border-radius: 999px; color: #fff; background: var(--inchiostro-3); }
+.esito[data-o="approved"] { background: var(--si); } .esito[data-o="rejected"] { background: var(--no); }
+.barra { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--filetto); }
+.barra i { display: block; height: 100%; }
+.voci { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 12px; font-size: 12.5px; color: var(--inchiostro-2); }
+.voci span { display: inline-flex; align-items: center; gap: 6px; }
+.voci b { font: 600 13px var(--mono); color: var(--inchiostro); }
+.pt { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.f { background: var(--si); } .c { background: var(--no); } .a { background: var(--forse); } .x { background: var(--assente); }
+.grafico { position: relative; background: var(--foglio); border: 1px solid var(--filetto); border-radius: 12px; padding: 10px 10px 4px; }
+.grafico svg { display: block; width: 100%; height: auto; touch-action: manipulation; }
+.grafico circle { transition: opacity .15s; }
+.grafico svg.filtro circle.s:not(.su) { opacity: .16; }
+.grafico circle.s.qui { stroke: var(--inchiostro); stroke-width: 2; }
+.etic { position: absolute; pointer-events: none; transform: translate(-50%, calc(-100% - 10px));
+  background: var(--inchiostro); color: var(--carta); font-size: 12px; line-height: 1.35;
+  padding: 6px 9px; border-radius: 6px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.18); display: none; }
+.etic b { font-weight: 600; } .etic span { opacity: .75; }
+.gruppi { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 10px; }
+.gruppo { all: unset; box-sizing: border-box; cursor: pointer; padding: 7px 9px; border: 1px solid var(--filetto);
+  border-radius: 8px; background: var(--foglio); font-size: 12px; }
+.gruppo:hover, .gruppo[aria-pressed="true"] { border-color: var(--accento); }
+.gruppo:focus-visible { outline: 2px solid var(--accento); outline-offset: 1px; }
+.gruppo .nome { display: flex; justify-content: space-between; gap: 6px; font-weight: 600; margin-bottom: 5px; }
+.gruppo .nome small { font: 11px var(--mono); color: var(--inchiostro-3); font-weight: 400; }
+.gruppo .barra { height: 5px; }
+.gruppo .cifre { margin-top: 4px; font: 11px var(--mono); color: var(--inchiostro-2); display: flex; gap: 8px; }
+.piede { margin-top: 10px; font-size: 11.5px; color: var(--inchiostro-3); }
 .segreto { padding: 12px; background: var(--foglio); border: 1px solid var(--filetto); border-radius: 10px; }
 </style></head><body>
 <div class="testa"><span class="marchio">""" + _MARCHIO + r"""<span>ParliamentRAG</span></span><span class="etichetta" id="ambito"></span></div>
@@ -246,45 +270,133 @@ h1 { font: 600 16px/1.3 var(--serif); margin: 0 0 2px; }
 <script>""" + _PONTE + r"""
 (function () {
   var T = {
-    it: { attesa: "Carico il voto…", fav: "favorevoli", con: "contrari", ast: "astenuti", pres: "presenti",
-          esito: "Esito", grafico: "Immagine", segreto: "Voto segreto", ambito: "Camera · XIX legislatura",
-          esiti: { approved: "approvata", rejected: "respinta" },
-          spiega: "Nel voto segreto i voti dei singoli deputati non sono pubblici: non c'è un emiciclo da disegnare. Sono ufficiali solo i totali.",
-          nodati: "Per questa votazione non ci sono i voti dei singoli deputati.",
-          piede: "Un punto per deputato, raggruppati per gruppo: non è la posizione reale in Aula." },
-    en: { attesa: "Loading the vote…", fav: "in favour", con: "against", ast: "abstained", pres: "present",
-          esito: "Outcome", grafico: "Image", segreto: "Secret ballot", ambito: "Chamber · 19th legislature",
-          esiti: { approved: "approved", rejected: "rejected" },
+    it: { attesa: "Carico il voto…", esiti: { approved: "Approvata", rejected: "Respinta" },
+          f: "Favorevoli", c: "Contrari", a: "Astenuti", x: "Assenti", pres: "presenti",
+          voto: { f: "favorevole", c: "contrario", a: "astenuto", x: "assente" },
+          ambiti: { camera: "Camera · XIX legislatura", senato: "Senato · XIX legislatura" },
+          segreto: "Voto segreto", grafico: "Immagine",
+          spiega: "Nel voto segreto i voti dei singoli parlamentari non sono pubblici: non c'è un emiciclo da disegnare. Sono ufficiali solo i totali.",
+          nodati: "Per questa votazione non ci sono i voti dei singoli parlamentari.",
+          gruppi: "Tocca un gruppo per evidenziarlo",
+          piede: { camera: "Un punto per deputato, raggruppati per gruppo: non è la posizione reale in Aula.",
+                   senato: "Ogni senatore al suo posto nella pianta dell'Aula di Palazzo Madama." } },
+    en: { attesa: "Loading the vote…", esiti: { approved: "Approved", rejected: "Rejected" },
+          f: "In favour", c: "Against", a: "Abstained", x: "Absent", pres: "present",
+          voto: { f: "in favour", c: "against", a: "abstained", x: "absent" },
+          ambiti: { camera: "Chamber of Deputies · 19th legislature", senato: "Senate · 19th legislature" },
+          segreto: "Secret ballot", grafico: "Image",
           spiega: "In a secret ballot individual votes are not public: there is no hemicycle to draw. Only the totals are official.",
           nodati: "There are no individual votes for this roll call.",
-          piede: "One dot per deputy, grouped by group: not the real seat in the Chamber." }
+          gruppi: "Tap a group to highlight it",
+          piede: { camera: "One dot per deputy, grouped by group: not the real seat in the Chamber.",
+                   senato: "Each senator on their seat in the plan of the Senate chamber." } }
   };
   var L = function () { return T[window.lingua()]; };
+  var COD = ["f", "c", "a", "x"];
+  var COL = { f: "var(--si)", c: "var(--no)", a: "var(--forse)", x: "var(--assente)" };
   document.getElementById("attesa").textContent = L().attesa;
+
+  function barra(n, tot) {
+    return '<div class="barra">' + COD.map(function (k) {
+      return n[k] ? '<i class="' + k + '" style="width:' + (100 * n[k] / tot).toFixed(2) + '%"></i>' : "";
+    }).join("") + "</div>";
+  }
+
   window.disegna = function (p) {
     var t = L(), esc = window.esc, d = window.datiDa(p) || {}, blocchi = p.content || [];
-    document.getElementById("ambito").textContent = t.ambito;
-    var tot = d.official_totals || {};
-    var h = "<h1>" + esc(d.subject || d.description || "") + "</h1>";
-    if (d.subject && d.description) h += '<p class="sotto">' + esc(d.description) + "</p>";
-    var numeri = '<div class="numeri">' +
-      (d.outcome ? '<span class="esito">' + t.esito + ": " + esc(t.esiti[d.outcome] || d.outcome) + "</span>" : "") +
-      '<span class="fav"><b>' + esc(tot.in_favor) + "</b> " + t.fav + "</span>" +
-      '<span class="con"><b>' + esc(tot.against) + "</b> " + t.con + "</span>" +
-      '<span class="ast"><b>' + esc(tot.abstained) + "</b> " + t.ast + "</span>" +
-      "<span><b>" + esc(tot.present) + "</b> " + t.pres + "</span></div>";
+    var aula = d.chamber === "senato" ? "senato" : "camera";
+    document.getElementById("ambito").textContent = t.ambiti[aula];
+    var tot = d.official_totals || {}, m = d.seat_map;
+    var h = '<div class="capo"><div><h1>' + esc(d.subject || d.description || "") + "</h1>" +
+      (d.subject && d.description ? '<p class="sotto">' + esc(d.description) + "</p>" : "") + "</div>" +
+      (d.outcome ? '<span class="esito" data-o="' + esc(d.outcome) + '">' + esc(t.esiti[d.outcome] || d.outcome) + "</span>" : "") + "</div>";
+
     if (d.available === false) {
-      h += '<div class="segreto">' + (d.secret_vote ? "<b>" + t.segreto + "</b><p>" + t.spiega + "</p>" : "<p>" + t.nodati + "</p>") + "</div>" + numeri;
-    } else {
-      var grafico = "";
-      blocchi.forEach(function (b) {
-        if (b.type === "image" && b.data) grafico = '<img alt="" src="data:' + esc(b.mimeType || "image/png") + ";base64," + b.data + '">';
-        else if (b.type === "text" && /^\s*<svg/.test(b.text || "")) grafico = b.text;
-      });
-      h += '<div class="grafico">' + grafico + "</div>" + numeri;
-      h += '<p class="piede">' + t.piede + (d.image_png_url ? ' <a href="' + esc(d.image_png_url) + '">' + t.grafico + "</a>" : "") + "</p>";
+      h += '<div class="segreto">' + (d.secret_vote ? "<b>" + t.segreto + "</b><p>" + t.spiega + "</p>" : "<p>" + t.nodati + "</p>") + "</div>";
+      h += '<div class="voci"><span><b>' + esc(tot.in_favor) + "</b> " + t.f + "</span><span><b>" + esc(tot.against) + "</b> " + t.c +
+           "</span><span><b>" + esc(tot.abstained) + "</b> " + t.a + "</span><span><b>" + esc(tot.present) + "</b> " + t.pres + "</span></div>";
+      document.getElementById("corpo").innerHTML = h;
+      return;
     }
+
+    if (!m) {  // older server: picture only
+      var img = "";
+      blocchi.forEach(function (b) {
+        if (b.type === "image" && b.data) img = '<img alt="" style="width:100%" src="data:' + esc(b.mimeType || "image/png") + ";base64," + b.data + '">';
+      });
+      document.getElementById("corpo").innerHTML = h + '<div class="grafico">' + img + "</div>";
+      return;
+    }
+
+    var n = { f: m.tally.favor, c: m.tally.against, a: m.tally.abstain, x: m.tally.absent };
+    var tutti = n.f + n.c + n.a + n.x;
+    h += barra(n, tutti);
+    h += '<div class="voci">' + COD.map(function (k) {
+      return n[k] ? '<span><i class="pt ' + k + '"></i><b>' + n[k] + "</b> " + t[k] + "</span>" : "";
+    }).join("") + (tot.present != null ? "<span><b>" + esc(tot.present) + "</b> " + t.pres + "</span>" : "") + "</div>";
+
+    // hemicycle
+    var W = m.box[0], H = m.box[1], r = m.dot;
+    var svg = '<svg viewBox="0 0 ' + W + " " + (H + 8) + '" role="img" aria-label="' + esc(d.subject || "") + '">';
+    (m.empty || []).forEach(function (e) {
+      svg += '<circle cx="' + e[0] + '" cy="' + e[1] + '" r="' + r + '" fill="none" stroke="var(--filetto)" stroke-width="1.5"/>';
+    });
+    m.seats.forEach(function (s, i) {
+      svg += '<circle class="s" data-i="' + i + '" data-g="' + esc(s[4]) + '" cx="' + s[0] + '" cy="' + s[1] + '" r="' + r +
+             '" fill="' + COL[s[2]] + '"><title>' + esc(s[3]) + " · " + esc(s[4]) + " · " + t.voto[s[2]] + "</title></circle>";
+    });
+    svg += "</svg>";
+    h += '<div class="grafico">' + svg + '<div class="etic" id="etic"></div></div>';
+
+    // groups, in arc order
+    var conta = {};
+    m.seats.forEach(function (s) {
+      var g = conta[s[4]] || (conta[s[4]] = { f: 0, c: 0, a: 0, x: 0 });
+      g[s[2]]++;
+    });
+    h += '<p class="piede" style="margin:10px 0 0">' + t.gruppi + "</p><div class=\"gruppi\">";
+    Object.keys(m.groups).forEach(function (g) {
+      var c = conta[g] || { f: 0, c: 0, a: 0, x: 0 }, k = c.f + c.c + c.a + c.x;
+      h += '<button class="gruppo" type="button" aria-pressed="false" data-g="' + esc(g) + '" title="' + esc(m.groups[g]) + '">' +
+           '<div class="nome"><span>' + esc(g) + "</span><small>" + k + "</small></div>" + barra(c, k) +
+           '<div class="cifre">' + COD.map(function (q) {
+             return c[q] ? '<span><i class="pt ' + q + '"></i> ' + c[q] + "</span>" : "";
+           }).join("") + "</div></button>";
+    });
+    h += "</div>";
+    h += '<p class="piede">' + t.piede[aula] + (d.image_png_url ? ' <a href="' + esc(d.image_png_url) + '">' + t.grafico + "</a>" : "") + "</p>";
     document.getElementById("corpo").innerHTML = h;
+
+    // interaction: label on hover or tap, highlight a group
+    var box = document.querySelector(".grafico"), el = box.querySelector("svg"), etic = document.getElementById("etic");
+    var qui = null;
+    function mostra(c) {
+      if (qui) qui.classList.remove("qui");
+      if (!c) { etic.style.display = "none"; qui = null; return; }
+      var s = m.seats[+c.getAttribute("data-i")];
+      qui = c; c.classList.add("qui");
+      etic.innerHTML = "<b>" + esc(s[3]) + "</b><br><span>" + esc(m.groups[s[4]] || s[4]) + "</span><br>" +
+        '<i class="pt ' + s[2] + '"></i> ' + t.voto[s[2]];
+      var a = box.getBoundingClientRect(), b = c.getBoundingClientRect();
+      var x = b.left + b.width / 2 - a.left;
+      etic.style.display = "block";
+      var w = etic.offsetWidth / 2;
+      etic.style.left = Math.max(w + 4, Math.min(a.width - w - 4, x)) + "px";
+      etic.style.top = (b.top - a.top) + "px";
+    }
+    el.addEventListener("pointerover", function (e) { if (e.target.classList.contains("s")) mostra(e.target); });
+    el.addEventListener("pointerleave", function () { mostra(null); });
+    el.addEventListener("click", function (e) { mostra(e.target.classList.contains("s") ? e.target : null); });
+    var scelto = null;
+    document.querySelectorAll(".gruppo").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var g = b.getAttribute("data-g");
+        scelto = scelto === g ? null : g;
+        document.querySelectorAll(".gruppo").forEach(function (o) { o.setAttribute("aria-pressed", String(o.getAttribute("data-g") === scelto)); });
+        el.classList.toggle("filtro", !!scelto);
+        el.querySelectorAll("circle.s").forEach(function (c) { c.classList.toggle("su", c.getAttribute("data-g") === scelto); });
+      });
+    });
   };
 })();
 </script></body></html>"""

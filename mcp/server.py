@@ -620,6 +620,7 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
             ),
             "official_totals": totals,
             "outcome": d.get("outcome"),
+            "chamber": d.get("chamber"),
         }
     participants = d.get("participants", [])
     if not any(p.get("outcome") in ("favor", "against") for p in participants):
@@ -629,11 +630,13 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
             "reason": "No individual vote data available for this roll call.",
             "official_totals": totals,
             "outcome": d.get("outcome"),
+            "chamber": d.get("chamber"),
         }
     title, sub, note = _hemicycle_captions(d, participants)
     summary = {
         "available": True,
         "vote_id": d.get("id"),
+        "chamber": d.get("chamber"),
         "subject": d.get("subject"),
         "description": d.get("description"),
         "outcome": d.get("outcome"),
@@ -641,6 +644,8 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
         "breakdown_by_group": d.get("breakdown"),
         "counts_consistency": _counts_consistency(d),
         "individual_votes_drawn": len(participants),
+        # For the MCP Apps view, which draws the chart: not for the answer.
+        "seat_map": _seat_payload(participants, d.get("chamber")),
         "image_png_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.png?r={_RENDER_V}",
         "image_svg_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.svg?r={_RENDER_V}",
         "chart_note": note,
@@ -1016,7 +1021,7 @@ def _senate_layout(participants: list[dict], plan: dict):
     taken: dict[int, dict] = {}
     pending: list[dict] = []
     for p in participants:
-        pid = (p.get("id") or "").rstrip("/")
+        pid = (p.get("senato_id") or p.get("id") or "").rstrip("/")
         seat = None
         if "dati.senato.it/senatore/" in pid:
             seat = plan["by_id"].get(pid.rsplit("/", 1)[-1])
@@ -1107,6 +1112,39 @@ def _hemicycle_layout(participants: list[dict], chamber: Optional[str] = None):
         tally[p.get("outcome") if p.get("outcome") in tally else "absent"] += 1
 
     return ordered, seats, dot, tally, []
+
+
+_SEAT_CODE = {"favor": "f", "against": "c", "abstain": "a"}
+
+
+def _display_name(p: dict) -> str:
+    name = f"{p.get('first_name') or ''} {p.get('last_name') or ''}".strip()
+    return name.title() if name.isupper() else name
+
+
+def _seat_payload(participants: list[dict], chamber: Optional[str]) -> dict:
+    """Seats for the MCP Apps view, which draws the hemicycle itself (with a
+    label per dot): same geometry as the PNG, cropped to the seats, rounded
+    to whole units to keep the result small."""
+    ordered, seats, dot, tally, empty = _hemicycle_layout(participants, chamber)
+    pts = [(x, y) for x, y, _a, _r in seats] + list(empty)
+    x0 = min(x for x, _ in pts) - dot * 2
+    y0 = min(y for _, y in pts) - dot * 2
+    w = max(x for x, _ in pts) + dot * 2 - x0
+    h = max(y for _, y in pts) + dot * 2 - y0
+    return {
+        "box": [round(w), round(h)],
+        "dot": round(dot, 1),
+        "seats": [
+            [round(x - x0), round(y - y0), _SEAT_CODE.get(p.get("outcome"), "x"),
+             _display_name(p), _party_abbr(p.get("party"))]
+            for (x, y, _a, _r), p in zip(seats, ordered)
+        ],
+        # Abbreviation -> full group name, in left-to-right order on the arc.
+        "groups": {_party_abbr(p.get("party")): p.get("party") or "" for p in ordered},
+        "empty": [[round(x - x0), round(y - y0)] for x, y in empty],
+        "tally": tally,
+    }
 
 
 _LEGEND_LABELS = [("favor", "Favorevoli"), ("against", "Contrari"),
