@@ -110,8 +110,8 @@ def _ro(title: str) -> ToolAnnotations:
 # Viste MCP Apps: l'host (claude.ai, ChatGPT, Claude Desktop) le mostra sotto
 # la chiamata dello strumento. Gli host senza MCP Apps usano il testo.
 _UI_MIME = "text/html;profile=mcp-app"
-_VERIFY_UI = "ui://parliamentrag/verify.html"
-_HEMICYCLE_UI = "ui://parliamentrag/hemicycle.html"
+_VERIFY_UI = "ui://parliamentrag/verify-v2.html"
+_HEMICYCLE_UI = "ui://parliamentrag/hemicycle-v2.html"
 
 
 def _ui(uri: str) -> dict:
@@ -908,7 +908,7 @@ _HEMI_W, _HEMI_H = 1400, 970
 # Versione del renderer, nei query string degli URL immagine: i voti sono
 # immutabili ma la grafica evolve, e Cloudflare tiene la cache per max-age —
 # bump a ogni modifica visiva per non servire render vecchi.
-_RENDER_V = "4"
+_RENDER_V = "5"
 _HEMI_DISCLAIMER = ("Rappresentazione schematica: i punti mostrano i totali di "
                     "voto per gruppo, non il seggio reale dei singoli deputati.")
 
