@@ -245,9 +245,17 @@ def _verdict(r: dict) -> list[str]:
                 return "Government"
             if v.get("role") == "relatore":
                 return "rapporteur"
-            return f"{v['rank']}/{v['group_size']} in group" if v.get("rank") else "not ranked"
+            if v.get("on_topic") is False:
+                return "did not speak on the topic"
+            if not v.get("rank"):
+                return "not ranked"
+            size = v.get("pool_size", v.get("group_size"))
+            if v.get("pool") == "speakers_on_topic":
+                return f"{v['rank']}/{size} among those in the group who spoke on the topic"
+            return f"{v['rank']}/{size} in group"
         ok = sum(1 for v in voices if v["authoritative"])
-        authority = f"{ok}/{len(voices)} authoritative (Government, rapporteur or top 5 of their group): " + \
+        authority = (f"{ok}/{len(voices)} authoritative (Government, rapporteur or top 5 of their group "
+                     "among those who spoke on the topic): ") + \
             "; ".join(f"{v['name']} {why(v)}" + (" (named)" if v.get("source") == "named" else "") for v in voices)
 
     if not q["total"]:
@@ -285,7 +293,8 @@ async def verify_answer(
        Government quoted
        exactly or named (full name, or surname without namesakes) speaks for
        the Government, is the rapporteur, or is among the top 5 of their
-       group by authority on the question's topic.
+       group by authority on the question's topic, ranked among the members
+       of the group who spoke on that topic.
     3. Exact quotes: every text in «…», “…” or "…" of 4+ words is a
        continuous stretch of one floor speech of the Chamber or the Senate
        in the 19th legislature, and
@@ -349,7 +358,8 @@ async def verify_answer(
             "topic": r["authority"]["topic"],
             "available": r["authority"]["available"],
             "voices": [
-                {k: v[k] for k in ("name", "group", "role", "rank", "group_size", "authoritative", "source") if k in v}
+                {k: v[k] for k in ("name", "group", "role", "rank", "pool_size", "group_size", "pool", "on_topic",
+                                         "authoritative", "source") if k in v}
                 for v in r["authority"]["voices"]
             ],
         },

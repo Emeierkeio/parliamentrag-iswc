@@ -152,7 +152,7 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
     it: { attesa: "Verifica in corso…", gruppi: "Tutti i gruppi", voci: "Voci autorevoli", cit: "Citazioni esatte",
           presenti: "presenti", mancano: "Mancano", tutti: "Ci sono tutte le voci.", autorevoli: "autorevoli",
           esatte: "esatte", nessuna: "nessuna", gov: "Governo", rel: "relatore", nom: "nominato",
-          su: " su ", senza: "senza punteggio", res: "Resoconto", sbagliato: "scritto come",
+          su: " su ", senza: "senza punteggio", tema: " tra chi ha parlato del tema", fuori: "non ha parlato del tema", res: "Resoconto", sbagliato: "scritto come",
           stati: { exact: "Esatta", omissions: "Salta delle parole", modified: "Non coincide", not_found: "Non trovata" },
           vicino: "il nome di chi parla non compare vicino", detta: "Detta da",
           piede: "Controllo deterministico sui dati ufficiali di Camera e Senato, senza modelli di AI.",
@@ -160,7 +160,7 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
     en: { attesa: "Checking…", gruppi: "All groups", voci: "Authoritative voices", cit: "Exact quotes",
           presenti: "present", mancano: "Missing", tutti: "Every voice is there.", autorevoli: "authoritative",
           esatte: "exact", nessuna: "none", gov: "Government", rel: "rapporteur", nom: "named",
-          su: " of ", senza: "not ranked", res: "Record", sbagliato: "written as",
+          su: " of ", senza: "not ranked", tema: " among those who spoke on the topic", fuori: "did not speak on the topic", res: "Record", sbagliato: "written as",
           stati: { exact: "Exact", omissions: "Skips words", modified: "Does not match", not_found: "Not found" },
           vicino: "the speaker's name is not near the quote", detta: "Said by",
           piede: "Deterministic check on the official data of the Chamber and the Senate, with no AI model.",
@@ -204,7 +204,8 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
     if (!voci.length) h += '<p class="vuoto">' + t.nessuna + "</p>";
     else h += "<ul>" + voci.map(function (v) {
       var e = v.authoritative ? "pass" : v.authoritative === false ? "fail" : "na";
-      var perche = v.role === "governo" ? t.gov : v.role === "relatore" ? t.rel : v.rank ? v.rank + t.su + v.group_size : t.senza;
+      var perche = v.role === "governo" ? t.gov : v.role === "relatore" ? t.rel : v.on_topic === false ? t.fuori
+        : v.rank ? v.rank + t.su + (v.pool_size || v.group_size) + (v.pool === "speakers_on_topic" ? t.tema : "") : t.senza;
       return '<li><span class="mark" data-e="' + e + '">' + M[e] + '</span><span class="chi">' + esc(v.name) + ' <span class="etichetta">' + esc(v.group || "") + (v.source === "named" ? " · " + t.nom : "") + '</span></span><span class="dx">' + esc(perche) + "</span></li>";
     }).join("") + "</ul>";
     h += "</details>";
