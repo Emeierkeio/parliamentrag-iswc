@@ -25,7 +25,7 @@ from typing import Any, Optional
 import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp import Image as FastMCPImage
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 from ui_views import HEMICYCLE_VIEW, VERIFY_VIEW
 
@@ -487,6 +487,13 @@ async def get_vote_details(
         "breakdown_by_group": d.get("breakdown"),
         "counts_consistency": _counts_consistency(d),
     }
+    if not d.get("secret_vote"):
+        # The tool docstring alone was not enough: in a 16/10 test on claude.ai
+        # the model reported the vote without ever calling the hemicycle tool.
+        out = {"next_step": (
+            f'Call get_vote_hemicycle with vote_id="{d["id"]}" now, before you reply: '
+            "it shows the user the seating chart and gives the public image URL to cite."
+        ), **out}
     participants = d.get("participants", [])
     if deputy or group:
         needle_d = (deputy or "").lower()
@@ -644,8 +651,6 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
         "breakdown_by_group": d.get("breakdown"),
         "counts_consistency": _counts_consistency(d),
         "individual_votes_drawn": len(participants),
-        # For the MCP Apps view, which draws the chart: not for the answer.
-        "seat_map": _seat_payload(participants, d.get("chamber")),
         "image_png_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.png?r={_RENDER_V}",
         "image_svg_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.svg?r={_RENDER_V}",
         "chart_note": note,
@@ -655,10 +660,17 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
             "artifact or visualization: report the numbers in words and cite image_png_url."
         ),
     }
+    # The seat coordinates go only to the MCP Apps view, in _meta: hosts keep
+    # _meta out of the model context. With them in the text block the model
+    # had everything it needed to redraw the chart itself (16/10, claude.ai).
+    view_meta = {"seat_map": _seat_payload(participants, d.get("chamber"))}
+    text = TextContent(type="text", text=json.dumps(summary, ensure_ascii=False))
     if format == "svg":
-        return [summary, _render_hemicycle_svg(participants, title, sub, note, d.get("chamber"))]
+        svg = _render_hemicycle_svg(participants, title, sub, note, d.get("chamber"))
+        return CallToolResult(content=[text, TextContent(type="text", text=svg)], _meta=view_meta)
     png = _render_hemicycle_png(participants, title, sub, note, d.get("chamber"))
-    return [summary, FastMCPImage(data=png, format="png")]
+    image = FastMCPImage(data=png, format="png").to_image_content()
+    return CallToolResult(content=[text, image], _meta=view_meta)
 
 
 # Pagina umana sulla radice del dominio: chi apre l'URL nel browser (dal

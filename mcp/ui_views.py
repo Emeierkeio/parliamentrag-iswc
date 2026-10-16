@@ -65,12 +65,16 @@ _PONTE = r"""
   });
   /* Dal risultato: structuredContent, oppure il primo blocco di testo JSON */
   window.datiDa = function (p) {
-    if (p.structuredContent) return p.structuredContent;
+    var d = null;
+    if (p.structuredContent) d = p.structuredContent;
     var blocchi = p.content || [];
-    for (var i = 0; i < blocchi.length; i++) {
-      if (blocchi[i].type === "text") { try { return JSON.parse(blocchi[i].text); } catch (err) {} }
+    for (var i = 0; !d && i < blocchi.length; i++) {
+      if (blocchi[i].type === "text") { try { d = JSON.parse(blocchi[i].text); } catch (err) {} }
     }
-    return null;
+    /* I dati che servono solo alla vista (seggi dell'emiciclo) arrivano in _meta,
+       che l'host non mette nel contesto del modello */
+    if (d && p._meta && p._meta.seat_map && !d.seat_map) d.seat_map = p._meta.seat_map;
+    return d;
   };
   window.esc = function (s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
