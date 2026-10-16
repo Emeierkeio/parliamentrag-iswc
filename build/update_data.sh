@@ -279,7 +279,8 @@ fi
 # Presidenti, vice, tesorieri e segretari dei gruppi da dati.camera.it:
 # finiscono come role sulla MEMBER_OF_GROUP attiva (wipe & reapply).
 run "Group offices (direttivo)" "$PY" build/ingest_group_offices.py \
-	--neo4j-uri "$DEMO_NEO4J" --neo4j-user neo4j --neo4j-password "$NEO4J_PASS_VAL"
+	--neo4j-uri "$DEMO_NEO4J" --neo4j-user neo4j --neo4j-password "$NEO4J_PASS_VAL" \
+	|| warn "group offices failed (SPARQL Camera giù?) — retry at next update-data"
 if [ -n "$LOCAL_UP" ]; then
 	run "Group offices (locale)" "$PY" build/ingest_group_offices.py \
 		--neo4j-uri "$LOCAL_NEO4J" --neo4j-user neo4j --neo4j-password "$NEO4J_PASS_VAL" \
@@ -294,7 +295,8 @@ misto_ingest() { # $1 = neo4j uri
 	NEO4J_URI="$1" NEO4J_USER="${NEO4J_USER_VAL:-neo4j}" NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 		"$PY" build/ingest_misto_componenti.py
 }
-run "Componenti Misto" misto_ingest "$DEMO_NEO4J" || die
+run "Componenti Misto" misto_ingest "$DEMO_NEO4J" \
+	|| warn "componenti Misto failed (SPARQL Camera giù?) — restano quelle di ieri, retry at next update-data"
 if [ -n "$LOCAL_UP" ]; then
 	run "Componenti Misto (locale)" misto_ingest "$LOCAL_NEO4J" \
 		|| warn "componenti Misto (locale) failed — snapshot da riallineare al prossimo giro"
