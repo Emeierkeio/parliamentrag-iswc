@@ -31,6 +31,7 @@ from .routers.timeline import router as timeline_router
 from .routers.data import router as data_router
 from .config import MAINTENANCE_MODE, get_config, get_settings
 from .services.api_keys import api_key_middleware
+from .services.neo4j_client import NEO4J_UNAVAILABLE
 
 
 class _ContextEnricher(logging.Filter):
@@ -324,6 +325,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+DATA_UNAVAILABLE = (
+    "I dati del Parlamento non sono raggiungibili in questo momento. "
+    "Di solito torna tutto in meno di un minuto: riprova tra poco."
+)
+
+
+async def _neo4j_unavailable(request: Request, exc: Exception) -> JSONResponse:
+    """Neo4j stopped (nightly backup, restart) or unreachable: 503, not a bare 500."""
+    logger.warning(f"Neo4j unavailable on {request.url.path}: {type(exc).__name__}: {exc}")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": DATA_UNAVAILABLE, "code": "data_unavailable"},
+        headers={"Retry-After": "30"},
+    )
+
+
+for _exc in NEO4J_UNAVAILABLE:
+    app.add_exception_handler(_exc, _neo4j_unavailable)
+
 
 @app.middleware("http")
 async def maintenance_middleware(request: Request, call_next):

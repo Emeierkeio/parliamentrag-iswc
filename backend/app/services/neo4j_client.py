@@ -8,9 +8,19 @@ from typing import Any, Dict, List, Optional
 from contextlib import contextmanager
 
 from neo4j import GraphDatabase, Driver
-from neo4j.exceptions import ServiceUnavailable, AuthError
+from neo4j.exceptions import (
+    AuthError,
+    ConnectionPoolError,
+    DatabaseUnavailable,
+    ServiceUnavailable,
+    SessionExpired,
+)
 
 logger = logging.getLogger(__name__)
+
+# The database cannot be reached at all, as opposed to a bad query: the API
+# answers 503 with Retry-After (handler in app/main.py).
+NEO4J_UNAVAILABLE = (ServiceUnavailable, SessionExpired, DatabaseUnavailable, ConnectionPoolError)
 
 
 class Neo4jClient:
@@ -36,6 +46,10 @@ class Neo4jClient:
                 max_connection_lifetime=3600,
                 max_connection_pool_size=50,
                 connection_acquisition_timeout=60.0,
+                connection_timeout=10.0,
+                # Pooled connections die with the nightly Neo4j stop (backup at
+                # 00:45 UTC): test idle ones before use, as Fascicoli does.
+                liveness_check_timeout=30.0,
             )
             # Verify connectivity
             self._driver.verify_connectivity()
