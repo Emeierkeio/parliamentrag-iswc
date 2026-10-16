@@ -17,14 +17,17 @@ Run:  uv run mcp/server.py          (stdio transport, no install needed)
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp import Image as FastMCPImage
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from ui_views import HEMICYCLE_VIEW, VERIFY_VIEW
@@ -132,25 +135,67 @@ def _hemicycle_view() -> str:
     return HEMICYCLE_VIEW
 
 
-async def _get(path: str, params: dict | None = None) -> Any:
-    import asyncio
+# Il backup notturno ferma Neo4j per 40-50 s: il backend risponde 503 con
+# Retry-After. Si riprova fino a 45 s in tutto, attese di al più 15 s.
+_RETRY_STATUS = (502, 503, 504)
+_RETRY_BUDGET_S = 45.0
+_RETRY_WAIT_MAX_S = 15.0
+_UNREACHABLE = (
+    "Parliament data is temporarily unreachable (maintenance or outage): wait a "
+    "minute and call the tool again; do not answer from memory."
+)
 
+
+class DataUnreachable(ToolError):
+    """Il backend o il suo database non hanno risposto entro i tentativi."""
+
+    def __init__(self) -> None:
+        super().__init__(_UNREACHABLE)
+
+
+def _retry_after(resp: httpx.Response, attempt: int) -> float:
+    try:
+        return max(1.0, float(resp.headers.get("retry-after", "")))
+    except ValueError:
+        return 2.0 * attempt
+
+
+async def _send(client: httpx.AsyncClient, method: str, url: str, **kwargs: Any) -> httpx.Response:
+    """Richiesta con retry su timeout, errori di trasporto e 502/503/504.
+
+    Esauriti i tentativi solleva DataUnreachable; gli altri errori HTTP
+    arrivano al chiamante come httpx.HTTPStatusError.
+    """
+    deadline = time.monotonic() + _RETRY_BUDGET_S
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            resp = await client.request(method, url, **kwargs)
+        except (httpx.TimeoutException, httpx.TransportError):
+            # Timeout già larghi (cold start di Railway): tre tentativi, non un budget.
+            if attempt == 3:
+                raise DataUnreachable() from None
+            await asyncio.sleep(2 * attempt)
+            continue
+        if resp.status_code not in _RETRY_STATUS:
+            resp.raise_for_status()
+            return resp
+        left = deadline - time.monotonic()
+        if left < 1:
+            raise DataUnreachable()
+        await asyncio.sleep(min(_retry_after(resp, attempt), _RETRY_WAIT_MAX_S, left))
+
+
+async def _get(path: str, params: dict | None = None) -> Any:
     params = {k: v for k, v in (params or {}).items() if v is not None}
     # UA dedicato: rende l'uso del connettore misurabile nei log del backend.
     headers = {"User-Agent": "parliamentrag-mcp/0.1.0"}
     async with httpx.AsyncClient(
         timeout=_TIMEOUT, follow_redirects=True, headers=headers
     ) as client:
-        for attempt in range(1, 4):
-            try:
-                resp = await client.get(f"{API_BASE}{path}", params=params)
-                resp.raise_for_status()
-                return resp.json()
-            except (httpx.TimeoutException, httpx.TransportError):
-                if attempt == 3:
-                    raise
-                await asyncio.sleep(2 * attempt)
-    return None  # unreachable
+        resp = await _send(client, "GET", f"{API_BASE}{path}", params=params)
+        return resp.json()
 
 
 def _trim(text: Optional[str], limit: int = 600) -> Optional[str]:
@@ -324,9 +369,7 @@ async def verify_answer(
     else:
         url = PUBLIC_VERIFY_URL
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=30.0), headers=headers) as client:
-        resp = await client.post(url, json=payload)
-        resp.raise_for_status()
-        r = resp.json()
+        r = (await _send(client, "POST", url, json=payload)).json()
 
     quotes = []
     verdict = _verdict(r)
@@ -1548,6 +1591,10 @@ def main() -> None:
             except httpx.HTTPStatusError as exc:
                 return PlainTextResponse(
                     "vote not found", status_code=exc.response.status_code
+                )
+            except DataUnreachable:
+                return PlainTextResponse(
+                    _UNREACHABLE, status_code=503, headers={"Retry-After": "30"}
                 )
             if d.get("secret_vote"):
                 return PlainTextResponse(
