@@ -4,7 +4,8 @@
   build/nightly_report.py            (cron on the VPS, 05:00 UTC)
   build/nightly_report.py --dry-run  (print the email instead of sending it)
 
-Reads the latest build/logs/update-data-*.log, the last line of the backup
+Reads the step lines of the last run from the cron log (/var/log/parliamentrag-nightly.log),
+the name of the latest build/logs/update-data-*.log, the last line of the backup
 log, the newest session per chamber in Neo4j and the state of the two SPARQL
 endpoints, then sends one email through the Brevo transactional API.
 Recipient and Brevo key live outside the repo, in /opt/parliamentrag-job/report.env
@@ -22,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 LOGS = ROOT / "build" / "logs"
 REPORT_ENV = Path("/opt/parliamentrag-job/report.env")
 BACKUP_LOG = Path("/var/log/parliamentrag-backup.log")
+NIGHTLY_LOG = Path("/var/log/parliamentrag-nightly.log")
 SENDER = {"name": "ParliamentRAG", "email": "news@parliamentrag.it"}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 SPARQL = {
@@ -45,9 +47,10 @@ def latest_log() -> Path | None:
     return logs[-1] if logs else None
 
 
-def steps(log: Path) -> tuple[list[tuple[bool, str]], bool]:
-    """Step lines (ok, label) printed by update_data.sh, and whether it died."""
-    text = ANSI.sub("", log.read_text(errors="replace"))
+def steps() -> tuple[list[tuple[bool, str]], bool]:
+    """Step lines (ok, label) of the last run in the cron log, and whether it died."""
+    text = ANSI.sub("", NIGHTLY_LOG.read_text(errors="replace")) if NIGHTLY_LOG.exists() else ""
+    text = text.rsplit("Updating demo DB at", 1)[-1]
     out = []
     for line in text.splitlines():
         m = re.match(r"\s*([✓✗]) (?:\[\d+\] )?(.+)$", line)
@@ -95,7 +98,7 @@ def build(log: Path | None, cfg: dict) -> tuple[str, str]:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if log is None:
         return f"Job notturno {today}: nessun log", "<p>Nessun log update-data trovato.</p>"
-    rows, died = steps(log)
+    rows, died = steps()
     failed = [l for ok, l in rows if not ok]
     fresh = log.name[len("update-data-"):len("update-data-") + 8]
     stale = fresh != today.replace("-", "")
