@@ -48,6 +48,16 @@ SITES = ["www.parliamentrag.it", "www.stenografo.it", "www.fascicoli.it", "www.s
 PLAUSIBLE_SITES = ["parliamentrag.it", "stenografo.it", "fascicoli.it", "scranno.it"]
 # Labels shown per chamber; the rest are shown as totals.
 BY_CHAMBER = ["Session", "Debate", "Speech", "Vote", "IndividualVote", "ParliamentaryAct"]
+# Senate nodes carry no common label (Scope_senato_19 is only on chunks): they are
+# told apart by the session they hang from or by their id/uri prefix.
+SENATE_COUNT = {
+    "Session": "MATCH (n:Session {chamber:'senato'}) RETURN count(n) AS c",
+    "Debate": "MATCH (:Session {chamber:'senato'})-[:HAS_DEBATE]->(n:Debate) RETURN count(n) AS c",
+    "Speech": "MATCH (n:Speech) WHERE n.id STARTS WITH 'sen_' RETURN count(n) AS c",
+    "Vote": "MATCH (:Session {chamber:'senato'})-[:HAS_VOTE]->(n:Vote) RETURN count(n) AS c",
+    "IndividualVote": "MATCH (n:IndividualVote) WHERE n.id STARTS WITH 'iv_senato' RETURN count(n) AS c",
+    "ParliamentaryAct": "MATCH (n:ParliamentaryAct) WHERE n.uri CONTAINS 'senato' RETURN count(n) AS c",
+}
 TOTALS = ["Chunk", "Deputy", "Senator", "Person", "SpeakerDebateSummary", "EurovocConcept",
           "MistoComponent", "ChatHistory", "UserFeedback"]
 RELS = ["VOTED", "SPOKEN_BY", "PRIMARY_SIGNATORY", "CO_SIGNATORY", "ON_ACT", "MEMBER_OF_GROUP",
@@ -112,7 +122,7 @@ def section_stats(body: str) -> dict:
         if m:
             fails[m.group(1) or m.group(2)] += 1
             h = HOST.search(line)
-            hosts[h.group(1) if h else "?"] += 1
+            hosts[h.group(1) if h else "senza indirizzo nel log"] += 1
     return {
         "http": sum(fails.values()), "codes": dict(fails), "hosts": dict(hosts),
         "timeouts": len(TIMEOUT.findall(body)),
@@ -131,7 +141,7 @@ def db_counts(cfg: dict) -> dict:
     with drv.session() as s:
         for lab in BY_CHAMBER:
             tot = s.run(f"MATCH (n:{lab}) RETURN count(n) AS c").single()["c"]
-            sen = s.run(f"MATCH (n:{lab}:Scope_senato_19) RETURN count(n) AS c").single()["c"]
+            sen = s.run(SENATE_COUNT[lab]).single()["c"]
             out["nodes"][lab] = {"camera": tot - sen, "senato": sen}
         for lab in TOTALS:
             out["nodes"][lab] = {"tot": s.run(f"MATCH (n:{lab}) RETURN count(n) AS c").single()["c"]}
@@ -142,8 +152,7 @@ def db_counts(cfg: dict) -> dict:
         for r in s.run("MATCH (x:Session)-[:HAS_DEBATE]->(:Debate)<-[:FOR_DEBATE]-(:SpeakerDebateSummary) "
                        "RETURN coalesce(x.chamber,'camera') AS c, max(x.date) AS d"):
             out["fresh"].setdefault(r["c"], {})["summary"] = str(r["d"])
-        for r in s.run("MATCH (v:Vote) WHERE v.date IS NOT NULL "
-                       "RETURN CASE WHEN v:Scope_senato_19 THEN 'senato' ELSE 'camera' END AS c, max(v.date) AS d"):
+        for r in s.run("MATCH (x:Session)-[:HAS_VOTE]->(:Vote) RETURN coalesce(x.chamber,'camera') AS c, max(x.date) AS d"):
             out["fresh"].setdefault(r["c"], {})["vote"] = str(r["d"])
         q = s.run("MATCH (c:ChatHistory) WHERE c.timestamp IS NOT NULL AND datetime(c.timestamp) >= datetime() - duration('P1D') "
                   "RETURN count(c) AS n").single()
