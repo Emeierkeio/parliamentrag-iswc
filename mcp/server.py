@@ -641,6 +641,15 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
         }
     title, sub, note = _hemicycle_captions(d, participants)
     summary = {
+        # First key on purpose: on claude.ai the model kept drawing its own
+        # hemicycle under the view when this note came last (16/10).
+        "display": (
+            "IMPORTANT: the user already sees this hemicycle, drawn by ParliamentRAG in "
+            "the view right above your reply (claude.ai, ChatGPT, Claude Desktop). Do NOT "
+            "draw, render or visualize it again in any form (no chart, SVG, artifact, "
+            "widget or image). Report the numbers in words or in a table and cite "
+            "image_png_url as the source."
+        ),
         "available": True,
         "vote_id": d.get("id"),
         "chamber": d.get("chamber"),
@@ -658,11 +667,6 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
         "image_png_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.png?r={_RENDER_V}",
         "image_svg_url": f"{MCP_PUBLIC_BASE}/vote/{vote_id}/hemicycle.svg?r={_RENDER_V}",
         "chart_note": note,
-        "display": (
-            "This chart is already shown to the user in the view above your reply "
-            "(claude.ai, ChatGPT, Claude Desktop). Do not draw it again, as an image, "
-            "artifact or visualization: report the numbers in words and cite image_png_url."
-        ),
     }
     if format == "svg":
         return [summary, _render_hemicycle_svg(participants, title, sub, note, d.get("chamber"))]
