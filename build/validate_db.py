@@ -208,6 +208,40 @@ class Validator:
         self.check(r["nobody"] == 0, "ddl del Senato con firmatari o presentatori",
                    f"{r['nobody']} senza nessuno")
 
+    def check_acts_camera(self):
+        print("\n[15] Atti della Camera XIX (build/ingest_acts_camera.py)")
+        # Acts cited by votes but never described at the source (about 2,755
+        # agenda orders, audit 14/10/2026) only have a URI: counted apart.
+        rows = self.q("""
+            MATCH (a:ParliamentaryAct)
+            WHERE a.uri STARTS WITH 'http://dati.camera.it/ocd/attocamera.rdf/ac19_'
+               OR (a.uri STARTS WITH 'http://dati.camera.it/ocd/aic.rdf/' AND a.uri ENDS WITH '_19')
+            WITH a, a.title IS NOT NULL AS described
+            RETURN sum(CASE WHEN described THEN 1 ELSE 0 END) AS tot,
+                   sum(CASE WHEN described AND (a.chamber IS NULL OR a.legislature IS NULL OR a.kind IS NULL)
+                       THEN 1 ELSE 0 END) AS incomplete,
+                   sum(CASE WHEN NOT described THEN 1 ELSE 0 END) AS uri_only
+        """)
+        r = rows[0]
+        self.check(r["incomplete"] == 0, f"atti Camera con chamber, legislature e kind ({r['tot']})",
+                   f"{r['incomplete']} senza")
+        self.check(r["uri_only"] == 0, "atti Camera con titolo", f"{r['uri_only']} con solo l'URI (assenti alla fonte)",
+                   warn_only=True)
+        rows = self.q("""
+            MATCH (a:Bill {chamber: 'camera'})
+            RETURN count(a) AS tot,
+                   sum(CASE WHEN a.initiative IS NULL THEN 1 ELSE 0 END) AS no_init,
+                   sum(CASE WHEN a.number IS NULL OR a.type IS NULL THEN 1 ELSE 0 END) AS no_number,
+                   sum(CASE WHEN a.initiative = 'governo' AND NOT (a)-[:PRESENTED_BY]->(:Government)
+                       THEN 1 ELSE 0 END) AS gov_no_pres
+        """)
+        r = rows[0]
+        self.check(r["tot"] > 0, f"progetti di legge della Camera con etichetta Bill ({r['tot']})", "nessuno")
+        self.check(r["no_init"] == 0, "progetti di legge della Camera con l'iniziativa", f"{r['no_init']} senza")
+        self.check(r["no_number"] == 0, "progetti di legge della Camera con tipo e numero", f"{r['no_number']} senza")
+        self.check(r["gov_no_pres"] == 0, "progetti di legge del governo con PRESENTED_BY",
+                   f"{r['gov_no_pres']} senza")
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""
@@ -417,6 +451,8 @@ class Validator:
         rows = self.q("MATCH (s:Session {chamber: 'senato'}) RETURN count(s) AS c")
         if rows[0]["c"]:
             self.check_senate(rows[0]["c"])
+
+        self.check_acts_camera()
 
         rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
         if rows[0]["c"]:

@@ -119,10 +119,22 @@ cypher_scalar() { # $1 = uri, $2 = query python inline
 	NEO4J_PASSWORD="$NEO4J_PASS_VAL" NEO4J_TARGET="$1" "$PY" -c "$2" 2>>"$LOG"
 }
 
+# --skip-atti: gli atti della Camera arrivano da ingest_acts_camera.py (sotto).
 v2_ingest() { # $1 = neo4j uri
-	(cd "$V2_DIR" && backend/venv/bin/python build/build_and_update.py update \
+	(cd "$V2_DIR" && backend/venv/bin/python build/build_and_update.py update --skip-atti \
 		--neo4j-uri "$1" --neo4j-user "${NEO4J_USER_VAL:-neo4j}" --neo4j-password "$NEO4J_PASS_VAL")
 }
+
+# ── Atti della Camera, per atto ──────────────────────────────────────────────
+# Sostituisce lo step 4 di build_and_update.py update, che leggeva gli atti
+# deputato per deputato e perdeva i ddl del governo, gli atti di regioni, CNEL,
+# iniziativa popolare ed ex deputati. Gira prima dell'ingest v2 perché è il
+# suo step 6 a calcolare gli embedding degli atti nuovi o con titolo cambiato.
+acts_camera() { # $1 = neo4j uri
+	NEO4J_PASSWORD="$NEO4J_PASS_VAL" "$PY" build/ingest_acts_camera.py --neo4j-uri "$1" --since-meta
+}
+run "Atti Camera per atto (ods:modified)" acts_camera "$DEMO_NEO4J" \
+	|| warn "Atti Camera per atto non riuscito: restano quelli del giro precedente"
 
 # ── Ingest incrementale (remoto) ─────────────────────────────────────────────
 run "Ingest v2 pipeline → $DEMO_NEO4J" v2_ingest "$DEMO_NEO4J" || die
@@ -187,6 +199,8 @@ if [ "$LOCAL_SYNC" = "0" ] || [ "$DEMO_NEO4J" = "$LOCAL_NEO4J" ]; then
 	note "Local snapshot sync skipped."
 elif nc -z -w 2 localhost "$LOCAL_BOLT_PORT" >/dev/null 2>&1; then
 	LOCAL_UP=1
+	run "Atti Camera per atto (locale)" acts_camera "$LOCAL_NEO4J" \
+		|| warn "Atti Camera per atto (locale) non riuscito"
 	run "Replay ingest → snapshot locale (:$LOCAL_BOLT_PORT)" v2_ingest "$LOCAL_NEO4J" || die
 	run "Repair speaker links (locale)" "$PY" "$BACKEND_DIR/scripts/repair_speaker_links.py" "$LOCAL_NEO4J" || die
 	run "Sync dati remote-only → snapshot locale" \
