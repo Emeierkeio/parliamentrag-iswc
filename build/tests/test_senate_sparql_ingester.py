@@ -384,6 +384,24 @@ class TestIndividualIngest:
         ing._mark_individual_missing.assert_not_called()
         assert stats["ivotes_written"] == 0 and not stats["aborted"]
 
+    def test_failed_chunk_is_split_and_retried(self):
+        from senate_sparql_ingester import SenateRequestFailed
+        ing = self._ingester(_pending(4))
+
+        def links(ranges, predicates):
+            # the endpoint refuses any request spanning more than two votazioni
+            (_, lo, hi), = ranges
+            if hi - lo + 1 > 2:
+                raise SenateRequestFailed("500")
+            return {f"http://dati.senato.it/votazione/19-300-{n}":
+                    {("favor", None): ["http://dati.senato.it/senatore/1"]} for n in range(lo, hi + 1)}
+
+        ing._get_senate_senator_links_bulk = MagicMock(side_effect=links)
+        stats = ing.ingest_individual_votes(19)
+        asked = [r[0][0][1:] for r, _ in ing._get_senate_senator_links_bulk.call_args_list]
+        assert asked == [(1, 4), (1, 2), (3, 4)]
+        assert stats["ivotes_written"] == 4 and not stats["aborted"]
+
     def test_blocked_endpoint_aborts(self):
         from senate_sparql_ingester import SenateEndpointBlocked
         ing = self._ingester(_pending(60))

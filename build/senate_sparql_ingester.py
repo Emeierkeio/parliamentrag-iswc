@@ -683,7 +683,12 @@ SELECT ?v ?p ?senatore WHERE {{
         pending = [p for p in pending if p["session"] in seduta_uris]
 
         sittings_seen: set[int] = set()
-        for chunk in _pack_ranges(pending, budget):
+        # A failed chunk is split in two and the halves retried: chunk sizes are
+        # deterministic, so a chunk the endpoint refuses (500 on 150 votazioni of
+        # sittings 27-38, 2026-10-16) would otherwise fail again at every run.
+        queue = _pack_ranges(pending, budget)
+        while queue:
+            chunk = queue.pop(0)
             by_uri = {
                 f"http://dati.senato.it/votazione/{legislature}-{p['session']}-{p['vote']}": p
                 for p in chunk
@@ -702,8 +707,14 @@ SELECT ?v ?p ?senatore WHERE {{
                 stats["aborted"] = True
                 break
             except SenateRequestFailed as exc:
-                logger.warning("  votes %s..%s failed, left for the next run: %s",
-                               chunk[0]["id"], chunk[-1]["id"], exc)
+                if len(chunk) > 1:
+                    half = len(chunk) // 2
+                    logger.warning("  votes %s..%s failed, retrying in two halves: %s",
+                                   chunk[0]["id"], chunk[-1]["id"], exc)
+                    queue[:0] = [chunk[:half], chunk[half:]]
+                else:
+                    logger.warning("  vote %s failed, left for the next run: %s",
+                                   chunk[0]["id"], exc)
                 continue
 
             batch: list[dict] = []
