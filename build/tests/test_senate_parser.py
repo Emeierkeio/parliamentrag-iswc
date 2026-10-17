@@ -190,3 +190,55 @@ def test_continuation_of_the_chair_is_dropped(tmp_path):
     ))
     assert not any("Passiamo alla votazione" in s["text"] for s in parsed["speeches"])
     assert all(s["deputatoId"] for s in parsed["speeches"])
+
+
+# ---------------------------------------------------------------------------
+# Debate titles
+# ---------------------------------------------------------------------------
+
+def _heading(xml: str):
+    import xml.etree.ElementTree as ET
+
+    from senate_parser import AKN_NS
+
+    return ET.fromstring(f'<heading xmlns="{AKN_NS}">{xml}</heading>')
+
+
+def test_debate_title_line_break_is_a_space():
+    from senate_parser import debate_title
+
+    h = _heading("<span><b>Discussione dalla sede redigente<eol/>del disegno di legge sul turismo</b></span><eol/>")
+    assert debate_title(h, "Altro") == "Discussione dalla sede redigente del disegno di legge sul turismo"
+
+
+def test_debate_title_cut_before_the_numbers_uses_the_name():
+    from senate_parser import debate_title
+
+    name = "Ripresa della discussione dei disegni di legge costituzionale: (13 e connessi) - Modifica all'articolo 33"
+    h = _heading("<span><b>Ripresa della discussione dei disegni di legge costituzionale<eol/>nn.</b></span>")
+    assert debate_title(h, name) == name
+    h = _heading("<b>Ripresa della discussione del disegno di legge n.</b>")
+    assert debate_title(h, "Ripresa della discussione del disegno di legge: (311) - PNRR") == (
+        "Ripresa della discussione del disegno di legge: (311) - PNRR"
+    )
+
+
+def test_debate_title_prefix_of_the_name_uses_the_name():
+    from senate_parser import debate_title
+
+    name = "Discussione e approvazione del disegno di legge: (311) - Politica energetica"
+    assert debate_title(_heading("<b>Discussione e approvazione del disegno di legge:</b>"), name) == name
+    assert debate_title(_heading("<b>Discussione congiunta del</b>"), "Discussione congiunta del documento LVII") == (
+        "Discussione congiunta del documento LVII"
+    )
+
+
+def test_debate_title_keeps_a_complete_heading():
+    from senate_parser import debate_title
+
+    h = _heading("<b>Svolgimento di interrogazioni a risposta immediata</b>")
+    assert debate_title(h, "(3-00039) - Question time su Milano-Cortina") == (
+        "Svolgimento di interrogazioni a risposta immediata"
+    )
+    assert debate_title(None, "Nome") == "Nome"
+    assert debate_title(_heading("  <eol/> "), "Nome") == "Nome"

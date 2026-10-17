@@ -38,6 +38,49 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_]", "_", text).strip("_").lower()
 
 
+# A heading cut before the act numbers: "... disegno di legge n.", "... nn.", "...:".
+_INCOMPLETE_HEADING_RE = re.compile(r"(\bnn?\.|:)$")
+
+
+def _alnum(text: str) -> str:
+    return re.sub(r"[^0-9a-z]", "", text.lower())
+
+
+def heading_text(heading_elem: Optional[ET.Element]) -> str:
+    """Printed text of a <heading>, with <eol/> line breaks as spaces."""
+    if heading_elem is None:
+        return ""
+    parts: list[str] = []
+
+    def walk(node: ET.Element) -> None:
+        parts.append(" " if node.tag == f"{{{AKN_NS}}}eol" else node.text or "")
+        for child in node:
+            walk(child)
+            parts.append(child.tail or "")
+
+    walk(heading_elem)
+    return re.sub(r"\s+", " ", "".join(parts)).strip()
+
+
+def debate_title(heading_elem: Optional[ET.Element], section_name: str) -> str:
+    """Title of a debateSection.
+
+    The <heading> is the printed title, often cut before the act numbers
+    ("... disegni di legge<eol/>nn."). The section's name attribute carries the
+    full title, so it wins when the heading is empty, a prefix of it, or
+    visibly incomplete.
+    """
+    heading = heading_text(heading_elem)
+    if not heading:
+        return section_name
+    if section_name and (
+        _INCOMPLETE_HEADING_RE.search(heading)
+        or _alnum(section_name).startswith(_alnum(heading))
+    ):
+        return section_name
+    return heading
+
+
 class SenateStenograficoParser:
     """Pure AKN XML parser for Senato della Repubblica stenografici.
 
@@ -136,16 +179,12 @@ class SenateStenograficoParser:
                 debate_id = f"{debate_id}_{debate_order}"
             seen_debate_ids.add(debate_id)
 
-            # Heading text may be whitespace-only or live in child elements
-            # (e.g. <docTitle>) — join all descendant text, else fall back
-            # to the section name attribute.
             heading_elem = section.find(f"{{{AKN_NS}}}heading")
-            heading_text = (
-                "".join(heading_elem.itertext()).strip()
-                if heading_elem is not None
-                else ""
-            )
-            title = heading_text or section_name
+            title = debate_title(heading_elem, section_name)
+            # The phase type keeps reading the printed heading: the longer
+            # section name mentions words ("votazione", "esame") that would
+            # reclassify ordinary discussions.
+            phase_type = classify_phase_type(heading_text(heading_elem) or title)
 
             debates.append({
                 "id": debate_id,
@@ -161,7 +200,7 @@ class SenateStenograficoParser:
                 "id": phase_id,
                 "originalId": f"{section_name}_phase0",
                 "title": title,
-                "phaseType": classify_phase_type(title),
+                "phaseType": phase_type,
                 "order": 0,
                 "debateId": debate_id,
             })
