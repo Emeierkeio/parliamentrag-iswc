@@ -23,6 +23,10 @@ Riparazioni indipendenti, attivabili singolarmente:
                   SPARQL ("Votazione Emendamento 1.104 PDL n. 0080") è
                   canonico e vince sempre quando presente.
 
+                  Poi deduce l'atto di emendamenti e articoli senza
+                  rif_attoCamera dalla votazione che nomina il progetto
+                  (infer_amendment_acts, relazione con inferred='vicini').
+
   --government    Backfill dei voti individuali dei ministri-deputati
                   (GovernmentMember con deputy_card): l'ingest storico
                   matchava solo i Deputy e perdeva i loro voti.
@@ -227,6 +231,10 @@ LIMIT {limit}
 
     # Una riga per votazione (le OPTIONAL possono duplicare).
     act_num_re = re.compile(r"\b(?:TU\s+)?(?:PDL|DDL)(?:\s+COST)?\b\D{0,8}?0*(\d+)")
+    # «Votazione Fiducia A.C. 2911-A», «Pdl C. 2822-B art.3»
+    ac_num_re = re.compile(r"(?<![A-Z])(?:A\.\s?)?C\.\s?0*(\d{1,4})(?:-[A-Z]+)?\b")
+    # «MOZ 1-593 RIF», «Mozione n. 1-00089»: l'URI aic delle mozioni è deterministico
+    moz_num_re = re.compile(r"\bMOZ(?:IONE)?\.?\s+(?:N\.\s*)?1[-/]0*(\d+)", re.IGNORECASE)
     by_vote: dict[tuple[int, int], dict] = {}
     for row in rows:
         sed, vot = parse_votazione_uri(row.get("votazione", {}).get("value", ""))
@@ -251,8 +259,13 @@ LIMIT {limit}
         rec = by_vote[(sed, vot)]
         if not rec["actUri"]:
             m = act_num_re.search(f"{rec['label'] or ''} {rec['description'] or ''}")
+            m = m or ac_num_re.search(f"{rec['label'] or ''} {rec['description'] or ''}")
             if m:
                 rec["actUri"] = f"http://dati.camera.it/ocd/attocamera.rdf/ac19_{m.group(1)}"
+        if not rec["actUri"] and not rec["aicUri"]:
+            m = moz_num_re.search(f"{rec['label'] or ''} {rec['description'] or ''}")
+            if m:
+                rec["aicUri"] = f"http://dati.camera.it/ocd/aic.rdf/aic1_{int(m.group(1)):05d}_19"
     batch = list(by_vote.values())
     logger.info("Votazioni: %d righe SPARQL -> %d votazioni univoche", len(rows), len(batch))
     if len(batch) < expected:
@@ -337,6 +350,80 @@ SELECT ?atto ?titolo ?rel WHERE {{
                 len(payload), sum(1 for p in payload if p["pdf"]))
 
 
+_PART_OF_BILL_RE = re.compile(
+    r"^\s*(?:VOTAZIONE\s+)?(?:EM\b|EMEND|SUBEM|IDENTICI|ART\b|ART\.|ARTICOL|ART AGG)", re.IGNORECASE)
+
+
+def infer_amendment_acts(driver, dry_run: bool = False) -> int:
+    """ON_ACT dedotto per emendamenti e articoli senza atto nella fonte.
+
+    Le sedute recenti escono su dati.camera.it con descrizioni brevi («EM 7.4»,
+    «ARTICOLO 3») e senza rif_attoCamera finché il dataset non viene
+    consolidato, mesi dopo. La Camera nomina il progetto di legge sulla prima
+    votazione di ogni blocco: un emendamento o articolo senza atto prende il
+    progetto della votazione collegata più vicina prima, nella stessa seduta.
+    A inizio seduta vale solo se la votazione collegata prima (seduta
+    precedente) e quella dopo puntano allo stesso progetto. La relazione porta
+    inferred='vicini'; quando la fonte la consolida, --subjects aggiunge quella
+    ufficiale.
+    """
+    with driver.session() as session:
+        rows = session.run(
+            """
+            MATCH (s:Session {chamber: 'camera', legislature: 19})-[:HAS_VOTE]->(v:Vote)
+            OPTIONAL MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct)
+            WITH s, v, collect(a.uri) AS acts
+            RETURN s.number AS sed, v.number AS num, v.id AS id,
+                   coalesce(v.description, v.subject, '') AS text,
+                   [u IN acts WHERE u CONTAINS '/attocamera.rdf/'] AS bills,
+                   size(acts) AS n_acts
+            ORDER BY sed, num
+            """
+        ).data()
+
+    def bill_of(r):
+        return r["bills"][0] if len(r["bills"]) == 1 else None
+
+    linked = [i for i, r in enumerate(rows) if r["n_acts"]]
+    payload = []
+    j = 0
+    for i, r in enumerate(rows):
+        while j < len(linked) and linked[j] < i:
+            j += 1
+        if r["n_acts"] or not _PART_OF_BILL_RE.match(r["text"]):
+            continue
+        prev_i = linked[j - 1] if j > 0 else None
+        next_i = linked[j] if j < len(linked) else None
+        prev = rows[prev_i] if prev_i is not None else None
+        nxt = rows[next_i] if next_i is not None else None
+        bill = None
+        if prev and prev["sed"] == r["sed"]:
+            # La Camera nomina il progetto solo sulla prima votazione del blocco
+            # («DDL 2789-A E ABB - EM 1.5»), le successive dicono «EM 2.19».
+            bill = bill_of(prev)
+        elif prev and nxt and nxt["sed"] - prev["sed"] <= 1 and bill_of(prev) == bill_of(nxt):
+            bill = bill_of(prev)
+        if bill:
+            payload.append({"id": r["id"], "uri": bill})
+
+    logger.info("Atto dedotto dai vicini per %d votazioni su emendamenti e articoli", len(payload))
+    if dry_run or not payload:
+        return len(payload)
+    with driver.session() as session:
+        for i in range(0, len(payload), NEO4J_BATCH):
+            session.run(
+                """
+                UNWIND $batch AS row
+                MATCH (v:Vote {id: row.id})
+                MATCH (a:ParliamentaryAct {uri: row.uri})
+                MERGE (v)-[r:ON_ACT]->(a)
+                ON CREATE SET r.inferred = 'vicini'
+                """,
+                batch=payload[i:i + NEO4J_BATCH],
+            )
+    return len(payload)
+
+
 def repair_government_votes(driver, legislature: int = 19) -> None:
     """Backfill dei voti individuali dei ministri-deputati.
 
@@ -370,18 +457,28 @@ def main() -> None:
     parser.add_argument("--secret", action="store_true")
     parser.add_argument("--subjects", action="store_true")
     parser.add_argument("--government", action="store_true")
+    parser.add_argument("--infer-only-dry-run", action="store_true",
+                        help="Conta le votazioni a cui si dedurrebbe l'atto, senza scrivere")
     args = parser.parse_args()
 
     run_all = not (args.abstentions or args.secret or args.subjects or args.government)
     driver = GraphDatabase.driver(args.neo4j_uri, auth=(args.neo4j_user, args.neo4j_password))
     try:
         driver.verify_connectivity()
+        if args.infer_only_dry_run:
+            infer_amendment_acts(driver, dry_run=True)
+            return
         if args.abstentions or run_all:
             repair_abstentions(driver)
         if args.secret or run_all:
             repair_secret_ballots(driver)
         if args.subjects or run_all:
-            repair_subjects(driver)
+            # La deduzione lavora sui collegamenti già nel grafo: gira anche se
+            # la SPARQL della Camera non risponde.
+            try:
+                repair_subjects(driver)
+            finally:
+                infer_amendment_acts(driver)
         if args.government or run_all:
             repair_government_votes(driver)
     finally:
