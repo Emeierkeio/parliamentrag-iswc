@@ -147,3 +147,25 @@ def test_official_vote_acts_keeps_senate_bills_only():
     out = official_vote_acts(rows, {"http://dati.senato.it/ddl/1", "http://dati.senato.it/ddl/2"})
     assert out == {"senato_leg19_sed027_v005": ["http://dati.senato.it/ddl/1"],
                    "senato_leg19_sed213_v140": ["http://dati.senato.it/ddl/2"]}
+
+
+def test_later_reading_inherits_signatories_of_the_first():
+    from link_senate_acts import inherit_from_first_reading
+    ddl = pd.DataFrame({
+        "ddl": ["s/17", "s/17-B", "s/90", "c/741"],
+        "idDdl": ["50878", "50878", "60000", "60000"],
+        "ramo": ["S", "S", "S", "C"],
+    })
+    signers = pd.DataFrame({"ddl": ["s/17", "s/17", "s/90"], "senatore": ["a", "b", "c"],
+                            "primoFirmatario": ["1", "0", "1"], "tipo": ["Parlamentare"] * 3})
+    orphans = set(ddl.loc[ddl["ramo"] == "S", "ddl"]) - set(signers["ddl"])
+    out = inherit_from_first_reading(ddl, signers, orphans)
+    assert sorted(out.loc[out["ddl"] == "s/17-B", "senatore"]) == ["a", "b"]
+    assert "c/741" not in set(out["ddl"])  # a Chamber reading stays as it is
+
+
+def test_minister_known_by_nickname():
+    from link_senate_acts import match_minister
+    members = [{"id": "gov_musumeci", "first_name": "Sebastiano", "last_name": "Musumeci"}]
+    text = "Ministro senza portafoglio per la protezione civile e politiche mare Nello Musumeci (Gov. Meloni-I)"
+    assert match_minister(text, members) == "gov_musumeci"

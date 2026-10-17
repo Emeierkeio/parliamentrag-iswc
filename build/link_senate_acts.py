@@ -203,6 +203,10 @@ def _tokens(text: str) -> list[str]:
     return re.sub(r"[^A-Z ]", " ", text.upper()).split()
 
 
+# Names the Senate uses for ministers whose registry name differs.
+GIVEN_NAME_ALIASES = {"NELLO": "SEBASTIANO"}  # Nello Musumeci
+
+
 def match_minister(presenter: str, members: list[dict]) -> Optional[str]:
     """Id of the government member named in an osr:presentatore string.
 
@@ -211,10 +215,34 @@ def match_minister(presenter: str, members: list[dict]) -> Optional[str]:
     first given name in the string. None when nobody or more than one does.
     """
     text = set(_tokens(GOV_SUFFIX_RE.sub("", presenter)))
+    text |= {GIVEN_NAME_ALIASES[t] for t in text if t in GIVEN_NAME_ALIASES}
     hits = [m["id"] for m in members
             if set(_tokens(m["last_name"])) <= text and _tokens(m["first_name"])[:1]
             and _tokens(m["first_name"])[0] in text]
     return hits[0] if len(hits) == 1 else None
+
+
+def inherit_from_first_reading(ddl: pd.DataFrame, frame: pd.DataFrame,
+                               orphans: set[str]) -> pd.DataFrame:
+    """Rows of a later reading (17-B) copied from the first one (17).
+
+    The source attaches signatories and presenters to the first reading only;
+    every reading of a bill shares its idDdl. Only readings in orphans (no
+    signatory and no presenter at all) inherit.
+    """
+    if frame.empty:
+        return frame
+    have = set(frame["ddl"])
+    readings = ddl.dropna(subset=["idDdl"]).groupby("idDdl")["ddl"].apply(list)
+    extra = []
+    for uris in readings:
+        source = next((u for u in uris if u in have), None)
+        if source is None:
+            continue
+        for uri in uris:
+            if uri in orphans:
+                extra.append(frame[frame["ddl"] == source].assign(ddl=uri))
+    return pd.concat([frame, *extra], ignore_index=True) if extra else frame
 
 
 def deputy_persona(uri: str) -> Optional[str]:
@@ -405,6 +433,9 @@ def main() -> int:
     presenters = (pd.read_csv(presenters_path, dtype=str) if os.path.exists(presenters_path)
                   else pd.DataFrame(columns=["ddl", "presentatore", "tipo", "deputato",
                                              "primoFirmatario"]))
+    orphans = set(ddl.loc[ddl["ramo"] == "S", "ddl"]) - set(signers["ddl"]) - set(presenters["ddl"])
+    signers = inherit_from_first_reading(ddl, signers, orphans)
+    presenters = inherit_from_first_reading(ddl, presenters, orphans)
     types: dict[str, set] = defaultdict(set)
     for frame in (signers, presenters):
         if "tipo" in frame.columns:
