@@ -36,3 +36,11 @@ def test_chamber_bill_unknown_to_the_senate_gets_its_own_process():
 def test_phases_missing_from_the_graph_are_skipped():
     rows = processes([_phase(SEN + "1", "8", "S", "5", "2023-01-01")], 19, {}, set())
     assert rows == []
+
+
+def test_unified_text_found_by_number():
+    phases = [_phase(SEN + "1", "9", "C", "536-891-910", "2023-01-01"),
+              _phase(SEN + "2", "9", "C", "536-891-910-B", "2024-01-01")]
+    bills = {CAM + "536": "536-891-910", CAM + "536-B": "536-891-910-B"}
+    rows = processes(phases, 19, bills, set())
+    assert [r["uri"] for r in rows] == [CAM + "536", CAM + "536-B"]

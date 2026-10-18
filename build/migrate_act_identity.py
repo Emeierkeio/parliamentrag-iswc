@@ -38,13 +38,15 @@ def processes(phases: list[dict], leg: int, camera_bills: dict[str, str],
     Senate bill URIs in the graph. Phases whose act is not in the graph are
     left out, and so are processes left with no reading.
     """
+    # Unified texts: numeroFase "536-891-910-B" is the bill ac19_536-B.
+    camera_by_number = {number: uri for uri, number in camera_bills.items()}
     by_iter: dict[str, list[dict]] = defaultdict(list)
     for p in phases:
         if p["ramo"] == "S":
             uri = p["ddl"] if p["ddl"] in senate_bills else None
         else:
             uri = CAMERA_BILL.format(leg=leg, number=p["numero"])
-            uri = uri if uri in camera_bills else None
+            uri = uri if uri in camera_bills else camera_by_number.get(p["numero"])
         if uri:
             by_iter[f"senato:{leg}:iter:{p['idDdl']}"].append(
                 {"uri": uri, "date": p["dataPresentazione"] or "", "number": p["numero"],
@@ -117,6 +119,8 @@ def main() -> int:
                   "FOR (lp:LegislativeProcess) REQUIRE lp.id IS UNIQUE").consume()
             for i in range(0, len(rows), 2000):
                 s.run(WRITE, rows=rows[i:i + 2000], leg=leg).consume()
+            # A reading moved to another process leaves the old one empty.
+            s.run("MATCH (lp:LegislativeProcess) WHERE NOT ()-[:PART_OF]->(lp) DELETE lp").consume()
     driver.close()
     logger.info("%d phases in %s; graph: %d Chamber bills, %d Senate bills",
                 len(phases), os.path.basename(path), len(camera_bills), len(senate_bills))
