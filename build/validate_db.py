@@ -23,8 +23,8 @@ WARN = "\033[93mWARN\033[0m"
 
 # Pattern URI dei dataset LOD sorgente (C10)
 URI_PATTERNS = {
-    # Senate bills by their dati.senato.it URI; Senate control acts (from
-    # aic.camera.it) by <assembly>:<term>:<type>:<key>, PLAN_data_platform 9.3.
+    # Senate bills by their dati.senato.it URI; Senate control acts by
+    # <assembly>:<term>:<type>:<key>, PLAN_data_platform 9.3 and decision D9.
     "ParliamentaryAct": ("uri", ("http://dati.camera.it/", "placeholder:",
                                  "http://dati.senato.it/ddl/", "senato:")),
     "EurovocConcept": ("uri", ("http://eurovoc.europa.eu/",)),
@@ -188,6 +188,27 @@ class Validator:
         """)
         self.check(rows[0]["c"] == 0, "votazioni del Senato con gli assenti (almeno quelli in missione)",
                    f"{rows[0]['c']} senza: {rows[0]['ids']} (build/senate_absent.py)")
+
+        # Decision D9 (18/10/2026): Senate control acts come from the Chamber's
+        # SPARQL (ocd:aic, ramo Senato) and keep its URI; outcome and link from
+        # dati.senato.it, which has no agenda orders.
+        rows = self.q("""
+            MATCH (a:ParliamentaryAct) WHERE a.uri STARTS WITH 'senato:19:aic:'
+            RETURN count(a) AS tot,
+                   sum(CASE WHEN none(u IN coalesce(a.official_uris, [])
+                                      WHERE u STARTS WITH 'http://dati.camera.it/ocd/aic.rdf/')
+                        THEN 1 ELSE 0 END) AS no_camera,
+                   sum(CASE WHEN coalesce(a.description, '') = '' THEN 1 ELSE 0 END) AS no_text,
+                   sum(CASE WHEN a.senato_url IS NOT NULL THEN 1 ELSE 0 END) AS with_url
+        """)
+        r = rows[0]
+        self.check(r["tot"] > 0 and r["no_camera"] == 0,
+                   f"atti di controllo del Senato con l'URI ocd:aic della Camera ({r['tot']})",
+                   f"{r['no_camera']} senza (build/download_senate_aic.py + ingest_senate_aic.py)")
+        self.check(r["no_text"] == 0, "atti di controllo del Senato con il testo", f"{r['no_text']} senza",
+                   warn_only=True)
+        self.check(r["with_url"] > 0, f"atti di controllo con il link a senato.it ({r['with_url']})",
+                   "nessuno: build/download_senate_aic.py --source senato", warn_only=True)
 
         # Decision D3 (15/10/2026): every Senate bill says who presented it.
         rows = self.q("""

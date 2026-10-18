@@ -2,8 +2,14 @@
 """
 Senate oversight and policy acts (download_senate_aic.py) into the graph.
 
-  (:ParliamentaryAct {uri: "senato:<leg>:aic:<numero>", chamber: 'senato'})
+  (:ParliamentaryAct {uri: "senato:<leg>:aic:<numero>", chamber: 'senato',
+                      official_uris, senato_url?, outcome?})
   (:Person)-[:PRIMARY_SIGNATORY|CO_SIGNATORY]->(act)
+
+The key is the number (decision D9, 18/10/2026): it survives reformulations,
+which the Senate publishes as new records with new URIs. official_uris holds
+the Chamber's ocd:aic URI and every Senate record of that number; senato_url
+and outcome come from the latest Senate record.
 
 The source names signatories as "COGNOME NOME" and identifies the first one by
 a Camera persona id that the senatore -> persona crosswalk covers for only a
@@ -77,11 +83,20 @@ def lookup(index: dict[str, str], name: str) -> str | None:
     return None
 
 
-def parse_date(text: str):
-    if not text:
-        return None
-    d, m, y = text.split("/")
-    return date(int(y), int(m), int(d))
+def parse_date(text: str | None):
+    return date.fromisoformat(text) if text else None
+
+
+def senate_records(path: str) -> dict[str, list[dict]]:
+    """numero -> Senate records, oldest first; empty when the file is missing."""
+    by_number: dict[str, list[dict]] = {}
+    if os.path.exists(path):
+        for line in open(path, encoding="utf-8"):
+            r = json.loads(line)
+            by_number.setdefault(r["numero"], []).append(r)
+    for recs in by_number.values():
+        recs.sort(key=lambda r: r.get("date") or "")
+    return by_number
 
 
 def main() -> int:
@@ -99,6 +114,7 @@ def main() -> int:
 
     path = os.path.join(REPO, "data", f"senato_{ROMAN[args.legislature]}_aic.jsonl")
     acts = [json.loads(line) for line in open(path, encoding="utf-8")]
+    senate = senate_records(os.path.join(REPO, "data", f"senato_{ROMAN[args.legislature]}_sindisp.jsonl"))
     driver = GraphDatabase.driver(args.neo4j_uri, auth=(args.neo4j_user, args.neo4j_password))
     stats = Counter()
     with driver.session() as s:
@@ -107,18 +123,22 @@ def main() -> int:
         unmatched = Counter()
         for a in acts:
             uri = f"senato:{args.legislature}:aic:{a['numero']}"
-            text = " ".join((a.get("testo") or "").split())
+            recs = senate.get(a["numero"], [])
+            latest = recs[-1] if recs else {}
             act_rows.append({
                 "uri": uri,
-                "type": a.get("tipoAtto") or a.get("tipologia"),
+                "type": a["type"],
                 "number": a["numero"],
-                "title": f"{a.get('tipoAtto') or a.get('tipologia')} {a['numero']}",
-                "description": text[:TEXT_CHARS],
-                "date": parse_date(a.get("dataPresentazione")),
-                "status": a.get("stato"),
+                "title": f"{a['type']} {a['numero']}",
+                "description": a["text"][:TEXT_CHARS],
+                "date": parse_date(a.get("date")),
+                "status": "CONCLUSO" if a["concluded"] else "IN CORSO",
+                "official_uris": [a["uri"]] + [r["uri"] for r in recs],
+                "senato_url": latest.get("url"),
+                "outcome": latest.get("outcome"),
             })
-            signers = [(a.get("primoFirmatario"), True)] + [
-                (n, False) for n in (a.get("coFirmatario") or []) if n != a.get("primoFirmatario")]
+            stats["with_senate_record"] += bool(recs)
+            signers = [(a["primary"], True)] + [(n, False) for n in a["cosigners"]]
             for name, primary in signers:
                 pid = lookup(index, name)
                 if pid:
@@ -129,10 +149,15 @@ def main() -> int:
             s.run("""
                 UNWIND $rows AS row
                 MERGE (a:ParliamentaryAct {uri: row.uri})
+                SET a.title_embedding = CASE WHEN a.title = row.title THEN a.title_embedding END,
+                    a.description_embedding = CASE WHEN a.description = row.description
+                                                   THEN a.description_embedding END
                 SET a.chamber = 'senato', a.legislature = $leg, a.type = row.type,
                     a.number = row.number, a.title = row.title,
                     a.description = row.description, a.presentation_date = row.date,
-                    a.status = row.status
+                    a.status = row.status, a.official_uris = row.official_uris,
+                    a.senato_url = coalesce(row.senato_url, a.senato_url),
+                    a.outcome = coalesce(row.outcome, a.outcome)
             """, rows=act_rows[i:i + 2000], leg=args.legislature)
         for i in range(0, len(sign_rows), 5000):
             s.run("""
