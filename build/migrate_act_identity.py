@@ -113,6 +113,8 @@ def main() -> int:
         stats = Counter(r["chamber"] for r in rows)
         sizes = Counter(Counter(r["process"] for r in rows).values())
         if not args.dry_run:
+            s.run("CREATE CONSTRAINT legislative_process_id IF NOT EXISTS "
+                  "FOR (lp:LegislativeProcess) REQUIRE lp.id IS UNIQUE").consume()
             for i in range(0, len(rows), 2000):
                 s.run(WRITE, rows=rows[i:i + 2000], leg=leg).consume()
     driver.close()
