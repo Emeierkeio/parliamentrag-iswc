@@ -282,6 +282,21 @@ class Validator:
         self.check(r["bad_kind"] == 0, "kind nel vocabolario della famiglia", f"{r['bad_kind']} fuori")
         self.check(r["no_raw"] == 0, "type_raw dove c'è type", f"{r['no_raw']} senza")
 
+    def check_act_identity(self):
+        print("\n[17] Letture e processo legislativo (decisione D2, build/migrate_act_identity.py)")
+        rows = self.q("""
+            MATCH (a:Bill) WHERE a.chamber IN ['camera', 'senato'] AND a.legislature = 19
+            RETURN a.chamber AS ch, count(a) AS tot,
+                   sum(CASE WHEN NOT (a)-[:PART_OF]->(:LegislativeProcess) THEN 1 ELSE 0 END) AS loose,
+                   sum(CASE WHEN a.number =~ '.*-[B-Z]$' AND NOT ()-[:NEXT_READING]->(a) THEN 1 ELSE 0 END) AS orphan
+            ORDER BY ch
+        """)
+        for r in rows:
+            self.check(r["loose"] == 0, f"{r['ch']}: progetti di legge con PART_OF ({r['tot']})",
+                       f"{r['loose']} senza processo")
+            self.check(r["orphan"] == 0, f"{r['ch']}: letture successive con la lettura precedente",
+                       f"{r['orphan']} senza NEXT_READING in arrivo", warn_only=True)
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""
@@ -494,6 +509,7 @@ class Validator:
 
         self.check_acts_camera()
         self.check_act_kinds()
+        self.check_act_identity()
 
         rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
         if rows[0]["c"]:
