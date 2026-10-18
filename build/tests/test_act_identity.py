@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from migrate_act_identity import processes
+from migrate_act_identity import processes, versions
 
 CAM = "http://dati.camera.it/ocd/attocamera.rdf/ac19_"
 SEN = "http://dati.senato.it/ddl/"
@@ -44,3 +44,16 @@ def test_unified_text_found_by_number():
     bills = {CAM + "536": "536-891-910", CAM + "536-B": "536-891-910-B"}
     rows = processes(phases, 19, bills, set())
     assert [r["uri"] for r in rows] == [CAM + "536", CAM + "536-B"]
+
+
+def test_text_versions_from_the_uri():
+    vta = "http://dati.camera.it/ocd/versioneTestoAtto.rdf/vta19_leg.19.pdl.camera."
+    rows = versions([
+        {"a": CAM + "1038", "v": vta + "1038.19PDL0031670", "date": "20230323"},
+        {"a": CAM + "1038", "v": vta + "1038_A.19PDL0043120", "date": "20230705"},
+        {"a": CAM + "1038", "v": vta + "1038_A.19PDL0043120", "date": "20230705"},
+        {"a": CAM + "952", "v": vta + "596.19PDLTU05960"},
+        {"a": CAM + "596", "v": vta + "596.19PDLTU05960"},
+    ])
+    assert [(r["bill"][len(CAM):], r["label"], r["date"]) for r in rows] == [
+        ("1038", None, "2023-03-23"), ("1038", "A", "2023-07-05"), ("952", "TU", None), ("596", "TU", None)]

@@ -359,9 +359,10 @@ run "Famiglia e kind degli atti" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/migrate_act_kinds.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
 	|| warn "famiglia e kind degli atti: migrazione fallita, riprende al prossimo giro"
 # Letture dello stesso progetto di legge in un LegislativeProcess (decisione
-# D2), dalle fasi del Senato che update_senato.sh ha appena scaricato.
+# D2), dalle fasi del Senato che update_senato.sh ha appena scaricato, e
+# versioni del testo della Camera (-A, -A/R, testi unificati): una query SPARQL.
 run "Letture e processo legislativo" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
-	"$PY" build/migrate_act_identity.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
+	"$PY" build/migrate_act_identity.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --versions \
 	|| warn "processo legislativo: migrazione fallita, riprende al prossimo giro"
 
 # ── Emendamenti XIX → grafo e archivio ───────────────────────────────────────

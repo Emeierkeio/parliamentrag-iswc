@@ -296,6 +296,13 @@ class Validator:
                        f"{r['loose']} senza processo")
             self.check(r["orphan"] == 0, f"{r['ch']}: letture successive con la lettura precedente",
                        f"{r['orphan']} senza NEXT_READING in arrivo", warn_only=True)
+        rows = self.q("""
+            MATCH (a:Bill {chamber: 'camera', legislature: 19})
+            RETURN count(a) AS tot, sum(CASE WHEN (a)-[:HAS_VERSION]->(:TextVersion) THEN 1 ELSE 0 END) AS with_v
+        """)
+        r = rows[0]
+        self.check(r["with_v"] >= 0.8 * r["tot"], f"progetti della Camera con le versioni del testo {r['with_v']}/{r['tot']}",
+                   "sotto l'80%: build/migrate_act_identity.py --versions", warn_only=True)
 
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
