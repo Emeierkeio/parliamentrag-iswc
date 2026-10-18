@@ -97,6 +97,20 @@ def _act_clause(chambers: tuple) -> str:
     return "true"
 
 
+# An act's author: its primary signatory, or for government bills (decision
+# D3, no primary signatory at the source) the Government that presented it.
+# A deputy filter also matches the ministers who presented the bill.
+ACT_AUTHOR = """
+    OPTIONAL MATCH (d)-[:PRIMARY_SIGNATORY]->(a)
+    WHERE (d:Deputy OR d:GovernmentMember)
+    OPTIONAL MATCH (d)-[:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
+    OPTIONAL MATCH (a)-[:PRESENTED_BY]->(gov:Government)"""
+ACT_GROUP = ("coalesce(g.name, CASE WHEN gov IS NOT NULL OR d:GovernmentMember "
+             "THEN 'Governo' END, 'MISTO')")
+ACT_BY_PERSON = ("(d.id = $deputy_id OR EXISTS { MATCH (:Person {id: $deputy_id})"
+                 "-[:PRESENTED {role: 'proponente'}]->(a) })")
+
+
 def _graph_chambers(chambers: tuple) -> List[str]:
     """Chambers whose speech text and vectors are in the graph; the others
     are searched in the text archive."""
@@ -307,10 +321,6 @@ def _search_acts_text(
         )
         params["search_text"] = q
 
-    if deputy_id:
-        where_clauses.append("d.id = $deputy_id")
-        params["deputy_id"] = deputy_id
-
     # presentation_date: date nativa (v2) o 'YYYYMMDD' string (v1) — normalizza
     if start_date:
         where_clauses.append(
@@ -324,20 +334,21 @@ def _search_acts_text(
     # Browse mode with a group-only filter leaves no act-level clause
     where_clause = " AND ".join(where_clauses) if where_clauses else "true"
 
-    # Group filter handled separately since it's on the signatory's group
-    group_filter = ""
+    author_filters = ["(d IS NOT NULL OR gov IS NOT NULL)"]
+    if deputy_id:
+        author_filters.append(ACT_BY_PERSON)
+        params["deputy_id"] = deputy_id
     if group:
-        group_filter = "WHERE g.name IN $groups"
+        author_filters.append(f"{ACT_GROUP} IN $groups")
         params["groups"] = group
 
     cypher = f"""
-    MATCH (d)-[:PRIMARY_SIGNATORY]->(a:ParliamentaryAct)
-    WHERE (d:Deputy OR d:GovernmentMember)
-    AND {where_clause}
-    OPTIONAL MATCH (d)-[:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
-    {group_filter}
+    MATCH (a:ParliamentaryAct)
+    WHERE {where_clause}
+    {ACT_AUTHOR}
+    WITH a, d, g, gov WHERE {" AND ".join(author_filters)}
     OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept)
-    WITH a, d, g, collect(ev.label_it) AS eurovoc_labels
+    WITH a, d, g, gov, collect(ev.label_it) AS eurovoc_labels
     RETURN a.uri AS act_uri,
            a.type AS act_type,
            a.title AS act_title,
@@ -348,8 +359,8 @@ def _search_acts_text(
            coalesce(a.eurovoc, reduce(s = '', l IN eurovoc_labels |
                CASE WHEN s = '' THEN l ELSE s + '; ' + l END)) AS eurovoc,
            d.first_name AS first_name,
-           d.last_name AS last_name,
-           coalesce(g.name, 'MISTO') AS group_name
+           coalesce(d.last_name, gov.name) AS last_name,
+           {ACT_GROUP} AS group_name
     ORDER BY date_raw DESC
     LIMIT $limit
     """
@@ -507,10 +518,10 @@ def _search_acts_semantic(
     }
 
     if deputy_id:
-        extra_where.append("d.id = $deputy_id")
+        extra_where.append(ACT_BY_PERSON)
         params["deputy_id"] = deputy_id
     if group:
-        extra_where.append("g.name IN $groups")
+        extra_where.append(f"{ACT_GROUP} IN $groups")
         params["groups"] = group
     # presentation_date: date nativa nel DB v2, stringa 'YYYYMMDD' nel v1.
     # replace(toString(...)) normalizza entrambe a 'YYYYMMDD' per il confronto.
@@ -523,29 +534,17 @@ def _search_acts_semantic(
             "replace(toString(a.presentation_date), '-', '') <= $end_date_act")
         params["end_date_act"] = end_date.replace("-", "")
 
-    # When filtering by deputy/group, use MATCH instead of OPTIONAL MATCH
-    if deputy_id or group:
-        signatory_match = "MATCH (d)-[:PRIMARY_SIGNATORY]->(a)\n    WHERE (d:Deputy OR d:GovernmentMember)"
-    else:
-        signatory_match = "OPTIONAL MATCH (d)-[:PRIMARY_SIGNATORY]->(a)\n    WHERE (d:Deputy OR d:GovernmentMember)"
-
-    if group:
-        group_match = "MATCH (d)-[:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)"
-    else:
-        group_match = "OPTIONAL MATCH (d)-[:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)"
-
     filter_clause = ("WHERE " + " AND ".join(extra_where)) if extra_where else ""
 
     cypher = f"""
     CALL db.index.vector.queryNodes('act_description_embedding_index', $top_k, $embedding)
     YIELD node AS a, score
     WHERE score >= $threshold AND {_act_clause(chambers)}
-    {signatory_match}
-    {group_match}
-    WITH a, d, g, score
+    {ACT_AUTHOR}
+    WITH a, d, g, gov, score
     {filter_clause}
     OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept)
-    WITH a, d, g, score, collect(ev.label_it) AS eurovoc_labels
+    WITH a, d, g, gov, score, collect(ev.label_it) AS eurovoc_labels
     RETURN a.uri AS act_uri,
            a.type AS act_type,
            a.title AS act_title,
@@ -557,8 +556,8 @@ def _search_acts_semantic(
            coalesce(a.eurovoc, reduce(s = '', l IN eurovoc_labels |
                CASE WHEN s = '' THEN l ELSE s + '; ' + l END)) AS eurovoc,
            d.first_name AS first_name,
-           d.last_name AS last_name,
-           coalesce(g.name, 'MISTO') AS group_name,
+           coalesce(d.last_name, gov.name) AS last_name,
+           {ACT_GROUP} AS group_name,
            score
     ORDER BY score DESC
     LIMIT $limit
@@ -899,13 +898,11 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
     client = get_client()
 
     try:
-        cypher = """
-        MATCH (a:ParliamentaryAct {uri: $act_uri})
-        OPTIONAL MATCH (d)-[:PRIMARY_SIGNATORY]->(a)
-        WHERE (d:Deputy OR d:GovernmentMember)
-        OPTIONAL MATCH (d)-[:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
+        cypher = f"""
+        MATCH (a:ParliamentaryAct {{uri: $act_uri}})
+        {ACT_AUTHOR}
         OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept)
-        WITH a, d, g, collect(ev.label_it) AS eurovoc_labels
+        WITH a, d, g, gov, collect(ev.label_it) AS eurovoc_labels
         RETURN a.uri AS act_uri,
                a.type AS act_type,
                a.title AS act_title,
@@ -916,8 +913,8 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
                coalesce(a.eurovoc, reduce(s = '', l IN eurovoc_labels |
                    CASE WHEN s = '' THEN l ELSE s + '; ' + l END)) AS eurovoc,
                d.first_name AS first_name,
-               d.last_name AS last_name,
-               coalesce(g.name, 'MISTO') AS group_name
+               coalesce(d.last_name, gov.name) AS last_name,
+               {ACT_GROUP} AS group_name
         LIMIT 1
         """
 
