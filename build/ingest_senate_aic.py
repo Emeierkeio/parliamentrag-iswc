@@ -24,10 +24,11 @@ import os
 import re
 import sys
 import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from act_kinds import aic_kind  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,12 @@ def main() -> int:
             uri = f"senato:{args.legislature}:aic:{a['numero']}"
             recs = senate.get(a["numero"], [])
             latest = recs[-1] if recs else {}
+            family, kind = aic_kind(a["type"]) or (None, None)
+            if family is None:
+                logger.warning("unknown act type %r (%s): no family label", a["type"], uri)
             act_rows.append({
+                "family": family,
+                "kind": kind,
                 "uri": uri,
                 "type": a["type"],
                 "number": a["numero"],
@@ -153,12 +159,19 @@ def main() -> int:
                     a.description_embedding = CASE WHEN a.description = row.description
                                                    THEN a.description_embedding END
                 SET a.chamber = 'senato', a.legislature = $leg, a.type = row.type,
+                    a.type_raw = row.type, a.kind = row.kind,
                     a.number = row.number, a.title = row.title,
                     a.description = row.description, a.presentation_date = row.date,
                     a.status = row.status, a.official_uris = row.official_uris,
                     a.senato_url = coalesce(row.senato_url, a.senato_url),
                     a.outcome = coalesce(row.outcome, a.outcome)
             """, rows=act_rows[i:i + 2000], leg=args.legislature)
+        by_family = defaultdict(list)
+        for r in act_rows:
+            if r["family"]:
+                by_family[r["family"]].append(r["uri"])
+        for family, uris in by_family.items():  # family comes from act_kinds.FAMILIES only
+            s.run(f"UNWIND $uris AS u MATCH (a:ParliamentaryAct {{uri: u}}) SET a:{family}", uris=uris)
         for i in range(0, len(sign_rows), 5000):
             s.run("""
                 UNWIND $rows AS row

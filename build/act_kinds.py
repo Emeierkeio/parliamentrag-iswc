@@ -77,6 +77,63 @@ def bill_kind(nature: Optional[str], title: Optional[str]) -> tuple[str, str]:
     return ("Bill", "pdl_costituzionale" if n.endswith("costituzionale") else "pdl_ordinaria")
 
 
+# osr:natura of Senate bills; "ordinaria" and "costituzionale" split on who
+# presented the bill, like ocd:rif_natura on the Chamber.
+_SENATE_NATURE = {
+    "di conversione di decreto-legge": "ddl_conversione_dl",
+    "di approvazione di bilancio": "ddl_bilancio",
+}
+
+
+def senate_bill_kind(nature: Optional[str], initiative: Optional[str]) -> tuple[str, str]:
+    """(family, kind) of a Senate bill from osr:natura and its initiative."""
+    n = (nature or "").strip().lower()
+    if n in _SENATE_NATURE:
+        return ("Bill", _SENATE_NATURE[n])
+    constitutional = n == "costituzionale"
+    if initiative == "governo":
+        return ("Bill", "ddl_costituzionale" if constitutional else "ddl_ordinario")
+    return ("Bill", "pdl_costituzionale" if constitutional else "pdl_ordinaria")
+
+
+# First digit of a Chamber oversight act number (aic<d>_..._19): the Chamber's
+# numbering of act types. Checked on 31,063 described acts (18/10/2026): each
+# digit maps to one kind.
+_AIC_DIGIT = {
+    "0": ("AgendaOrder", "odg_commissione"), "1": ("Motion", "mozione"),
+    "2": ("OversightAct", "interpellanza"), "3": ("OversightAct", "interrogazione_orale"),
+    "4": ("OversightAct", "interrogazione_scritta"), "5": ("OversightAct", "interrogazione_commissione"),
+    "6": ("Resolution", "risoluzione_assemblea"), "7": ("Resolution", "risoluzione_commissione"),
+    "8": ("Resolution", "risoluzione_conclusiva"), "9": ("AgendaOrder", "odg_assemblea"),
+}
+_AIC_URI_RE = re.compile(r"/aic\.rdf/aic(\d)_")
+
+
+def act_kind(uri: str, type_raw: Optional[str], nature: Optional[str] = None,
+             initiative: Optional[str] = None) -> Optional[tuple[str, str]]:
+    """(family, kind) of any act node, for nodes whose writer does not set
+    them: Senate bills, document placeholders and Chamber agenda orders known
+    only by the URI a vote cites."""
+    t = (type_raw or "").strip()
+    if t == "Disegno di legge":
+        return senate_bill_kind(nature, initiative)
+    if t == "pdl":  # placeholder of a Chamber bill, nature unknown until resolved
+        return ("Bill", "pdl_ordinaria")
+    if t == "doc" or uri.startswith("placeholder:doc:"):
+        return ("ParliamentaryDocument", "doc")
+    fk = aic_kind(t)
+    if fk:
+        return fk
+    m = _AIC_URI_RE.search(uri)
+    if m and not t:
+        return _AIC_DIGIT[m.group(1)]
+    return None
+
+
+def valid(family: Optional[str], kind: Optional[str]) -> bool:
+    return family in KINDS and kind in KINDS[family]
+
+
 # ocd:iniziativa of Chamber bills -> initiative (decision D3).
 _CAMERA_INITIATIVE = {
     "Parlamentare": "parlamentare", "Governo": "governo", "Regioni": "regionale",

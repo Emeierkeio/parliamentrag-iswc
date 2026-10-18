@@ -39,8 +39,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Camera bill references: "A.C. 2505", "A.C. n. 547-A"
 _AC_REF = re.compile(r'\bA\.\s?C\.\s*(?:n\.\s*)?(\d+(?:-[A-Z]+)?)')
 
-# Act types whose `number` is a bare bill number comparable to an A.C. citation
-BILL_TYPES = ("Progetto di Legge", "pdl")
 
 
 class DeputyResolver:
@@ -123,9 +121,10 @@ def load_resolver(session) -> DeputyResolver:
 
 def load_act_index(session) -> ActIndex:
     rows = session.run(
-        "MATCH (a:ParliamentaryAct) WHERE a.type IN $types "
+        # Chamber bills and their placeholders (no chamber): a bare number
+        # comparable to an A.C. citation.
+        "MATCH (a:Bill) WHERE coalesce(a.chamber, 'camera') = 'camera' "
         "RETURN a.uri AS uri, a.number AS number",
-        types=list(BILL_TYPES),
     )
     return ActIndex([dict(r) for r in rows])
 

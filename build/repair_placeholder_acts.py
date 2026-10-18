@@ -37,13 +37,14 @@ def build_resolution(session) -> list[dict]:
     real_mozioni = {
         r["number"]: r["uri"]
         for r in session.run(
-            "MATCH (a:ParliamentaryAct {type: 'MOZIONE'}) "
+            # Senate motions share the numbering (1/00062): Chamber ones only.
+            "MATCH (a:Motion {chamber: 'camera'}) "
             "WHERE a.isPlaceholder IS NULL RETURN a.number AS number, a.uri AS uri")
     }
     real_bills = {
         r["number"]: r["uri"]
         for r in session.run(
-            "MATCH (a:ParliamentaryAct {type: 'Progetto di Legge'}) "
+            "MATCH (a:Bill {chamber: 'camera'}) "
             "WHERE a.isPlaceholder IS NULL RETURN a.number AS number, a.uri AS uri")
     }
 

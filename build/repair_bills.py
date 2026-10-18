@@ -81,18 +81,18 @@ def main() -> None:
                 "WHERE a.presentation_date IS NULL "
                 "SET a.presentation_date = date(row.iso) RETURN count(a) AS n", rows=dates).single()["n"]
             print(f"Aggiornati: {updated}")
-        left = s.run("MATCH (a:ParliamentaryAct {type: 'Progetto di Legge'}) "
+        left = s.run("MATCH (a:Bill {chamber: 'camera'}) "
                      "WHERE a.presentation_date IS NULL RETURN count(a) AS n").single()["n"]
         print(f"Progetti di legge ancora senza data: {left}")
 
-        no_emb = ("MATCH (a:ParliamentaryAct {type: 'Progetto di Legge'}) "
+        no_emb = ("MATCH (a:Bill {chamber: 'camera'}) "
                   "WHERE a.description_embedding IS NULL AND a.title_embedding IS NOT NULL ")
         todo = s.run(no_emb + "RETURN count(a) AS n").single()["n"]
         print(f"Progetti di legge senza embedding di descrizione (copio quello del titolo): {todo}")
         if not args.dry_run and todo:
             s.run(no_emb + "CALL { WITH a SET a.description_embedding = a.title_embedding } "
                   "IN TRANSACTIONS OF 500 ROWS")
-        left = s.run("MATCH (a:ParliamentaryAct {type: 'Progetto di Legge'}) "
+        left = s.run("MATCH (a:Bill {chamber: 'camera'}) "
                      "WHERE a.description_embedding IS NULL RETURN count(a) AS n").single()["n"]
         print(f"Progetti di legge ancora senza embedding: {left}")
     driver.close()

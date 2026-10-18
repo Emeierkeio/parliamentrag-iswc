@@ -49,6 +49,7 @@ interface ActDetail {
   type: "act";
   id: string;
   act_type: string;
+  act_kind?: string | null;
   act_title: string;
   description: string;
   date: string;
@@ -243,8 +244,8 @@ function ActDetailContent({
   const t = useTranslations("SearchPage");
   const locale = useLocale();
   const groupColor = getGroupColor(detail.group);
-  const typeLabel = getActTypeLabel(detail.act_type);
-  const typeColor = getActTypeColor(detail.act_type);
+  const typeLabel = getActTypeLabel(detail.act_type, detail.act_kind);
+  const typeColor = getActTypeColor(detail.act_type, detail.act_kind);
 
   const topics = detail.eurovoc
     ? detail.eurovoc

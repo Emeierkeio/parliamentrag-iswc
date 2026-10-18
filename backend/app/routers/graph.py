@@ -17,7 +17,8 @@ router = APIRouter(prefix="/api/graph", tags=["Graph"])
 ENGLISH_LABELS = {
     "Speech", "Phase", "Debate", "Session", "Deputy", "Senator",
     "GovernmentMember", "ParliamentaryGroup", "Committee",
-    "ParliamentaryAct", "Chunk", "Vote", "IndividualVote"
+    "ParliamentaryAct", "Chunk", "Vote", "IndividualVote",
+    "Bill", "Motion", "Resolution", "AgendaOrder", "OversightAct", "ParliamentaryDocument",
 }
 
 # English relationship types (migrated schema)
@@ -25,7 +26,8 @@ ENGLISH_RELATIONSHIPS = {
     "SPOKEN_BY", "CONTAINS_SPEECH", "HAS_PHASE", "HAS_DEBATE",
     "HAS_CHUNK", "MEMBER_OF_GROUP", "MEMBER_OF_COMMITTEE",
     "PRIMARY_SIGNATORY", "CO_SIGNATORY", "IS_PRESIDENT",
-    "IS_SECRETARY", "IS_VICE_PRESIDENT", "GOVERNMENT_REFERENCE", "NEXT"
+    "IS_SECRETARY", "IS_VICE_PRESIDENT", "GOVERNMENT_REFERENCE", "NEXT",
+    "PRESENTED", "PRESENTED_BY",
 }
 
 # Global client instance

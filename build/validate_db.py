@@ -263,6 +263,25 @@ class Validator:
         self.check(r["gov_no_pres"] == 0, "progetti di legge del governo con PRESENTED_BY",
                    f"{r['gov_no_pres']} senza")
 
+    def check_act_kinds(self):
+        print("\n[16] Famiglia e kind degli atti (decisione D1, build/act_kinds.py)")
+        from act_kinds import FAMILIES, KINDS
+        rows = self.q("""
+            MATCH (a:ParliamentaryAct)
+            WITH a, [l IN labels(a) WHERE l IN $families] AS fam
+            RETURN count(a) AS tot,
+                   sum(CASE WHEN size(fam) = 0 THEN 1 ELSE 0 END) AS no_family,
+                   sum(CASE WHEN size(fam) > 1 THEN 1 ELSE 0 END) AS many,
+                   sum(CASE WHEN size(fam) = 1 AND NOT a.kind IN $kinds[fam[0]] THEN 1 ELSE 0 END) AS bad_kind,
+                   sum(CASE WHEN a.type IS NOT NULL AND a.type_raw IS NULL THEN 1 ELSE 0 END) AS no_raw
+        """, families=list(FAMILIES), kinds={f: sorted(k) for f, k in KINDS.items()})
+        r = rows[0]
+        self.check(r["no_family"] == 0, f"atti con un'etichetta di famiglia ({r['tot']})",
+                   f"{r['no_family']} senza (build/migrate_act_kinds.py)")
+        self.check(r["many"] == 0, "atti con una sola famiglia", f"{r['many']} con più etichette")
+        self.check(r["bad_kind"] == 0, "kind nel vocabolario della famiglia", f"{r['bad_kind']} fuori")
+        self.check(r["no_raw"] == 0, "type_raw dove c'è type", f"{r['no_raw']} senza")
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""
@@ -474,6 +493,7 @@ class Validator:
             self.check_senate(rows[0]["c"])
 
         self.check_acts_camera()
+        self.check_act_kinds()
 
         rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
         if rows[0]["c"]:

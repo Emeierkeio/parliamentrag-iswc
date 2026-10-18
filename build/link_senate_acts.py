@@ -38,6 +38,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from act_kinds import senate_bill_kind  # noqa: E402
 from csv_loader import parse_date_to_neo4j  # noqa: E402
 from senate_parser import _slug  # noqa: E402
 from senate_sparql_ingester import parse_senate_votazione_uri  # noqa: E402
@@ -309,12 +310,15 @@ def write_acts(session, ddl: pd.DataFrame, legislature: int,
         "status": r.stato if isinstance(r.stato, str) else None,
         "nature": r.natura if isinstance(r.natura, str) else None,
         "initiative": initiatives.get(r.ddl),
+        "kind": senate_bill_kind(r.natura if isinstance(r.natura, str) else None,
+                                 initiatives.get(r.ddl))[1],
         "descr": getattr(r, "descrIniziativa", None)
         if isinstance(getattr(r, "descrIniziativa", None), str) else None,
     } for r in ddl[ddl["ramo"] == "S"].itertuples()]
     session.run("""
         UNWIND $rows AS row
         MERGE (a:ParliamentaryAct {uri: row.uri})
+        SET a:Bill, a.kind = row.kind, a.type_raw = $type
         SET a.chamber = 'senato', a.legislature = $leg, a.type = $type,
             a.number = row.number, a.title = row.title,
             a.presentation_date = row.date, a.id_ddl = row.idDdl,

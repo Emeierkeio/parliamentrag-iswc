@@ -351,6 +351,7 @@ def _search_acts_text(
     WITH a, d, g, gov, collect(ev.label_it) AS eurovoc_labels
     RETURN a.uri AS act_uri,
            a.type AS act_type,
+           a.kind AS act_kind,
            a.title AS act_title,
            a.description AS description,
            toString(a.presentation_date) AS date_raw,
@@ -387,6 +388,7 @@ def _search_acts_text(
                 "last_name": record["last_name"] or "",
                 "group": record["group_name"] or "MISTO",
                 "act_type": record["act_type"] or "",
+                "act_kind": record["act_kind"],
                 "act_title": record["act_title"] or "",
                 "act_number": record["act_number"] or "",
                 "destinatario": record["destinatario"] or "",
@@ -547,6 +549,7 @@ def _search_acts_semantic(
     WITH a, d, g, gov, score, collect(ev.label_it) AS eurovoc_labels
     RETURN a.uri AS act_uri,
            a.type AS act_type,
+           a.kind AS act_kind,
            a.title AS act_title,
            a.description AS description,
            toString(a.presentation_date) AS date_raw,
@@ -585,6 +588,7 @@ def _search_acts_semantic(
             "last_name": r.get("last_name") or "",
             "group": r.get("group_name") or "MISTO",
             "act_type": r.get("act_type") or "",
+            "act_kind": r.get("act_kind"),
             "act_title": r.get("act_title") or "",
             "act_number": r.get("act_number") or "",
             "destinatario": r.get("destinatario") or "",
@@ -905,6 +909,7 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
         WITH a, d, g, gov, collect(ev.label_it) AS eurovoc_labels
         RETURN a.uri AS act_uri,
                a.type AS act_type,
+           a.kind AS act_kind,
                a.title AS act_title,
                a.description AS description,
                toString(a.presentation_date) AS date_raw,
@@ -936,6 +941,7 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
                 "type": "act",
                 "id": act_uri,
                 "act_type": record["act_type"] or "",
+                "act_kind": record["act_kind"],
                 "act_title": record["act_title"] or "",
                 "description": record["description"] or "",
                 "date": formatted_date,

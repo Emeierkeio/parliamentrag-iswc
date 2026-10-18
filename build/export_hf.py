@@ -374,6 +374,7 @@ class HfExporter:
                 "chamber": p.get("chamber"),
                 "number": s(p.get("number")),
                 "act_type": p.get("type"),
+                "kind": p.get("kind"),
                 "title": p.get("title"),
                 "description": p.get("description"),
                 "presentation_date": iso(p.get("presentation_date")),

@@ -352,6 +352,13 @@ else
 		|| warn "Senato: aggiornamento incompleto (rc 3 = dati.senato.it rifiuta le richieste), riprende al prossimo giro"
 fi
 
+# ── Famiglia e kind degli atti (decisione D1) ────────────────────────────────
+# Dopo tutti i writer di atti: copre segnaposto e ODG noti solo dall'URI.
+# Idempotente, senza rete.
+run "Famiglia e kind degli atti" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/migrate_act_kinds.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
+	|| warn "famiglia e kind degli atti: migrazione fallita, riprende al prossimo giro"
+
 # ── Emendamenti XIX → grafo e archivio ───────────────────────────────────────
 # Spento di default: si accende con EMENDAMENTI_GRAFO=1 (ambiente o .env).
 # Dopo il Senato, così le sue votazioni nuove si collegano nello stesso giro.

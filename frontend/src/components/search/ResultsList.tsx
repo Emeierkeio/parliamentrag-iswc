@@ -22,6 +22,7 @@ export interface SearchResultItem {
   last_name: string;
   group: string;
   act_type: string | null;
+  act_kind?: string | null;
   act_title: string | null;
   act_number: string | null;
   destinatario: string | null;
@@ -61,7 +62,46 @@ const ACT_TYPE_COLORS: Record<string, string> = {
   "INTERPELLANZA": "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300",
 };
 
-export function getActTypeLabel(tipo: string): string {
+// Closed vocabulary of build/act_kinds.py (decision D1): same labels for
+// Camera and Senato, whatever wording the source uses.
+const ACT_KIND_SHORT: Record<string, string> = {
+  pdl_ordinaria: "PDL",
+  pdl_costituzionale: "PDL costituzionale",
+  ddl_ordinario: "DDL",
+  ddl_costituzionale: "DDL costituzionale",
+  ddl_conversione_dl: "Conversione DL",
+  ddl_bilancio: "Bilancio",
+  mozione: "Mozione",
+  mozione_sfiducia: "Mozione di sfiducia",
+  risoluzione_assemblea: "Risoluzione",
+  risoluzione_commissione: "Risoluzione",
+  risoluzione_conclusiva: "Risoluzione",
+  odg_assemblea: "OdG",
+  odg_commissione: "OdG",
+  odg_bilancio: "OdG",
+  interrogazione_scritta: "Interrogazione scritta",
+  interrogazione_orale: "Interrogazione orale",
+  interrogazione_commissione: "Interrogazione",
+  question_time: "Question time",
+  interpellanza: "Interpellanza",
+  interpellanza_urgente: "Interpellanza",
+  doc: "Documento",
+};
+
+// Kind prefix → the ACT_TYPE_COLORS key of its family
+const ACT_KIND_COLOR_KEY: [string, string][] = [
+  ["pdl_", "PROPOSTA DI LEGGE"],
+  ["ddl_", "PROPOSTA DI LEGGE"],
+  ["mozione", "MOZIONE"],
+  ["risoluzione", "RISOLUZIONE"],
+  ["odg", "ORDINE DEL GIORNO"],
+  ["interrogazione", "INTERROGAZIONE"],
+  ["question_time", "INTERROGAZIONE"],
+  ["interpellanza", "INTERPELLANZA"],
+];
+
+export function getActTypeLabel(tipo: string, kind?: string | null): string {
+  if (kind && ACT_KIND_SHORT[kind]) return ACT_KIND_SHORT[kind];
   if (!tipo) return "Atto";
   const exact = ACT_TYPE_SHORT[tipo.toUpperCase()];
   if (exact) return exact;
@@ -73,7 +113,9 @@ export function getActTypeLabel(tipo: string): string {
   return tipo.length > 30 ? tipo.slice(0, 30) + "..." : tipo;
 }
 
-export function getActTypeColor(tipo: string): string {
+export function getActTypeColor(tipo: string, kind?: string | null): string {
+  const key = kind && ACT_KIND_COLOR_KEY.find(([prefix]) => kind.startsWith(prefix))?.[1];
+  if (key) return ACT_TYPE_COLORS[key];
   if (!tipo) return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
   const upper = tipo.toUpperCase();
   for (const [key, color] of Object.entries(ACT_TYPE_COLORS)) {
@@ -345,8 +387,8 @@ function ActCard({
 }) {
   const t = useTranslations("SearchPage");
   const groupColor = getGroupColor(item.group);
-  const typeLabel = getActTypeLabel(item.act_type || "");
-  const typeColor = getActTypeColor(item.act_type || "");
+  const typeLabel = getActTypeLabel(item.act_type || "", item.act_kind);
+  const typeColor = getActTypeColor(item.act_type || "", item.act_kind);
 
   // Parse EuroVoc topics
   const topics = item.eurovoc
