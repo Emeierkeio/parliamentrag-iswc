@@ -18,7 +18,11 @@ transcripts in data/senate_xml (Akoma Ntoso); no network.
                                                         or the title where there is no
                                                         Akoma Ntoso (HTML-only sittings);
                                                         questions and interpellations
-                                                        from the title, "(3-02671)"
+                                                        from the title, "(3-02671)";
+                                                        motions from the title ("mozione
+                                                        n. 47") and, with resolutions, from
+                                                        the section where their vote is
+                                                        announced
   (:Vote)-[:ON_ACT]->(act)                              bill, motion (1/...) or resolution (6/...)
 
 The official link is osr:Votazione -> osr:oggetto -> osr:relativoA
@@ -79,6 +83,13 @@ FINAL_RE = re.compile(r"votazione finale|nel suo complesso", re.IGNORECASE)
 # controprova") are not the vote.
 REPEAT_ANNOUNCE_RE = re.compile(r"(?:dispongo la|procediamo (?:nuovamente )?alla) controprova",
                                 re.IGNORECASE)
+# Labels and announcements name a motion by serial or full number ("mozione
+# n. 39", "Mozione 1-00039") and a resolution by its number within the
+# debate ("proposta di risoluzione n. 2 (testo 2)", "Prop. risol. n.3",
+# "Prop.ris.n.5").
+MOTION_KEY_RE = re.compile(r"\bmozione\s+(?:n\.\s*(\d+)|1-(\d{5}))", re.IGNORECASE)
+RESOLUTION_KEY_RE = re.compile(r"\bprop(?:osta)?\.?\s*(?:di)?\s*ris\w*\.?\s*n\.?\s*(\d+)",
+                               re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -94,21 +105,27 @@ def vote_keys(text: str) -> set[str]:
         keys |= {f"art:{m.lower()}" for m in ARTICLE_RE.findall(text)}
     if FINAL_RE.search(text):
         keys.add("final")
+    keys |= {f"motion:{int(a or b)}" for a, b in MOTION_KEY_RE.findall(text)}
+    keys |= {f"resolution:{int(n)}" for n in RESOLUTION_KEY_RE.findall(text)}
     return keys
 
 
 def parse_sitting(path: str) -> dict:
     """Bills by section slug, and vote announcements with their bills.
 
-    Returns {"sections": {slug: [bill numbers]}, "events": [(keys, [bill numbers])]}.
+    Returns {"sections": {slug: [bill numbers]}, "events": [(keys, [bill numbers])],
+    "event_sections": [(slug, occurrence)]}: the section each announcement
+    sits in, occurrence counting the earlier sections with the same name.
     """
     root = ET.parse(path).getroot()
     ns = root.tag.split("}")[0] + "}"
     body = root.find(f".//{ns}debateBody")
     sections: dict[str, list[str]] = defaultdict(list)
     events: list[tuple[set[str], list[str]]] = []
+    event_sections: list[tuple[str, int]] = []
     if body is None:
-        return {"sections": {}, "events": []}
+        return {"sections": {}, "events": [], "event_sections": []}
+    seen = Counter()
     for sec in body.findall(f"{ns}debateSection"):
         bills = [
             (b.findtext(f"{ns}docNumber") or "").strip()
@@ -117,6 +134,8 @@ def parse_sitting(path: str) -> dict:
         ]
         bills = [b for b in bills if b]
         slug = _slug(sec.get("name", ""))
+        occurrence = seen[slug]
+        seen[slug] += 1
         for b in bills:
             if b not in sections[slug]:
                 sections[slug].append(b)
@@ -126,7 +145,67 @@ def parse_sitting(path: str) -> dict:
                 continue
             explicit = BILL_NUMBER_RE.findall(text)
             events.append((vote_keys(text), explicit or bills))
-    return {"sections": dict(sections), "events": events}
+            event_sections.append((slug, occurrence))
+    return {"sections": dict(sections), "events": events, "event_sections": event_sections}
+
+
+def section_debates(session_id: str, debates: list[tuple[str, int]]) -> dict[tuple[str, int], str]:
+    """{(section slug, occurrence): Debate id} for the debates of a sitting.
+
+    senate_parser names a debate after its section and, when the name repeats
+    in the sitting, appends "_{order}": the k-th debate of a slug in order is
+    the k-th section with that name. A section without speeches has no
+    debate, so a later one with the same name may be counted one short.
+    """
+    out: dict[tuple[str, int], str] = {}
+    count = Counter()
+    for debate_id, order in sorted(debates, key=lambda d: d[1]):
+        slug = debate_id[len(session_id) + 1:]
+        suffix = f"_{order}"
+        if slug.endswith(suffix) and count[slug[:-len(suffix)]]:
+            slug = slug[:-len(suffix)]
+        out[(slug, count[slug])] = debate_id
+        count[slug] += 1
+    return out
+
+
+RESUMED_PREFIX_RE = re.compile(
+    r"^(?:(?:ripresa|seguito) della )?discussione(?: congiunta)?"
+    r"(?: e (?:approvazione|reiezione))?(?:, con modificazioni,)?"
+    r"(?: dalla sede redigente)? (?:sulle|sulla|sul|del|della|dello|dei|delle|degli)\s+")
+
+
+def resumed_debate(debate_id: str, debates: list[tuple[str, str, int]]) -> Optional[str]:
+    """The debate a "Ripresa della discussione ..." section resumes, else None.
+
+    debates: (id, title, order) of the sitting. "Ripresa della discussione
+    sulle comunicazioni del Governo" resumes the latest earlier debate whose
+    title, without the procedural opening, starts with "comunicazioni del
+    Governo": "Comunicazioni del Governo in esito alla richiesta ...".
+    """
+    by_id = {d[0]: d for d in debates}
+    if debate_id not in by_id:
+        return None
+    _, title, order = by_id[debate_id]
+    title = (title or "").lower()
+    if not title.startswith("ripresa della discussione"):
+        return None
+    core = RESUMED_PREFIX_RE.sub("", title).strip()
+    if not core or core == title:
+        return None
+    for other_id, other_title, other_order in sorted(debates, key=lambda d: -d[2]):
+        other = (other_title or "").lower()
+        if other_order < order and not other.startswith("ripresa") \
+                and RESUMED_PREFIX_RE.sub("", other).startswith(core):
+            return other_id
+    return None
+
+
+def vote_sections(votes: list[tuple[str, str]], sitting: dict) -> dict[str, tuple[str, int]]:
+    """{vote id: (section slug, occurrence)} of the announcement each vote is aligned to."""
+    events, where = sitting["events"], sitting.get("event_sections", [])
+    pairs = align([vote_keys(label or "") for _, label in votes], events)
+    return {votes[i][0]: where[j] for i, j in pairs.items() if j < len(where)}
 
 
 def vote_act(label: str, sitting: dict) -> Optional[str]:
@@ -313,6 +392,13 @@ AMENDMENT_TAIL_RE = re.compile(r"\b(?:Em{1,2}\.|ODG\b)")
 TITLE_BILL_RE = re.compile(r"\((\d+(?:-[A-Z]+)?)\)")
 # "(3-02671) - Question time su ...", "(3-00011 e 3-00042, con carattere d'urgenza ...)"
 CONTROL_ACT_IN_TITLE_RE = re.compile(r"\b([1-4])-(\d{5})\b")
+# Motions by serial: "della mozione n. 47 sul ...", "delle mozioni nn. 50 (testo 2),
+# 52 (testo 2) e 53 sull'...", "della mozione di sfiducia individuale n. 62"
+MOTIONS_IN_TITLE_RE = re.compile(
+    r"\bmozion[ei]\b(?:\s+di\s+sfiducia(?:\s+individuale)?)?\s+nn?\.\s*"
+    r"(\d+(?:\s*\(testo\s+\d+\))?(?:\s*(?:,|\be\b)\s*\d+(?:\s*\(testo\s+\d+\))?)*)",
+    re.IGNORECASE)
+TESTO_RE = re.compile(r"\(testo\s+\d+\)", re.IGNORECASE)
 
 
 def motion_of(label: str) -> Optional[str]:
@@ -375,6 +461,8 @@ def title_bills(title: str) -> list[str]:
 def title_control_acts(title: str) -> list[str]:
     """Numbers of the motions, interpellations and questions a debate title names ("3/02671")."""
     found = [f"{kind}/{n}" for kind, n in CONTROL_ACT_IN_TITLE_RE.findall(title or "")]
+    for group in MOTIONS_IN_TITLE_RE.findall(title or ""):
+        found += [f"1/{int(n):05d}" for n in re.findall(r"\d+", TESTO_RE.sub("", group))]
     return list(dict.fromkeys(found))
 
 
@@ -624,9 +712,12 @@ def main() -> int:
                 WHERE v.type <> 'verifica numero legale' OR v.type IS NULL
                 RETURN v.id AS id, v.subject AS label ORDER BY v.number
             """, sid=session_id)]
-            debates = [(r["id"], r["title"]) for r in s.run(
-                "MATCH (:Session {id: $sid})-[:HAS_DEBATE]->(d:Debate) RETURN d.id AS id, d.title AS title",
-                sid=session_id)]
+            debate_rows = list(s.run(
+                "MATCH (:Session {id: $sid})-[:HAS_DEBATE]->(d:Debate) "
+                "RETURN d.id AS id, d.title AS title, d.order AS order", sid=session_id))
+            debates = [(r["id"], r["title"]) for r in debate_rows]
+            ordered = [(r["id"], r["title"], r["order"] or 0) for r in debate_rows]
+            by_section = section_debates(session_id, [(d[0], d[2]) for d in ordered])
 
             path = os.path.join(data, "senate_xml", f"resaula_leg{args.legislature}_{num:04d}.akn")
             if os.path.exists(path):
@@ -635,7 +726,7 @@ def main() -> int:
                 # Sittings published only as HTML (212-222, the latest ones
                 # until their Akoma Ntoso arrives): labels and titles only.
                 stats["sittings_without_transcript"] += 1
-                sitting = {"sections": {}, "events": []}
+                sitting = {"sections": {}, "events": [], "event_sections": []}
 
             for debate_id, title in debates:
                 if sitting["events"] or sitting["sections"]:
@@ -660,6 +751,7 @@ def main() -> int:
             # The whole sitting goes through the alignment, so that a vote
             # with an official link still anchors the ones around it.
             linked = link_sitting_votes(votes, sitting)
+            where = vote_sections(votes, sitting)
             for vote_id, label in votes:
                 motion, resolution = motion_of(label), resolution_of(label, num, resolutions)
                 if official.get(vote_id):
@@ -681,6 +773,18 @@ def main() -> int:
                     stats["votes_bill_unknown"] += vote_id in linked
                 stats[f"votes_{how}"] += 1
                 on_act += [{"vote": vote_id, "uri": uri} for uri in uris]
+                # A motion or resolution is discussed in the debate where
+                # its vote is announced.
+                if how in ("motion", "resolution"):
+                    debate_id = by_section.get(where.get(vote_id))
+                    if debate_id:
+                        resumed = resumed_debate(debate_id, ordered)
+                        for d in filter(None, (debate_id, resumed)):
+                            discusses += [{"debate": d, "uri": uri} for uri in uris]
+                        stats[f"debates_linked_{how}_vote"] += 1
+                        stats[f"debates_linked_{how}_resumed"] += resumed is not None
+                    else:
+                        stats[f"{how}_vote_without_section"] += 1
                 # The acts found now replace the earlier ones; a vote left
                 # unresolved keeps what it has.
                 if uris or how in ("official_not_a_bill", "repeat_outside_bills"):

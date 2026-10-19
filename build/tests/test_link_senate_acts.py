@@ -259,3 +259,64 @@ def test_title_control_acts():
                               "Regolamento) - Problematiche carceri italiane") == ["3/00011", "3/00042"]
     assert title_control_acts("Svolgimento di interpellanze: (2-00012) - Su ...") == ["2/00012"]
     assert title_control_acts("Discussione del disegno di legge: (1199) Proroga") == []
+
+
+def test_title_control_acts_motions_by_serial():
+    from link_senate_acts import title_control_acts
+    assert title_control_acts("Discussione e approvazione della mozione n. 47 sul contrasto "
+                              "all'omofobia") == ["1/00047"]
+    assert title_control_acts("Discussione delle mozioni nn. 50 (testo 2), 52 (testo 2) e 53 "
+                              "sull'attuazione degli impegni previsti dal PNRR") == [
+        "1/00050", "1/00052", "1/00053"]
+    assert title_control_acts("Discussione e reiezione della mozione di sfiducia individuale n. 62 "
+                              "nei confronti del Ministro del turismo") == ["1/00062"]
+    assert title_control_acts("Sulla mozione approvata dal Senato accademico") == []
+
+
+def test_motion_and_resolution_keys():
+    assert vote_keys("Mozione 1-00039, Boccia e altri. Votazione finale") == {"motion:39", "final"}
+    assert vote_keys("Indìco la votazione nominale con scrutinio simultaneo della mozione n. 1, "
+                     "presentata dalla senatrice Segre") == {"motion:1"}
+    assert vote_keys("Comunicazioni Ministro difesa. Proposta di risoluzione n. 2 (testo 2), "
+                     "Paita e altri") == {"resolution:2"}
+    assert vote_keys("Comunicaz. Consiglio EU. Prop.ris.n.5, Malan") == {"resolution:5"}
+
+
+def test_vote_sections_and_section_debates():
+    from link_senate_acts import section_debates, vote_sections
+    sid = "sen_leg19_sed17"
+    debates = [(f"{sid}_ripresa_della_discussione_sulle_comunicazioni", 2),
+               (f"{sid}_ripresa_della_discussione_sulle_comunicazioni_4", 4),
+               (f"{sid}_sulla_relazione_n_4", 3)]
+    by_section = section_debates(sid, debates)
+    assert by_section[("ripresa_della_discussione_sulle_comunicazioni", 1)] == debates[1][0]
+    assert by_section[("sulla_relazione_n_4", 0)] == debates[2][0]
+    sitting = {
+        "sections": {},
+        "events": [(vote_keys("Indìco la votazione dell'emendamento 1.1"), ["274"]),
+                   (vote_keys("indìco la votazione della proposta di risoluzione n. 2 (testo 2)"), []),
+                   (vote_keys("Indìco la votazione della proposta di risoluzione n. 3"), [])],
+        "event_sections": [("ddl_274", 0), ("ripresa_della_discussione_sulle_comunicazioni", 1),
+                           ("ripresa_della_discussione_sulle_comunicazioni", 1)],
+    }
+    votes = [("v1", "Comunicazioni Ministro difesa. Proposta di risoluzione n. 2 (testo 2), Paita"),
+             ("v2", "Comunicazioni Ministro difesa. Proposta di risoluzione n. 3, Malpezzi")]
+    where = vote_sections(votes, sitting)
+    assert {v: by_section[w] for v, w in where.items()} == {"v1": debates[1][0], "v2": debates[1][0]}
+
+
+def test_resumed_debate():
+    from link_senate_acts import resumed_debate
+    debates = [
+        ("d0", "Comunicazioni del Governo in esito alla richiesta di aiuti dai Paesi del Golfo "
+               "e conseguente discussione", 12),
+        ("d1", "Ripresa della discussione sulle comunicazioni del Governo", 13),
+        ("d2", "Ripresa della discussione sulle comunicazioni del Governo", 15),
+        ("d3", "Discussione della mozione n. 47 sul contrasto all'omofobia", 16),
+        ("d4", "Ripresa della discussione della mozione n. 47", 18),
+        ("d5", "Ripresa della discussione", 19),
+    ]
+    assert resumed_debate("d2", debates) == "d0"
+    assert resumed_debate("d4", debates) == "d3"
+    assert resumed_debate("d0", debates) is None
+    assert resumed_debate("d5", debates) is None

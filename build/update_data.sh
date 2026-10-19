@@ -358,6 +358,12 @@ fi
 run "Famiglia e kind degli atti" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/migrate_act_kinds.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
 	|| warn "famiglia e kind degli atti: migrazione fallita, riprende al prossimo giro"
+# Mozioni e risoluzioni della Camera votate in Aula → il dibattito in cui cade
+# il voto («Vedi votazione n.» del resoconto) e quello che riprende. Dopo i
+# kind, senza rete, idempotente. Quelle del Senato passano da link_senate_acts.py.
+run "Mozioni e risoluzioni Camera → dibattito" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/link_camera_motions.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
+	|| warn "mozioni e risoluzioni Camera: collegamento fallito, riprende al prossimo giro"
 # Letture dello stesso progetto di legge in un LegislativeProcess (decisione
 # D2), dalle fasi del Senato che update_senato.sh ha appena scaricato, e
 # versioni del testo della Camera (-A, -A/R, testi unificati): una query SPARQL.

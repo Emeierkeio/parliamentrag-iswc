@@ -80,6 +80,7 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `download_esiti_senato.py` | Senate amendment outcomes and the floor texts missing from Akoma Ntoso |
 | `parse_emendamenti.py` | both chambers' amendments in one JSONL (`downloads/emendamenti/`) |
 | `link_agenda_orders.py` | agenda orders `REFERS_TO` their bill (from the number), outcome from votes (Camera) and from the G amendments (Senato) |
+| `link_camera_motions.py` | Chamber motions and resolutions voted in the House `DISCUSSES`-linked to the debate where the vote falls and to the one it resumes (Senate ones: `link_senate_acts.py`) |
 | `ingest_reporters.py` | bill rapporteurs, `(:Bill)-[:REPORTED_BY]->(:Person)`, from dati.camera.it and dati.senato.it |
 
 ## Notes
