@@ -8,6 +8,7 @@ have none.
 """
 from __future__ import annotations
 
+import re
 from typing import Iterable
 
 from ..models.timeline import LawRef
@@ -67,3 +68,47 @@ def laws_for_acts(neo4j: Neo4jClient, uris: Iterable[str | None]) -> dict[str, L
         return {}
     rows = neo4j.query(LAW_BY_ACT, {"uris": wanted})
     return {r["uri"]: law_ref(r) for r in rows if r.get("number") is not None}
+
+
+# "legge 180/2026", "L. 180/2026", "legge n. 180 del 2026", "legge 9 ottobre
+# 2026, n. 180", "legge costituzionale n. 1 del 2026"
+_NUM_YEAR = re.compile(
+    r"\b(?P<kind>legge|l\.)\s*(?P<cost>costituzionale\s*)?(?:n\.?|numero)?\s*(?P<num>\d{1,4})\s*"
+    r"(?:/\s*|del(?:l['’])?\s+(?:\d{1,2}\s+[a-z]+\s+)?)(?P<year>(?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
+_DATE_NUM = re.compile(
+    r"\blegge\s*(?P<cost>costituzionale\s*)?\d{1,2}\s+[a-z]+\s+(?P<year>(?:19|20)\d{2}),?\s*n\.?\s*(?P<num>\d{1,4})\b",
+    re.IGNORECASE,
+)
+
+
+def parse_law_reference(text: str | None) -> tuple[int, int, str | None] | None:
+    """(number, year, kind) of a law cited in a search query, else None.
+    kind is "legge_costituzionale" when the query says so, else None (any)."""
+    if not text:
+        return None
+    m = _NUM_YEAR.search(text) or _DATE_NUM.search(text)
+    if not m:
+        return None
+    kind = "legge_costituzionale" if m.group("cost") else None
+    return int(m.group("num")), int(m.group("year")), kind
+
+
+ACTS_OF_LAW = """
+MATCH (l:Law {number: $number})
+WHERE l.date.year = $year AND ($kind IS NULL OR l.kind = $kind)
+MATCH (a:ParliamentaryAct)-[:PART_OF]->(:LegislativeProcess)-[:BECAME_LAW]->(l)
+RETURN DISTINCT a.uri AS uri
+"""
+
+
+def acts_of_law(neo4j: Neo4jClient, text: str | None) -> list[str]:
+    """URIs of every reading of the law a query names ("legge 180/2026"),
+    or [] when the query names no law or the law is not in the graph."""
+    ref = parse_law_reference(text)
+    if not ref:
+        return []
+    number, year, kind = ref
+    return [r["uri"] for r in neo4j.query(ACTS_OF_LAW, {"number": number, "year": year, "kind": kind})
+            if r.get("uri")]

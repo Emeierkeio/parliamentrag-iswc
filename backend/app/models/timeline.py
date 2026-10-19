@@ -17,6 +17,9 @@ class DebateSummary(BaseModel):
     id: str
     title: str
     speech_count: int
+    # Senate outcome fragments ("È approvato.") that continue this debate,
+    # merged into it; get_debate on this id includes their speeches.
+    continuation_ids: list[str] = []
 
 
 class SessionCard(BaseModel):
@@ -65,6 +68,9 @@ class VoteInfo(BaseModel):
     # Readable subject of the motion or resolution voted on, from the debate
     # title (build/act_subjects.py); None for other votes.
     act_subject: Optional[str] = None
+    # "quorum_check" for a Senate check of the quorum (Verifica del numero
+    # legale): not a vote on anything, outcome is None. None otherwise.
+    kind: Optional[str] = None
 
 
 class VoteParticipant(BaseModel):
@@ -114,14 +120,16 @@ class VoteActRef(BaseModel):
     # Motions and resolutions: what the act is about, from official text
     # (build/act_subjects.py); the title is only their code.
     subject: Optional[str] = None
-    url: Optional[str] = None  # camera.it / aic.camera.it page (iter, dossier)
-    text_url: Optional[str] = None  # direct PDF of the full text (stampato)
+    number: Optional[str] = None  # "2822-B", "1903"
+    status: Optional[str] = None  # Senate bills: "assorbito" for a joint bill absorbed by the main one
+    url: Optional[str] = None  # camera.it / aic.camera.it / senato.it page (iter, dossier)
+    text_url: Optional[str] = None  # full text: PDF of the printed bill, or the texts page
     law: Optional[LawRef] = None
 
 
 class VoteActTextResponse(BaseModel):
-    """Testo integrale di ciò che una votazione ha deliberato (emendamento o
-    articolo), estratto dall'Allegato A del resoconto di seduta."""
+    """Full text of what a roll call decided (amendment or article): from
+    Allegato A of the Camera sitting, or from the amendment archive."""
 
     paragraphs: list[str]
     source_url: str
@@ -135,6 +143,7 @@ class VoteDetailResponse(BaseModel):
     chamber: str = "camera"
     subject: Optional[str] = None
     description: Optional[str] = None
+    kind: Optional[str] = None  # see VoteInfo.kind
     acts: list[VoteActRef] = []
     # Allegato A del resoconto di seduta: testi integrali di emendamenti,
     # articoli e odg votati in quella seduta (documenti.camera.it).
@@ -162,6 +171,9 @@ class ActInfo(BaseModel):
     title: Optional[str] = None
     subject: Optional[str] = None  # motions and resolutions, see VoteActRef
     type: Optional[str] = None
+    number: Optional[str] = None
+    status: Optional[str] = None  # see VoteActRef.status
+    url: Optional[str] = None
     law: Optional[LawRef] = None
 
 
@@ -172,6 +184,8 @@ class SpeakerInfo(BaseModel):
     first_name: str
     last_name: str
     party: Optional[str] = None
+    # Set when party is a Mixed Group component: the group itself (Misto)
+    parliamentary_group: Optional[str] = None
     speaking_role: Optional[str] = None
     is_government_member: bool = False
     speech_count: int
@@ -187,6 +201,7 @@ class InterventionInfo(BaseModel):
     first_name: str
     last_name: str
     party: Optional[str] = None
+    parliamentary_group: Optional[str] = None  # see SpeakerInfo
     speaking_role: Optional[str] = None
     is_government_member: bool = False
     phase_title: Optional[str] = None
@@ -198,6 +213,8 @@ class DebateDetailResponse(BaseModel):
     id: str
     title: str
     recap: Optional[str] = None
+    # Outcome fragments merged into this debate (see DebateSummary)
+    continuation_ids: list[str] = []
     phases: list[PhaseInfo]
     speakers: list[SpeakerInfo]
     interventions: list[InterventionInfo] = []

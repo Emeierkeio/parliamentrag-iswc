@@ -14,7 +14,7 @@ class GraphV2:
         return {"id": "leg19_sed727_tit00030", "title": "Caregiver familiari", "recap": None}
 
     def query(self, cypher, params=None):
-        if "DISCUSSES" not in cypher:
+        if "DISCUSSES" not in cypher or "HAS_VOTE" in cypher:
             return []
         act_id = ACT if "a.uri" in cypher else None
         return [{"id": act_id, "title": "Riconoscimento e tutela dei caregiver", "type": "Progetto di Legge", "subject": None}]

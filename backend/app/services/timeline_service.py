@@ -37,38 +37,124 @@ from ..models.timeline import (
     VoteParticipant,
     VotePartyBreakdown,
 )
-from .archive import fill_rows
-from .laws import laws_for_acts
+from .archive import fill_rows, get_archive
+from .laws import acts_of_law, laws_for_acts
+from .links import act_public_url, act_text_url, https
 from .neo4j_client import Neo4jClient
 
 
-def _act_public_url(uri: str | None) -> str | None:
-    """Public camera.it page for a ParliamentaryAct URI, when derivable.
+_act_public_url = act_public_url
 
-    - attocamera.rdf/ac19_2735          → act page (PDL/DDL bills)
-    - aic.rdf/aic9_01492_027_19         → AIC page (ODG/motion/resolution)
-      with the full text; the number is rebuilt from the URI segments
-      ("9_02911_A_028" → "9/02911-A/028": letters are suffixes of the
-      previous segment).
+
+# Senate sittings: the stenographic record of a sequence of amendment votes
+# is split at every outcome, and the ingest turned each "È approvato." into a
+# debate of its own. They continue the debate before them.
+_OUTCOME_FRAGMENT = re.compile(r"^(?:non\s+)?(?:è|e')?\s*(?:approvat|respint)[oa]\.?$", re.IGNORECASE)
+# Titles cut where the record names the act: "Discussione del disegno di
+# legge:", "Ripresa della discussione del disegno di legge n."
+_TRUNCATED = re.compile(r"(?::|\bn\.)\s*$")
+_RESUMED = re.compile(r"^Si riprende la discussione\.?$", re.IGNORECASE)
+_CLOCK = re.compile(r"\s*\(ore \d{1,2}[,.]\d{2}\)\.?")
+
+
+def is_outcome_fragment(title: str | None) -> bool:
+    return bool(_OUTCOME_FRAGMENT.match((title or "").strip()))
+
+
+def clean_debate_title(title: str | None, act: dict | None = None, chamber: str | None = None) -> str:
+    """Readable debate title.
+
+    The Camera record repeats the time of the sitting ("(ore 9,08). (ore
+    9,08) (ore 9,08)") and pads some titles with dots; Senate titles that
+    stop where the act is named get the discussed act appended. `act` is
+    {number, title} of an act the debate DISCUSSES.
     """
-    if not uri:
+    t = (title or "").strip()
+    clocks = _CLOCK.findall(t)
+    if len(clocks) > 1:
+        t = _CLOCK.sub("", t).rstrip(" .") + " " + clocks[0].strip().rstrip(".")
+    t = re.sub(r"(?:\s*\.){2,}\s*$", ".", t)
+    if act and act.get("number"):
+        if _TRUNCATED.search(t):
+            base = _TRUNCATED.sub("", t).rstrip(" ,")
+            name = (act.get("title") or "").strip()
+            if len(name) > 160:
+                name = name[:160].rsplit(" ", 1)[0] + "…"
+            t = f"{base} n. {act['number']}" + (f": {name}" if name else "")
+        elif _RESUMED.match(t):
+            code = "A.S." if chamber == "senato" else "A.C."
+            t = f"Si riprende la discussione ({code} {act['number']})"
+    return t
+
+
+def fold_fragments(debates: list[dict]) -> list[dict]:
+    """Merge outcome fragments into the debate before them, in sitting order.
+
+    Each debate is {id, title, speech_count, ...}; a fragment adds its
+    speeches to its parent and its id to the parent's `continuation_ids`. A
+    fragment with nothing before it stays, titled as what it is.
+    """
+    out: list[dict] = []
+    for d in debates:
+        if is_outcome_fragment(d.get("title")) and out:
+            parent = out[-1]
+            parent["speech_count"] = parent.get("speech_count", 0) + (d.get("speech_count") or 0)
+            parent.setdefault("continuation_ids", []).append(d["id"])
+            continue
+        out.append({**d, "continuation_ids": list(d.get("continuation_ids") or [])})
+    return out
+
+
+_QUORUM_CHECK = re.compile(r"^\s*verifica del numero legale", re.IGNORECASE)
+
+
+def is_quorum_check(subject: str | None) -> bool:
+    """A Senate roll call to count who is present: it decides nothing, the
+    source records it with zero votes and outcome "rejected"."""
+    return bool(_QUORUM_CHECK.match(subject or ""))
+
+
+def _absorbed(act: dict) -> bool:
+    return (act.get("status") or "").lower().startswith("assorbit")
+
+
+def _bill_label(act: dict) -> str | None:
+    """'ddl n. 1903: Delega al Governo …' for a Senate bill, the code and the
+    subject for a motion or resolution."""
+    number, title = act.get("number"), (act.get("title") or "").strip()
+    if "legge" in (act.get("type") or "").lower() and number:
+        return f"ddl n. {number}" + (f": {title}" if title else "")
+    subject = (act.get("subject") or "").strip()
+    if title and subject and subject.lower() not in title.lower():
+        return f"{title}: {subject}"
+    return title or subject or None
+
+
+def senate_vote_description(acts: list[dict]) -> str | None:
+    """What a Senate roll call decided on, from its linked acts: the source
+    gives only the label ("Votazione finale", "Em. 3.3, Gaudiano e altri").
+    The main act comes first; bills absorbed into it are listed after."""
+    acts = [a for a in acts if a and (a.get("number") or a.get("title"))]
+    if not acts:
         return None
-    m = re.search(r"/attocamera\.rdf/ac(\d+)_(\w+)$", uri)
-    if m:
-        leg, num = m.group(1), m.group(2)
-        return f"https://www.camera.it/leg{leg}/126?tab=1&leg={leg}&idDocumento={num}"
-    m = re.search(r"/aic\.rdf/aic(.+)_(\d+)$", uri)
-    if m:
-        body, leg = m.group(1), m.group(2)
-        segments: list[str] = []
-        for part in body.split("_"):
-            if part.isalpha() and segments:
-                segments[-1] += f"-{part}"
-            else:
-                segments.append(part)
-        numero = urllib.parse.quote("/".join(segments), safe="")
-        return f"https://aic.camera.it/aic/scheda.html?numero={numero}&ramo=CAMERA&leg={leg}"
-    return None
+    main = sorted(acts, key=lambda a: (_absorbed(a), str(a.get("number") or "")))
+    label = _bill_label(main[0])
+    absorbed = sorted({str(a["number"]) for a in main[1:] if _absorbed(a) and a.get("number")},
+                      key=lambda n: (len(n), n))
+    if label and absorbed:
+        label += f" (assorbiti i ddl n. {', '.join(absorbed)})"
+    return label[:1].upper() + label[1:] if label else None
+
+
+def _vote_kind_fields(subject: str | None, outcome: str | None, description: str | None,
+                      present: int | None = None) -> dict:
+    """kind, outcome and description of a vote, quorum checks told apart."""
+    if is_quorum_check(subject):
+        text = "Verifica del numero legale: conta i presenti, non è una votazione su un atto"
+        if present:
+            text += f" (presenti {present})"
+        return {"kind": "quorum_check", "outcome": None, "description": description or text}
+    return {"kind": None, "outcome": outcome, "description": description}
 
 
 async def get_sessions(
@@ -104,11 +190,14 @@ async def get_sessions(
     else:
         chambers = [chamber]
 
-    # Build search subquery condition (added to WHERE at debate level)
+    # A query naming a published law ("legge 180/2026") also finds the
+    # sittings that debated or voted any reading of it.
+    law_acts = acts_of_law(neo4j, search) if search else []
+
     search_clause = ""
     if search:
         search_clause = """
-  AND EXISTS {
+  AND (EXISTS {
     MATCH (s)-[:HAS_DEBATE]->(sd)
     WHERE toLower(sd.title) CONTAINS toLower($search)
        OR toLower(s.recapIt) CONTAINS toLower($search)
@@ -118,16 +207,17 @@ async def get_sessions(
          WHERE (spk2:Deputy OR spk2:GovernmentMember)
            AND toLower(spk2.first_name + ' ' + spk2.last_name) CONTAINS toLower($search)
        }
-  }"""
+  } OR EXISTS { MATCH (s)-[:HAS_DEBATE]->()-[:DISCUSSES]->(la) WHERE la.uri IN $law_acts }
+    OR EXISTS { MATCH (s)-[:HAS_VOTE]->()-[:ON_ACT]->(la) WHERE la.uri IN $law_acts })"""
 
-    # When searching, compute a relevance flag per debate so matching debates sort first
+    # When searching, matching debates sort first
     relevance_expr = "0 AS relevance"
-    order_debates = "d.id"
     if search:
         relevance_expr = (
-            "CASE WHEN toLower(d.title) CONTAINS toLower($search) THEN 1 ELSE 0 END AS relevance"
+            "CASE WHEN toLower(d.title) CONTAINS toLower($search) "
+            "OR EXISTS { MATCH (d)-[:DISCUSSES]->(la) WHERE la.uri IN $law_acts } "
+            "THEN 1 ELSE 0 END AS relevance"
         )
-        order_debates = "relevance DESC, d.id"
 
     cypher = f"""
 MATCH (s:Session)
@@ -140,8 +230,11 @@ WITH s ORDER BY s.date DESC LIMIT $fetch_limit
 OPTIONAL MATCH (s)-[:HAS_DEBATE]->(d)
 OPTIONAL MATCH (d)-[:HAS_PHASE]->(p)-[:CONTAINS_SPEECH]->(sp)
 WITH s, d, count(DISTINCT sp) AS dSpeechCount, {relevance_expr}
-ORDER BY s.date DESC, {order_debates}
-WITH s, collect(DISTINCT {{id: d.id, title: d.title, speechCount: dSpeechCount}}) AS debates
+WITH s, collect(DISTINCT {{
+       id: d.id, title: d.title, speechCount: dSpeechCount, ord: d.order, relevance: relevance,
+       act: COLLECT {{ MATCH (d)-[:DISCUSSES]->(a:ParliamentaryAct)
+                       RETURN {{number: a.number, title: a.title}} ORDER BY a.number LIMIT 1 }}[0]
+     }}) AS debates
 OPTIONAL MATCH (s)-[:HAS_VOTE]->(v)
 WITH s, debates, count(DISTINCT v) AS voteCount
 RETURN s.id AS id,
@@ -150,9 +243,7 @@ RETURN s.id AS id,
        s.number AS number,
        s.{recap_field} AS recap,
        debates,
-       voteCount,
-       size(debates) AS debateCount,
-       reduce(total = 0, d IN debates | total + d.speechCount) AS speechCount
+       voteCount
 ORDER BY date DESC
 """
 
@@ -166,6 +257,7 @@ ORDER BY date DESC
     }
     if search:
         params["search"] = search
+        params["law_acts"] = law_acts
 
     rows = neo4j.query(cypher, params)
 
@@ -177,14 +269,25 @@ ORDER BY date DESC
 
     sessions = []
     for row in rows:
+        raw = sorted(
+            (d for d in (row["debates"] or []) if d.get("id")),
+            key=lambda d: (d.get("ord") if d.get("ord") is not None else 10**6, d["id"]),
+        )
+        folded = fold_fragments([
+            {"id": d["id"], "speech_count": d.get("speechCount") or 0, "relevance": d.get("relevance") or 0,
+             "title": d.get("title") or "", "act": d.get("act")}
+            for d in raw
+        ])
+        if search:
+            folded.sort(key=lambda d: -d["relevance"])
         debates = [
             DebateSummary(
-                id=d["id"] or "",
-                title=d["title"] or "",
-                speech_count=d["speechCount"] or 0,
+                id=d["id"],
+                title=clean_debate_title(d["title"], d.get("act"), row["chamber"]),
+                speech_count=d["speech_count"],
+                continuation_ids=d["continuation_ids"],
             )
-            for d in (row["debates"] or [])
-            if d.get("id")  # skip null entries from OPTIONAL MATCH
+            for d in folded
         ]
         sessions.append(
             SessionCard(
@@ -193,14 +296,47 @@ ORDER BY date DESC
                 chamber=row["chamber"] or "",
                 number=row["number"] or 0,
                 recap=row["recap"],
-                debate_count=row["debateCount"] or 0,
+                debate_count=len(debates),
                 vote_count=row["voteCount"] or 0,
-                speech_count=row["speechCount"] or 0,
+                speech_count=sum(d.speech_count for d in debates),
                 debates=debates,
             )
         )
 
     return TimelineResponse(sessions=sessions, next_cursor=next_cursor, has_more=has_more)
+
+
+def _display_case(name: str | None) -> str:
+    """Government members keep the Camera's upper-case names (WANDA FERRO)."""
+    name = (name or "").strip()
+    return name.title() if name.isupper() else name
+
+
+# Party of a speaker at the sitting date: the group (in the sitting's
+# chamber when there is one: a deputy in the Government speaking in the
+# Senate keeps the Camera group), or its Mixed Group component when the
+# speaker sat in the Misto, never the Misto as a whole.
+SPEAKER_PARTY = """
+        OPTIONAL MATCH (spk)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
+          WHERE mg.start_date <= sess.date
+            AND (mg.end_date IS NULL OR mg.end_date >= sess.date)
+        OPTIONAL MATCH (spk)-[mc:MEMBER_OF_COMPONENT]->(mcomp:MistoComponent)
+          WHERE mc.start_date <= sess.date
+            AND (mc.end_date IS NULL OR mc.end_date >= sess.date)
+            AND coalesce(mcomp.chamber, 'camera') = coalesce(sess.chamber, 'camera')
+"""
+
+
+MISTO_WITHOUT_COMPONENT = "Misto (non iscritto a una componente)"
+
+
+def _party(group: str | None, component: str | None) -> tuple[str | None, str | None]:
+    """(party, parliamentary_group): the component replaces the Misto; a
+    member of the Misto in no component says so (the Camera's "altre
+    componenti del gruppo")."""
+    if "misto" in (group or "").lower():
+        return component or MISTO_WITHOUT_COMPONENT, group
+    return group, None
 
 
 async def get_debate_detail(
@@ -211,21 +347,23 @@ async def get_debate_detail(
     """
     Return full detail for a single debate.
 
-    Queries:
-      - Debate recap (locale-aware)
-      - Phases with speech counts
-      - Speakers (Deputy or GovernmentMember) in chronological order
-      - Votes via session (Session-[:HAS_VOTE]->Vote)
-      - Parliamentary acts (Debate-[:DISCUSSES]->ParliamentaryAct)
+    Senate outcome fragments that follow the debate in the sitting ("È
+    approvato.") are part of it: their speeches are included. Votes are the
+    sitting's roll calls on the acts the debate discusses (or on their
+    amendments, agenda orders and later readings); a debate that discusses
+    no act lists none, get_session_votes has them all.
     """
     recap_field = "recapEn" if locale == "en" else "recapIt"
 
     debate_row = neo4j.query_single(
         f"""
         MATCH (d:Debate {{id: $debate_id}})
+        OPTIONAL MATCH (sess:Session)-[:HAS_DEBATE]->(d)
         RETURN d.id AS id,
                d.title AS title,
-               d.{recap_field} AS recap
+               d.{recap_field} AS recap,
+               coalesce(sess.chamber, 'camera') AS chamber,
+               [(sess)-[:HAS_DEBATE]->(o:Debate) | {{id: o.id, title: o.title, ord: o.order}}] AS siblings
         """,
         {"debate_id": debate_id},
     )
@@ -235,9 +373,25 @@ async def get_debate_detail(
             phases=[], speakers=[], votes=[], acts=[],
         )
 
+    siblings = sorted(
+        (o for o in (debate_row.get("siblings") or []) if o.get("id")),
+        key=lambda o: (o.get("ord") if o.get("ord") is not None else 10**6, o["id"]),
+    )
+    folded = fold_fragments([{"id": o["id"], "title": o.get("title") or ""} for o in siblings])
+    group = next((f for f in folded if f["id"] == debate_id), None)
+    continuation_ids = group["continuation_ids"] if group else []
+    title = debate_row["title"] or ""
+    if not group:
+        parent = next((f for f in folded if debate_id in f["continuation_ids"]), None)
+        if parent:
+            title = f"{clean_debate_title(parent['title'])} (seguito)"
+    debate_ids = [debate_id, *continuation_ids]
+    params = {"debate_id": debate_id, "debate_ids": debate_ids}
+
     phase_rows = neo4j.query(
         """
-        MATCH (d:Debate {id: $debate_id})-[:HAS_PHASE]->(p:Phase)
+        MATCH (d:Debate)-[:HAS_PHASE]->(p:Phase)
+        WHERE d.id IN $debate_ids
         OPTIONAL MATCH (p)-[:CONTAINS_SPEECH]->(sp:Speech)
         WITH p, count(DISTINCT sp) AS speechCount
         RETURN p.id AS id,
@@ -246,7 +400,7 @@ async def get_debate_detail(
                speechCount
         ORDER BY p.id
         """,
-        {"debate_id": debate_id},
+        params,
     )
     phases = [
         PhaseInfo(
@@ -258,34 +412,31 @@ async def get_debate_detail(
         for r in phase_rows
     ]
 
-    # Party comes from the MEMBER_OF_GROUP relationship (not a direct property).
-    # speakingRole lives on Speech, not on the speaker node — collect the first distinct role.
+    # speakingRole lives on Speech, not on the speaker node. A deputy who is
+    # also in the Government (labels Deputy and GovernmentMember) speaks for
+    # the Government when the speech says so (speaker_in_government).
     speaker_rows = neo4j.query(
-        """
-        MATCH (d:Debate {id: $debate_id})<-[:HAS_DEBATE]-(sess:Session)
-        WITH d, sess
-        MATCH (d)-[:HAS_PHASE]->(p:Phase)
-              -[:CONTAINS_SPEECH]->(sp:Speech)
-        OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(dep:Deputy)
-        OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(gov:GovernmentMember)
-        WITH coalesce(dep, gov) AS spk,
-             (dep IS NULL AND gov IS NOT NULL) AS isGov,
-             p, sp, sess
-        WHERE spk IS NOT NULL
-        WITH spk, isGov, sess,
+        f"""
+        MATCH (sess:Session)-[:HAS_DEBATE]->(d:Debate)-[:HAS_PHASE]->(p:Phase)
+              -[:CONTAINS_SPEECH]->(sp:Speech)-[:SPOKEN_BY]->(spk)
+        WHERE d.id IN $debate_ids AND (spk:Deputy OR spk:GovernmentMember)
+        WITH spk, sess,
              collect(DISTINCT p.title) AS participatedPhases,
              count(DISTINCT sp) AS speechCount,
              min(sp.id) AS firstSpeechId,
-             head(collect(DISTINCT sp.speakingRole)) AS speakingRole
-        OPTIONAL MATCH (spk)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
-          WHERE mg.start_date <= sess.date
-            AND (mg.end_date IS NULL OR mg.end_date >= sess.date)
+             head(collect(DISTINCT sp.speakingRole)) AS speakingRole,
+             any(x IN collect(coalesce(sp.speaker_in_government,
+                                       spk:GovernmentMember AND NOT spk:Deputy)) WHERE x) AS isGov
+        {SPEAKER_PARTY}
         WITH spk, isGov, participatedPhases, speechCount, firstSpeechId, speakingRole,
-             head(collect(g.name)) AS party
+             coalesce(head(collect(DISTINCT CASE WHEN coalesce(mg.chamber, sess.chamber, 'camera')
+                                               = coalesce(sess.chamber, 'camera') THEN g.name END)),
+                      head(collect(DISTINCT g.name))) AS party,
+             head(collect(DISTINCT mcomp.name)) AS component
         RETURN spk.id AS id,
                spk.first_name AS first_name,
                spk.last_name AS last_name,
-               party,
+               party, component,
                speakingRole AS speaking_role,
                isGov AS is_government_member,
                speechCount,
@@ -293,67 +444,75 @@ async def get_debate_detail(
                firstSpeechId
         ORDER BY firstSpeechId
         """,
-        {"debate_id": debate_id},
+        params,
     )
-    speakers = [
-        SpeakerInfo(
+    speakers = []
+    for r in speaker_rows:
+        party, group_name = _party(r["party"], r.get("component"))
+        speakers.append(SpeakerInfo(
             id=r["id"],
-            first_name=r["first_name"] or "",
-            last_name=r["last_name"] or "",
-            party=r["party"],
+            first_name=_display_case(r["first_name"]),
+            last_name=_display_case(r["last_name"]),
+            party=party,
+            parliamentary_group=group_name,
             speaking_role=r["speaking_role"],
             is_government_member=bool(r["is_government_member"]),
             speech_count=r["speechCount"] or 0,
             phases=[ph for ph in (r["phases"] or []) if ph],
-        )
-        for r in speaker_rows
-    ]
+        ))
 
     # One row per speech slot: a deputy who takes the floor twice appears twice, in order.
     intervention_rows = neo4j.query(
-        """
-        MATCH (d:Debate {id: $debate_id})<-[:HAS_DEBATE]-(sess:Session)
-        MATCH (d)-[:HAS_PHASE]->(p:Phase)-[:CONTAINS_SPEECH]->(sp:Speech)
-        OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(dep:Deputy)
-        OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(gov:GovernmentMember)
-        WITH sp, p, sess,
-             coalesce(dep, gov) AS spk,
-             (dep IS NULL AND gov IS NOT NULL) AS isGov
-        WHERE spk IS NOT NULL
-        OPTIONAL MATCH (spk)-[mg:MEMBER_OF_GROUP]->(g:ParliamentaryGroup)
-          WHERE mg.start_date <= sess.date
-            AND (mg.end_date IS NULL OR mg.end_date >= sess.date)
-        WITH sp, p, spk, isGov, head(collect(g.name)) AS party
+        f"""
+        MATCH (sess:Session)-[:HAS_DEBATE]->(d:Debate)-[:HAS_PHASE]->(p:Phase)
+              -[:CONTAINS_SPEECH]->(sp:Speech)-[:SPOKEN_BY]->(spk)
+        WHERE d.id IN $debate_ids AND (spk:Deputy OR spk:GovernmentMember)
+        {SPEAKER_PARTY}
+        WITH sp, p, spk,
+             coalesce(sp.speaker_in_government, spk:GovernmentMember AND NOT spk:Deputy) AS isGov,
+             coalesce(head(collect(DISTINCT CASE WHEN coalesce(mg.chamber, sess.chamber, 'camera')
+                                               = coalesce(sess.chamber, 'camera') THEN g.name END)),
+                      head(collect(DISTINCT g.name))) AS party,
+             head(collect(DISTINCT mcomp.name)) AS component
         RETURN sp.id AS speech_id,
                spk.id AS speaker_id,
                spk.first_name AS first_name,
                spk.last_name AS last_name,
-               party,
+               party, component,
                sp.speakingRole AS speaking_role,
                isGov AS is_government_member,
                p.title AS phase_title
         ORDER BY sp.id
         """,
-        {"debate_id": debate_id},
+        params,
     )
-    interventions = [
-        InterventionInfo(
+    interventions = []
+    for r in intervention_rows:
+        party, group_name = _party(r["party"], r.get("component"))
+        interventions.append(InterventionInfo(
             speech_id=r["speech_id"],
             speaker_id=r["speaker_id"],
-            first_name=r["first_name"] or "",
-            last_name=r["last_name"] or "",
-            party=r["party"],
+            first_name=_display_case(r["first_name"]),
+            last_name=_display_case(r["last_name"]),
+            party=party,
+            parliamentary_group=group_name,
             speaking_role=r["speaking_role"],
             is_government_member=bool(r["is_government_member"]),
             phase_title=r["phase_title"],
-        )
-        for r in intervention_rows
-    ]
+        ))
 
-    # Votes hang off the Session, not the Debate.
+    # Votes hang off the Session; a vote belongs to the debate when it is on
+    # one of the discussed acts, directly or through an agenda order
+    # (REFERS_TO), an amendment (AMENDS) or an earlier reading of the act.
     vote_rows = neo4j.query(
         """
         MATCH (d:Debate {id: $debate_id})<-[:HAS_DEBATE]-(s:Session)-[:HAS_VOTE]->(v:Vote)
+        WITH s, v, [(dd:Debate)-[:DISCUSSES]->(x:ParliamentaryAct) WHERE dd.id IN $debate_ids | x] AS mine
+        WHERE size(mine) > 0
+          AND (any(t IN [(v)-[:ON_ACT]->(a) | a] WHERE t IN mine)
+               OR any(t IN [(v)-[:ON_ACT]->()-[:REFERS_TO]->(b) | b] WHERE t IN mine)
+               OR any(t IN [(v)-[:ON_ACT]->()-[:NEXT_READING*1..3]->(c) | c] WHERE t IN mine)
+               OR any(t IN [(v)-[:ON_AMENDMENT]->()-[:AMENDS]->(e) | e] WHERE t IN mine))
         RETURN v.id AS id,
                v.number AS number,
                v.subject AS subject,
@@ -363,61 +522,95 @@ async def get_debate_detail(
                v.inFavor AS in_favor,
                v.against AS against,
                v.abstained AS abstained,
+               v.present AS present,
+               coalesce(s.chamber, 'camera') AS chamber,
                COLLECT { MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct) WHERE a.subject IS NOT NULL
-                         RETURN a.subject }[0] AS act_subject
+                         RETURN a.subject }[0] AS act_subject,
+               COLLECT { MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct)
+                         RETURN {number: a.number, title: a.title, type: a.type,
+                                 status: a.status, subject: a.subject} } AS acts
         ORDER BY v.number
         """,
-        {"debate_id": debate_id},
+        params,
     )
-    votes = [
-        VoteInfo(
-            id=r["id"],
-            number=r["number"] or 0,
-            subject=r["subject"],
-            description=r["description"],
-            final_vote=bool(r["final_vote"]),
-            outcome=r["outcome"],
-            in_favor=r["in_favor"],
-            against=r["against"],
-            abstained=r["abstained"],
-            act_subject=r["act_subject"],
-        )
-        for r in vote_rows
-    ]
+    votes = [v for v in (_vote_info(r) for r in vote_rows) if v.kind != "quorum_check"]
 
+    # Acts discussed, and the joint bills absorbed into them that the
+    # debate's votes name too.
     act_rows = neo4j.query(
         """
-        MATCH (d:Debate {id: $debate_id})-[:DISCUSSES]->(a:ParliamentaryAct)
-        RETURN coalesce(a.id, a.uri) AS id,
+        MATCH (d:Debate)-[:DISCUSSES]->(a:ParliamentaryAct)
+        WHERE d.id IN $debate_ids
+        WITH collect(DISTINCT a) AS discussed
+        OPTIONAL MATCH (v:Vote) WHERE v.id IN $vote_ids
+        OPTIONAL MATCH (v)-[:ON_ACT]->(j:ParliamentaryAct)
+          WHERE NOT j IN discussed AND toLower(coalesce(j.status, '')) STARTS WITH 'assorbit'
+            AND any(m IN [(v)-[:ON_ACT]->(x) | x] WHERE m IN discussed)
+        WITH discussed, collect(DISTINCT j) AS joint
+        UNWIND discussed + joint AS a
+        RETURN DISTINCT coalesce(a.id, a.uri) AS id,
+               a.uri AS uri,
                a.title AS title,
                a.subject AS subject,
-               a.type AS type
-        ORDER BY a.title
+               a.type AS type,
+               a.number AS number,
+               a.status AS status,
+               a.url AS url
         """,
-        {"debate_id": debate_id},
+        {**params, "vote_ids": [v.id for v in votes]},
     )
     laws = laws_for_acts(neo4j, (r["id"] for r in act_rows))
-    acts = [
-        ActInfo(
-            id=r["id"],
-            title=r["title"],
-            subject=r["subject"],
-            type=r["type"],
-            law=laws.get(r["id"]),
-        )
-        for r in act_rows
-        if r["id"]
-    ]
+    acts = sorted(
+        (
+            ActInfo(
+                id=r["id"],
+                title=r["title"],
+                subject=r["subject"],
+                type=r["type"],
+                number=r.get("number"),
+                status=r.get("status"),
+                url=act_public_url(r.get("uri") or r["id"], r.get("url")),
+                law=laws.get(r["id"]),
+            )
+            for r in act_rows
+            if r["id"]
+        ),
+        key=lambda a: (_absorbed({"status": a.status}), a.title or ""),
+    )
 
+    main_act = next(({"number": a.number, "title": a.title} for a in acts), None)
     return DebateDetailResponse(
         id=debate_row["id"],
-        title=debate_row["title"] or "",
+        title=clean_debate_title(title, main_act, debate_row.get("chamber")),
         recap=debate_row["recap"],
+        continuation_ids=continuation_ids,
         phases=phases,
         speakers=speakers,
         interventions=interventions,
         votes=votes,
         acts=acts,
+    )
+
+
+def _vote_info(r: dict) -> VoteInfo:
+    """VoteInfo from a vote row; Senate votes get their description from the
+    linked acts, quorum checks are marked."""
+    description = r.get("description")
+    if not description and r.get("chamber") == "senato" and not is_quorum_check(r.get("subject")):
+        description = senate_vote_description(r.get("acts") or [])
+    fields = _vote_kind_fields(r.get("subject"), r.get("outcome"), description, r.get("present"))
+    return VoteInfo(
+        id=r["id"],
+        number=r["number"] or 0,
+        subject=r["subject"],
+        description=fields["description"],
+        final_vote=bool(r["final_vote"]),
+        outcome=fields["outcome"],
+        in_favor=r["in_favor"],
+        against=r["against"],
+        abstained=r["abstained"],
+        act_subject=r["act_subject"],
+        kind=fields["kind"],
     )
 
 
@@ -443,27 +636,60 @@ async def get_session_votes(
                v.inFavor AS in_favor,
                v.against AS against,
                v.abstained AS abstained,
+               v.present AS present,
+               coalesce(s.chamber, 'camera') AS chamber,
                COLLECT { MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct) WHERE a.subject IS NOT NULL
-                         RETURN a.subject }[0] AS act_subject
+                         RETURN a.subject }[0] AS act_subject,
+               COLLECT { MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct)
+                         RETURN {number: a.number, title: a.title, type: a.type,
+                                 status: a.status, subject: a.subject} } AS acts
         ORDER BY v.number
         """,
         {"session_id": session_id},
     )
-    return [
-        VoteInfo(
-            id=r["id"],
-            number=r["number"] or 0,
-            subject=r["subject"],
-            description=r["description"],
-            final_vote=bool(r["final_vote"]),
-            outcome=r["outcome"],
-            in_favor=r["in_favor"],
-            against=r["against"],
-            abstained=r["abstained"],
-            act_subject=r["act_subject"],
-        )
-        for r in vote_rows
-    ]
+    return [_vote_info(r) for r in vote_rows]
+
+
+ACT_REF_MAP = """{
+    uri: a.uri, title: a.title, subject: a.subject, text_pdf: a.textPdfUrl, url: a.url,
+    number: a.number, status: a.status, type: a.type,
+    version_url: COLLECT { MATCH (a)-[:HAS_VERSION]->(t) WHERE t.url IS NOT NULL
+                           RETURN t.url ORDER BY t.date, t.code LIMIT 1 }[0]
+}"""
+
+# Reading codes in a Camera vote description: "PDL 2822-B - ARTICOLO 8".
+# "-A" is the committee text of the same reading, not another reading.
+_READING_CODE = re.compile(r"\b(\d+(?:-\d+)*-[B-H])\b")
+
+
+def _later_readings(neo4j: Neo4jClient, acts: list[dict], description: str | None) -> list[dict]:
+    """Swap an act for its later reading when the vote is on that reading.
+
+    dati.camera.it links the votes of a second reading (C.2822-B) to the
+    first one (C.2822); the description names the reading voted, and
+    NEXT_READING leads to it.
+    """
+    codes = sorted(set(_READING_CODE.findall(description or "")))
+    stale = [a["uri"] for a in acts if codes and a.get("number") and a["number"] not in codes]
+    if not stale:
+        return acts
+    rows = neo4j.query(
+        f"""
+        UNWIND $uris AS uri
+        MATCH (:ParliamentaryAct {{uri: uri}})-[:NEXT_READING*1..4]->(a:ParliamentaryAct)
+        WHERE a.number IN $codes
+        RETURN uri, {ACT_REF_MAP} AS act
+        """,
+        {"uris": stale, "codes": codes},
+    )
+    later = {r["uri"]: r["act"] for r in rows if r.get("act")}
+    out, seen = [], set()
+    for a in acts:
+        a = later.get(a["uri"], a)
+        if a["uri"] not in seen:
+            seen.add(a["uri"])
+            out.append(a)
+    return out
 
 
 async def get_vote_detail(
@@ -486,14 +712,15 @@ async def get_vote_detail(
     (MEMBER_OF_COMPONENT → MistoComponent) when one is active at vote date.
     """
     meta = neo4j.query_single(
-        """
-        MATCH (s:Session)-[:HAS_VOTE]->(v:Vote {id: $vote_id})
+        f"""
+        MATCH (s:Session)-[:HAS_VOTE]->(v:Vote {{id: $vote_id}})
         OPTIONAL MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct)
+        WITH s, v, a
         RETURN v.id AS id,
                v.number AS number,
                v.subject AS subject,
                v.description AS description,
-               collect(DISTINCT {uri: a.uri, title: a.title, subject: a.subject, text_pdf: a.textPdfUrl}) AS acts,
+               collect(DISTINCT {ACT_REF_MAP}) AS acts,
                v.secretVote AS secret_vote,
                v.outcome AS outcome,
                v.type AS vote_type,
@@ -577,26 +804,33 @@ async def get_vote_detail(
     )
 
     # Linked acts: the voted object first (ODG/motion via aic.rdf), then the
-    # context bill. Titles from the acts ingest carry padding. AICs without a
-    # dc:title in the dataset also lack a page on aic.camera.it (the link
-    # would give "FILE NON TROVATO"): no title, no link.
+    # main bill, then the joint bills absorbed into it. Titles from the acts
+    # ingest carry padding. AICs without a dc:title in the dataset also lack
+    # a page on aic.camera.it (the link would give "FILE NON TROVATO"): no
+    # title, no link.
+    raw_acts = _later_readings(neo4j, [a for a in meta["acts"] if a.get("uri")], meta["description"])
     act_refs = []
-    laws = laws_for_acts(neo4j, (a.get("uri") for a in meta["acts"]))
-    for a in meta["acts"]:
-        if not a.get("uri"):
-            continue
+    laws = laws_for_acts(neo4j, (a.get("uri") for a in raw_acts))
+    for a in raw_acts:
         title = (a["title"] or "").strip() or None
-        url = _act_public_url(a["uri"])
+        url = act_public_url(a["uri"], a.get("url"))
         if url and "aic.camera.it" in url and not title:
             url = None
         act_refs.append(VoteActRef(
-            title=title, subject=a.get("subject"), url=url, text_url=a.get("text_pdf"),
+            title=title, subject=a.get("subject"), number=a.get("number"), status=a.get("status"),
+            url=url, text_url=act_text_url(a["uri"], a.get("text_pdf"), a.get("version_url")),
             law=laws.get(a["uri"]),
         ))
     acts = sorted(
         act_refs,
-        key=lambda a: 0 if a.url and "aic.camera.it" in a.url else 1,
+        key=lambda a: (0 if a.url and "aic.camera.it" in a.url else 1, _absorbed({"status": a.status}),
+                       a.number or ""),
     )
+
+    description = meta["description"]
+    if not description and meta["chamber"] == "senato" and not is_quorum_check(meta["subject"]):
+        description = senate_vote_description(raw_acts)
+    kind_fields = _vote_kind_fields(meta["subject"], meta["outcome"], description, meta["present"])
 
     annex_url = _annex_url(meta["chamber"], meta["legislature"], meta["session_number"])
 
@@ -605,11 +839,12 @@ async def get_vote_detail(
         number=meta["number"] or 0,
         chamber=meta["chamber"],
         subject=meta["subject"],
-        description=meta["description"],
+        description=kind_fields["description"],
+        kind=kind_fields["kind"],
         acts=[a for a in acts if a.title or a.url or a.text_url or a.law],
         session_annex_url=annex_url,
         secret_vote=bool(meta["secret_vote"]),
-        outcome=meta["outcome"],
+        outcome=kind_fields["outcome"],
         vote_type=meta["vote_type"],
         in_favor=meta["in_favor"],
         against=meta["against"],
@@ -735,8 +970,11 @@ def _extract_amendment(paras: list[tuple[str | None, str]], num: str) -> list[st
     return [t for _, t in paras[j + 1:ti + 1] if t]
 
 
-def _extract_article(paras: list[tuple[str | None, str]], num: str) -> list[str] | None:
-    id_re = re.compile(rf"\.art_{re.escape(num)}$")
+def _extract_article(paras: list[tuple[str | None, str]], num: str, act: str | None = None) -> list[str] | None:
+    """Article block, anchored "ac.2822-B.art_8". With the act code only that
+    bill's article matches: one Allegato A can carry several bills."""
+    prefix = rf"(?:^|\.)ac\.{re.escape(act)}" if act else ""
+    id_re = re.compile(rf"{prefix}\.art_{re.escape(num)}$")
     start = next((i for i, (p, _) in enumerate(paras) if p and id_re.search(p)), None)
     if start is None:
         return None
@@ -749,15 +987,71 @@ def _extract_article(paras: list[tuple[str | None, str]], num: str) -> list[str]
     return seg or None
 
 
+# A bill's articles and amendments are printed in Allegato A of the sitting
+# where its examination starts; the votes can come sittings later (C.2822-B:
+# articles in sitting 720, article 8 voted in 722).
+_ANNEX_LOOKBACK = 6
+_ACT_CODE = re.compile(r"\b(?:PDL|DDL|A\.?C\.?)\s*(\d+(?:-\d+)*(?:-[A-Z]+)?)\b", re.IGNORECASE)
+
+
+def _annex_block(meta: dict, kind: str, num: str) -> tuple[list[str], str] | None:
+    """(paragraphs, url) of the voted block in the sitting's Allegato A or,
+    for articles of a known bill, in one of the sittings before it."""
+    code = _ACT_CODE.search(f"{meta.get('subject') or ''} {meta.get('description') or ''}")
+    act = code.group(1).upper() if code else None
+    number = meta.get("session_number") or 0
+    lookback = _ANNEX_LOOKBACK if (kind == "article" and act) else 0
+    for n in range(int(number), max(int(number) - lookback, 0) - 1, -1):
+        url = _annex_url(meta["chamber"], meta["legislature"], n)
+        if not url:
+            return None
+        try:
+            paras = _fetch_annex_paragraphs(url)
+        except Exception:
+            continue
+        if kind == "amendment":
+            seg = _extract_amendment(paras, num)
+        else:
+            # Earlier sittings may print other bills' articles: match the bill.
+            seg = _extract_article(paras, num, None if n == number else act)
+        if seg:
+            return seg, url
+    return None
+
+
+def _archived_amendment(amendment_ids: list[str]) -> tuple[list[str], str | None] | None:
+    """(paragraphs, source page) of a voted amendment from the text archive."""
+    archive = get_archive()
+    if archive is None or not amendment_ids:
+        return None
+    try:
+        with archive.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, number, coalesce(text, text_presented), source_url FROM amendment "
+                "WHERE id = ANY(%s) AND coalesce(text, text_presented) IS NOT NULL ORDER BY number",
+                [amendment_ids]).fetchall()
+    except Exception:
+        return None
+    if not rows:
+        return None
+    paragraphs: list[str] = []
+    for _, number, text, _ in rows:
+        if len(rows) > 1:
+            paragraphs.append(f"{number}")
+        paragraphs.extend(p.strip() for p in re.split(r"\n+", text) if p.strip())
+    return paragraphs, rows[0][3]
+
+
 async def get_vote_act_text(
     neo4j: Neo4jClient,
     vote_id: str,
 ) -> VoteActTextResponse | None:
-    """Extract the text of the voted amendment/article from Allegato A.
+    """Text of the voted amendment or article.
 
-    None when the vote does not decide an amendment/article, the sitting has
-    no reachable Allegato A, or the block cannot be found (old formats
-    without anchors, unpublished texts)."""
+    Camera: Allegato A of the sitting (articles also from the sittings
+    before it). Both chambers: the text of the amendment the vote is linked
+    to (ON_AMENDMENT) in the archive. None when the vote decides neither, or
+    no text is found (Senate articles: the graph has no article texts)."""
     meta = neo4j.query_single(
         """
         MATCH (s:Session)-[:HAS_VOTE]->(v:Vote {id: $vote_id})
@@ -765,29 +1059,22 @@ async def get_vote_act_text(
                v.description AS description,
                s.number AS session_number,
                s.legislature AS legislature,
-               coalesce(s.chamber, 'camera') AS chamber
+               coalesce(s.chamber, 'camera') AS chamber,
+               [(v)-[:ON_AMENDMENT]->(e:Amendment) | e.id] AS amendments
         """,
         {"vote_id": vote_id},
     )
     if not meta:
         return None
     target = _annex_target(meta["subject"], meta["description"])
-    url = _annex_url(meta["chamber"], meta["legislature"], meta["session_number"])
-    if not target or not url:
-        return None
-    try:
-        paras = _fetch_annex_paragraphs(url)
-    except Exception:
-        return None
-    kind, num = target
-    seg = (
-        _extract_amendment(paras, num)
-        if kind == "amendment"
-        else _extract_article(paras, num)
-    )
-    if not seg:
-        return None
-    return VoteActTextResponse(paragraphs=seg, source_url=url)
+    if target and _annex_url(meta["chamber"], meta["legislature"], meta["session_number"]):
+        found = _annex_block(meta, *target)
+        if found:
+            return VoteActTextResponse(paragraphs=found[0], source_url=found[1])
+    archived = _archived_amendment(meta.get("amendments") or [])
+    if archived and archived[1]:
+        return VoteActTextResponse(paragraphs=archived[0], source_url=https(archived[1]))
+    return None
 
 
 async def get_speaker_summary(
