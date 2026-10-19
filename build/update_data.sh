@@ -370,6 +370,12 @@ run "Letture e processo legislativo" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 run "ODG Camera → progetto di legge ed esito" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/link_agenda_orders.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera \
 	|| warn "ODG Camera: collegamento fallito, riprende al prossimo giro"
+# Relatori dei progetti di legge della Camera (ocd:rif_relatore, due query
+# SPARQL). Dopo l'ingest per atto: servono i Bill. I relatori del Senato
+# passano da update_senato.sh.
+run "Relatori Camera" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/ingest_reporters.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera \
+	|| warn "relatori Camera: SPARQL non raggiungibile, restano quelli del giro precedente"
 
 # ── Emendamenti XIX → grafo e archivio ───────────────────────────────────────
 # Spento di default: si accende con EMENDAMENTI_GRAFO=1 (ambiente o .env).

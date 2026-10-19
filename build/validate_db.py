@@ -343,6 +343,28 @@ class Validator:
         """)
         self.check(rows[0]["many"] == 0, "ODG con un solo atto di riferimento", f"{rows[0]['many']} con più di uno")
 
+    def check_reporters(self):
+        print("\n[19] Relatori dei progetti di legge (build/ingest_reporters.py)")
+        rows = self.q("""
+            MATCH (b:Bill)-[r:REPORTED_BY]->(p)
+            RETURN b.chamber AS ch, count(DISTINCT b) AS bills, count(r) AS rels,
+                   sum(CASE WHEN NOT r.role IN ['relatore', 'maggioranza', 'minoranza', 'facente_funzione', 'sostituto']
+                       THEN 1 ELSE 0 END) AS bad_role,
+                   sum(CASE WHEN NOT p:Person THEN 1 ELSE 0 END) AS not_person
+        """)
+        by_ch = {r["ch"]: r for r in rows}
+        present = {r["ch"] for r in self.q("MATCH (b:Bill) RETURN DISTINCT b.chamber AS ch")}
+        # Bills with a rapporteur at the source on 19/10/2026: Camera 1,059
+        # (ocd:rif_relatore), Senato 965 (osr:relatore, ramo S).
+        for ch, floor in (("camera", 1000), ("senato", 900)):
+            if ch not in present:
+                continue
+            r = by_ch.get(ch, {"bills": 0, "rels": 0, "bad_role": 0, "not_person": 0})
+            self.check(r["bills"] >= floor, f"{ch}: progetti di legge con relatore {r['bills']} ({r['rels']} relatori)",
+                       f"sotto {floor}")
+            self.check(r["bad_role"] == 0 and r["not_person"] == 0, f"{ch}: REPORTED_BY con ruolo nel vocabolario",
+                       f"{r['bad_role']} ruoli fuori vocabolario, {r['not_person']} verso nodi non Person")
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""
@@ -557,6 +579,7 @@ class Validator:
         self.check_act_kinds()
         self.check_act_identity()
         self.check_agenda_orders()
+        self.check_reporters()
 
         rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
         if rows[0]["c"]:
