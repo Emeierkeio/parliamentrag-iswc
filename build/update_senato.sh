@@ -82,6 +82,10 @@ step "atti di controllo e indirizzo → grafo" env NEO4J_PASSWORD="$PASS_VAL" \
 senato_step "disegni di legge e firmatari" "$PY" build/download_senate_ddl.py --legislature 19
 step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/link_senate_acts.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
+# Offline: il ddl dal numero dell'ODG, l'esito dagli emendamenti di tipo G
+# (JSONL di parse_emendamenti.py, rigenerato da update_data.sh prima di qui).
+step "ordini del giorno → ddl ed esito" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/link_agenda_orders.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato
 # Atti di controllo e DDL appena caricati: senza i loro embedding
 # l'autorevolezza li conterebbe a rilevanza neutra (0,5) su ogni tema.
 step "embedding di atti e interventi nuovi" env NEO4J_URI="$URI" NEO4J_PASSWORD="$PASS_VAL" \

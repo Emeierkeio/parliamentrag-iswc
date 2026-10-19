@@ -364,6 +364,12 @@ run "Famiglia e kind degli atti" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 run "Letture e processo legislativo" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/migrate_act_identity.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --versions \
 	|| warn "processo legislativo: migrazione fallita, riprende al prossimo giro"
+# Ordini del giorno della Camera → progetto di legge (dal numero) ed esito
+# (dai voti caricati sopra). Senza rete, idempotente. Quelli del Senato
+# passano da update_senato.sh.
+run "ODG Camera → progetto di legge ed esito" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/link_agenda_orders.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera \
+	|| warn "ODG Camera: collegamento fallito, riprende al prossimo giro"
 
 # ── Emendamenti XIX → grafo e archivio ───────────────────────────────────────
 # Spento di default: si accende con EMENDAMENTI_GRAFO=1 (ambiente o .env).

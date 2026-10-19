@@ -304,6 +304,45 @@ class Validator:
         self.check(r["with_v"] >= 0.8 * r["tot"], f"progetti della Camera con le versioni del testo {r['with_v']}/{r['tot']}",
                    "sotto l'80%: build/migrate_act_identity.py --versions", warn_only=True)
 
+    def check_agenda_orders(self):
+        print("\n[18] Ordini del giorno: atto di riferimento ed esito (build/link_agenda_orders.py)")
+        rows = self.q("""
+            MATCH (o:AgendaOrder)
+            WHERE o.chamber = 'camera' OR (o.chamber IS NULL AND o.uri STARTS WITH 'http://dati.camera.it/ocd/aic.rdf/'
+                                           AND o.uri ENDS WITH '_19')
+            RETURN count(o) AS tot,
+                   sum(CASE WHEN (o)-[:REFERS_TO]->(:Bill) THEN 1 ELSE 0 END) AS linked,
+                   sum(CASE WHEN (o)<-[:ON_ACT]-(:Vote) THEN 1 ELSE 0 END) AS voted,
+                   sum(CASE WHEN (o)<-[:ON_ACT]-(:Vote) AND o.outcome IS NULL THEN 1 ELSE 0 END) AS voted_no_outcome,
+                   sum(CASE WHEN o.outcome IS NOT NULL THEN 1 ELSE 0 END) AS with_outcome
+        """)
+        r = rows[0]
+        # Floors: 9,422 + 2,715 orders whose number or URI names a bill and
+        # 6,502 voted orders at the source (audit, 14/10/2026); 13,282 linked
+        # and 6,720 with an outcome in production on 19/10/2026.
+        self.check(r["linked"] >= 12137, f"Camera: ODG collegati al progetto di legge {r['linked']}/{r['tot']}",
+                   "sotto 12.137 (audit 14/10/2026)")
+        self.check(r["with_outcome"] >= 6502, f"Camera: ODG con esito dal voto {r['with_outcome']}",
+                   "sotto 6.502 (audit 14/10/2026)")
+        self.check(r["voted_no_outcome"] == 0, f"Camera: ODG votati con esito ({r['voted']})",
+                   f"{r['voted_no_outcome']} senza")
+        rows = self.q("""
+            MATCH (o:AgendaOrder {chamber: 'senato'})
+            RETURN count(o) AS tot, sum(CASE WHEN (o)-[:REFERS_TO]->(:Bill) THEN 1 ELSE 0 END) AS linked,
+                   sum(CASE WHEN o.outcome IS NOT NULL THEN 1 ELSE 0 END) AS with_outcome
+        """)
+        r = rows[0]
+        # 5,773 of 6,454 on 19/10/2026: the rest are on documents and motions.
+        self.check(r["linked"] >= 0.85 * r["tot"], f"Senato: ODG collegati al ddl {r['linked']}/{r['tot']}",
+                   "sotto l'85%", warn_only=True)
+        self.check(r["with_outcome"] > 0, f"Senato: ODG con esito {r['with_outcome']}",
+                   "nessuno (JSONL degli emendamenti assente?)", warn_only=True)
+        rows = self.q("""
+            MATCH (o:AgendaOrder)-[:REFERS_TO]->(b) WITH o, count(b) AS n
+            RETURN sum(CASE WHEN n > 1 THEN 1 ELSE 0 END) AS many
+        """)
+        self.check(rows[0]["many"] == 0, "ODG con un solo atto di riferimento", f"{rows[0]['many']} con più di uno")
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""
@@ -517,6 +556,7 @@ class Validator:
         self.check_acts_camera()
         self.check_act_kinds()
         self.check_act_identity()
+        self.check_agenda_orders()
 
         rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
         if rows[0]["c"]:
