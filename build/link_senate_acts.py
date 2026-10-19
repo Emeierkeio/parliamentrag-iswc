@@ -12,12 +12,19 @@ transcripts in data/senate_xml (Akoma Ntoso); no network.
                                                         presented it: kept apart from
                                                         the signatures, which feed
                                                         the authority score
-  (:Debate)-[:DISCUSSES]->(act)                         from the section's <block name="Atto">
-  (:Vote)-[:ON_ACT]->(act)                              official link, else vote_act()
+  (:Debate)-[:DISCUSSES]->(act)                         from the section's <block name="Atto">,
+                                                        or the title where there is no
+                                                        Akoma Ntoso (HTML-only sittings)
+  (:Vote)-[:ON_ACT]->(act)                              bill, motion (1/...) or resolution (6/...)
 
 The official link is osr:Votazione -> osr:oggetto -> osr:relativoA
-(senato_{roman}_voti_atti.csv); it replaces any other ON_ACT of that vote.
-Votes it does not cover are matched through the transcript: the label alone
+(senato_{roman}_voti_atti.csv). The acts found for a vote replace its
+earlier ON_ACT; a vote left unresolved keeps them.
+When it names only a Documento the vote gets no bill: those documents are
+not nodes yet.
+Motions and resolutions have no osr:oggetto: they are read from the label
+(motion_of, resolution_of). The other votes are matched through the
+transcript: the label alone
 ("Em. 1.3, Parrini e altri", "Articolo 21", "Votazione finale") does not name
 the bill, but the transcript announces each vote inside the section of the
 bill under discussion ("Indìco la votazione nominale con scrutinio simultaneo
@@ -25,6 +32,7 @@ dell'emendamento 1.3, presentato dal senatore Parrini").
 """
 
 import argparse
+import json
 import logging
 import os
 import re
@@ -50,14 +58,23 @@ ROMAN = {18: "xviii", 19: "xix"}
 ACT_TYPE = "Disegno di legge"
 
 VOTE_ANNOUNCE_RE = re.compile(r"Ind[iì]co la votazione", re.IGNORECASE)
+# "Disegno di legge n. 1272", "DDL. n. 1561", "Disegni di legge nn. 2011 e 2012"
 BILL_NUMBER_RE = re.compile(
-    r"(?:disegno di legge|d\.d\.l\.|ddl)\s*n\.\s*(\d+(?:-[A-Za-z]+)?)", re.IGNORECASE
+    r"\b(?:disegn[oi] di legge|d\.?d\.?l\.?)\s*nn?\.\s*(\d+(?:-[A-Za-z]+)?)", re.IGNORECASE
 )
+# Vote labels only: "Questione di fiducia art. 1 A.S 442"
+LABEL_AS_RE = re.compile(r"\bA\.\s?S\.?\s*(?:n\.\s*)?(\d+(?:-[A-Za-z]+)?)\b")
 # Amendment / agenda-item identifiers: 1.3, 26-bis.100, G1.100, S18.200,
 # 18.0.6 (new article after 18), 5.0.100/102 (sub-amendment)
 ITEM_RE = re.compile(r"\b([A-Za-z]{0,2}\d+(?:-[a-z]+)?(?:\.\d+)+(?:/\d+)?)")
 ARTICLE_RE = re.compile(r"\barticolo\s+(\d+(?:-[a-z]+)?)", re.IGNORECASE)
 FINAL_RE = re.compile(r"votazione finale|nel suo complesso", re.IGNORECASE)
+# The President orders the electronic re-count of a show-of-hands vote:
+# "Dispongo la controprova", "Procediamo alla controprova mediante
+# procedimento elettronico". Senators asking for it ("Chiediamo la
+# controprova") are not the vote.
+REPEAT_ANNOUNCE_RE = re.compile(r"(?:dispongo la|procediamo (?:nuovamente )?alla) controprova",
+                                re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +83,8 @@ FINAL_RE = re.compile(r"votazione finale|nel suo complesso", re.IGNORECASE)
 
 def vote_keys(text: str) -> set[str]:
     """Keys shared by a vote label and its announcement in the transcript."""
+    if text.strip().lower().startswith("controprova") or REPEAT_ANNOUNCE_RE.search(text):
+        return {"repeat"}
     keys = {f"item:{m}" for m in ITEM_RE.findall(text)}
     if not keys:
         keys |= {f"art:{m.lower()}" for m in ARTICLE_RE.findall(text)}
@@ -99,7 +118,7 @@ def parse_sitting(path: str) -> dict:
                 sections[slug].append(b)
         for p in sec.iter(f"{ns}p"):
             text = " ".join("".join(p.itertext()).split())
-            if not VOTE_ANNOUNCE_RE.search(text):
+            if not (VOTE_ANNOUNCE_RE.search(text) or REPEAT_ANNOUNCE_RE.search(text)):
                 continue
             explicit = BILL_NUMBER_RE.findall(text)
             events.append((vote_keys(text), explicit or bills))
@@ -114,7 +133,7 @@ def vote_act(label: str, sitting: dict) -> Optional[str]:
     2. the only bill voted on in the sitting, if every vote was on it.
     """
     events = sitting["events"]
-    explicit = BILL_NUMBER_RE.findall(label or "")
+    explicit = BILL_NUMBER_RE.findall(label or "") or LABEL_AS_RE.findall(label or "")
     if explicit:
         return explicit[0]
     # Only when every announcement sits in a bill's section: otherwise a
@@ -154,27 +173,26 @@ def align(vote_key_sets: list[set[str]], events: list[tuple[set[str], list[str]]
     return pairs
 
 
-def link_sitting_votes(votes: list[tuple[str, str]], sitting: dict) -> dict[str, str]:
+def link_sitting_votes(votes: list[tuple[str, str]], sitting: dict) -> dict[str, Optional[str]]:
     """{vote id: bill number} for the votes of a sitting, given in vote order.
 
-    vote_act() first; the rest through align(). A "Controprova" repeats the
-    previous vote, so it takes the same bill. Joint bills: the first
-    <block name="Atto"> of the section is the base text voted on.
+    vote_act() first; the rest through align(). A "Controprova" re-counts a
+    show-of-hands vote that has no record of its own, often on another item
+    than the recorded vote before it: it takes the bill of the section where
+    the transcript orders it, and None when that section has no bill. Joint
+    bills: the first <block name="Atto"> of the section is the base text
+    voted on.
     """
     events = sitting["events"]
     pairs = align([vote_keys(label or "") for _, label in votes], events)
-    out: dict[str, str] = {}
-    previous = None
+    out: dict[str, Optional[str]] = {}
     for i, (vote_id, label) in enumerate(votes):
-        if (label or "").strip().lower().startswith("controprova"):
-            bill = previous
-        else:
-            bill = vote_act(label, sitting)
-            if bill is None and i in pairs and events[pairs[i]][1]:
-                bill = events[pairs[i]][1][0]
-        if bill:
+        repeat = (label or "").strip().lower().startswith("controprova")
+        bill = None if repeat else vote_act(label, sitting)
+        if bill is None and i in pairs and events[pairs[i]][1]:
+            bill = events[pairs[i]][1][0]
+        if bill or (repeat and i in pairs):
             out[vote_id] = bill
-        previous = bill
     return out
 
 
@@ -261,16 +279,91 @@ def government_on(governments: list[dict], day: str) -> Optional[dict]:
 
 
 def official_vote_acts(rows: pd.DataFrame, senate_uris: set[str]) -> dict[str, list[str]]:
-    """{Vote id: [Ddl URIs]} from osr:relativoA, Senate-branch bills only."""
-    out: dict[str, list[str]] = defaultdict(list)
+    """{Vote id: [Ddl URIs]} from osr:relativoA, Senate-branch bills only.
+
+    A vote whose objects are all outside them (a Documento, a Chamber
+    reading) maps to []: the source says what it is about, so the
+    transcript must not attach it to the bill debated around it.
+    """
+    out: dict[str, list[str]] = {}
     for vz, atto in zip(rows["votazione"], rows["atto"]):
         leg, sitting, number = parse_senate_votazione_uri(vz or "")
-        if leg is None or atto not in senate_uris:
+        if leg is None:
             continue
-        vote_id = f"senato_leg{leg}_sed{sitting:03d}_v{number:03d}"
-        if atto not in out[vote_id]:
-            out[vote_id].append(atto)
+        acts = out.setdefault(f"senato_leg{leg}_sed{sitting:03d}_v{number:03d}", [])
+        if atto in senate_uris and atto not in acts:
+            acts.append(atto)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Motions and resolutions (no osr:oggetto at the source)
+# ---------------------------------------------------------------------------
+
+MOTION_NUMBER_RE = re.compile(r"\b1-(\d{5})\b")
+MOTION_LABEL_RE = re.compile(r"\bMozione\s+n\.\s*(\d+)", re.IGNORECASE)
+# "Proposta di risoluzione n. 3", "Prop. risol. n.1", "Prop.ris.n.5", "Propostadi risoluzione"
+RESOLUTION_LABEL_RE = re.compile(r"\bprop(?:osta)?\.?\s*(?:di)?\s*ris", re.IGNORECASE)
+SITTING_IN_DESCR_RE = re.compile(r"seduta n\.\s*(\d+)")
+AMENDMENT_TAIL_RE = re.compile(r"\b(?:Em{1,2}\.|ODG\b)")
+TITLE_BILL_RE = re.compile(r"\((\d+(?:-[A-Z]+)?)\)")
+
+
+def motion_of(label: str) -> Optional[str]:
+    """Number of the motion a vote label names ("1/00039"), else None.
+
+    The Senate writes it as "Mozione 1-00039" or "(1-00071)", or by its
+    serial alone: "Mozione n. 67" is 1-00067.
+    """
+    label = label or ""
+    if "mozion" not in label.lower():
+        return None
+    m = MOTION_NUMBER_RE.search(label)
+    if m:
+        return f"1/{m.group(1)}"
+    m = MOTION_LABEL_RE.search(label)
+    return f"1/{int(m.group(1)):05d}" if m else None
+
+
+def resolutions_by_sitting(rows) -> dict[int, list[dict]]:
+    """{sitting: [{number, surname}]} of the resolutions (6/...) presented in it.
+
+    rows: number, description ("... presentata da ... seduta n.202 ...") and
+    the first signatory's surname, as the graph keeps them.
+    """
+    out: dict[int, list[dict]] = defaultdict(list)
+    for r in rows:
+        m = SITTING_IN_DESCR_RE.search(r.get("description") or "")
+        if m and r.get("surname"):
+            out[int(m.group(1))].append({"number": r["number"], "surname": r["surname"]})
     return dict(out)
+
+
+def resolution_of(label: str, sitting: int, resolutions: dict[int, list[dict]]) -> Optional[str]:
+    """Number of the resolution a vote is on, else None.
+
+    The label numbers resolutions within the debate ("Prop. risol. n.3,
+    Patuanelli e altri"), not by their 6-xxxxx number: the resolution is the
+    one presented in that sitting whose first signatory the label names.
+    None when no resolution or more than one matches.
+    """
+    if not RESOLUTION_LABEL_RE.search(label or ""):
+        return None
+    # "..., Zanettin e altri, Em. 4.1, Enrico Borghi e Scalfarotto": the
+    # amendment's signers are not the resolution's.
+    words = set(_tokens(AMENDMENT_TAIL_RE.split(label)[0]))
+    hits = {r["number"] for r in resolutions.get(sitting, [])
+            if set(_tokens(r["surname"])) <= words}
+    return hits.pop() if len(hits) == 1 else None
+
+
+def title_bills(title: str) -> list[str]:
+    """Bill numbers a debate title names: "(1199) Proroga ...", "disegno di legge n. 1162"."""
+    title = title or ""
+    if "disegn" not in title.lower():
+        return []
+    found = TITLE_BILL_RE.findall(title) + BILL_NUMBER_RE.findall(title)
+    return list(dict.fromkeys(found))
 
 
 # ---------------------------------------------------------------------------
@@ -425,6 +518,9 @@ def main() -> int:
     ap.add_argument("--neo4j-password", default=os.environ.get("NEO4J_PASSWORD"),
                     required=os.environ.get("NEO4J_PASSWORD") is None)
     ap.add_argument("--legislature", type=int, default=19)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="read the graph and count the links, write nothing")
+    ap.add_argument("--dump", help="write the computed DISCUSSES and ON_ACT rows to this JSON file")
     args = ap.parse_args()
 
     from neo4j import GraphDatabase
@@ -455,76 +551,111 @@ def main() -> int:
 
     driver = GraphDatabase.driver(args.neo4j_uri, auth=(args.neo4j_user, args.neo4j_password))
     stats = Counter()
-    with driver.session() as s:
-        stats["acts"] = write_acts(s, ddl, args.legislature, initiatives)
-        stats["signatures"] = write_signatories(s, signers, senate_uris)
-        stats.update(write_presenters(s, ddl, signers, presenters, initiatives))
+    mode = "READ" if args.dry_run else "WRITE"
+    with driver.session(default_access_mode=mode) as s:
+        if not args.dry_run:
+            stats["acts"] = write_acts(s, ddl, args.legislature, initiatives)
+            stats["signatures"] = write_signatories(s, signers, senate_uris)
+            stats.update(write_presenters(s, ddl, signers, presenters, initiatives))
 
         sittings = {r["n"]: r["id"] for r in s.run(
             "MATCH (x:Session {chamber: 'senato', legislature: $leg}) RETURN x.number AS n, x.id AS id",
             leg=args.legislature)}
+        prefix = f"senato:{args.legislature}:aic:"
+        motions = {r["number"] for r in s.run(
+            "MATCH (a:ParliamentaryAct) WHERE a.uri STARTS WITH $p + '1/' RETURN a.number AS number",
+            p=prefix)}
+        resolutions = resolutions_by_sitting(r.data() for r in s.run("""
+            MATCH (a:ParliamentaryAct) WHERE a.uri STARTS WITH $p + '6/'
+            OPTIONAL MATCH (p:Person)-[:PRIMARY_SIGNATORY]->(a)
+            RETURN a.number AS number, a.description AS description, head(collect(p.last_name)) AS surname
+        """, p=prefix))
         discusses, on_act = [], []
+        settled: dict[str, list[str]] = {}
         for num, session_id in sorted(sittings.items()):
             votes = [(r["id"], r["label"]) for r in s.run("""
                 MATCH (:Session {id: $sid})-[:HAS_VOTE]->(v:Vote)
                 WHERE v.type <> 'verifica numero legale' OR v.type IS NULL
                 RETURN v.id AS id, v.subject AS label ORDER BY v.number
             """, sid=session_id)]
-            for vote_id, _ in votes:
-                on_act += [{"vote": vote_id, "uri": uri} for uri in official.get(vote_id, [])]
-            stats["votes_linked_official"] += sum(1 for v, _ in votes if v in official)
+            debates = [(r["id"], r["title"]) for r in s.run(
+                "MATCH (:Session {id: $sid})-[:HAS_DEBATE]->(d:Debate) RETURN d.id AS id, d.title AS title",
+                sid=session_id)]
 
             path = os.path.join(data, "senate_xml", f"resaula_leg{args.legislature}_{num:04d}.akn")
-            if not os.path.exists(path):
+            if os.path.exists(path):
+                sitting = parse_sitting(path)
+            else:
+                # Sittings published only as HTML (212-222, the latest ones
+                # until their Akoma Ntoso arrives): labels and titles only.
                 stats["sittings_without_transcript"] += 1
-                stats["votes_unresolved"] += sum(1 for v, _ in votes if v not in official)
-                continue
-            sitting = parse_sitting(path)
+                sitting = {"sections": {}, "events": []}
 
-            for r in s.run("MATCH (:Session {id: $sid})-[:HAS_DEBATE]->(d:Debate) RETURN d.id AS id",
-                           sid=session_id):
-                slug = r["id"][len(session_id) + 1:]
-                bills = sitting["sections"].get(slug) or sitting["sections"].get(
-                    re.sub(r"_\d+$", "", slug), [])
+            for debate_id, title in debates:
+                if sitting["events"] or sitting["sections"]:
+                    slug = debate_id[len(session_id) + 1:]
+                    bills = sitting["sections"].get(slug) or sitting["sections"].get(
+                        re.sub(r"_\d+$", "", slug), [])
+                else:
+                    bills = title_bills(title)
                 for b in bills:
                     if b in index:
-                        discusses.append({"debate": r["id"], "uri": index[b]})
+                        discusses.append({"debate": debate_id, "uri": index[b]})
                     else:
                         stats["debate_bill_unknown"] += 1
 
             # The whole sitting goes through the alignment, so that a vote
             # with an official link still anchors the ones around it.
             linked = link_sitting_votes(votes, sitting)
-            stats["votes_unresolved"] += sum(1 for v, _ in votes
-                                             if v not in official and v not in linked)
-            for vote_id, bill in linked.items():
-                if vote_id in official:
-                    stats["transcript_agrees_official"] += index.get(bill) in official[vote_id]
-                    continue
-                if bill in index:
-                    on_act.append({"vote": vote_id, "uri": index[bill]})
+            for vote_id, label in votes:
+                motion, resolution = motion_of(label), resolution_of(label, num, resolutions)
+                if official.get(vote_id):
+                    uris, how = official[vote_id], "official"
+                    if vote_id in linked:
+                        stats["transcript_agrees_official"] += index.get(linked[vote_id]) in uris
+                elif motion in motions:
+                    uris, how = [prefix + motion], "motion"
+                elif resolution:
+                    uris, how = [prefix + resolution], "resolution"
+                elif vote_id in official:
+                    uris, how = [], "official_not_a_bill"
+                elif linked.get(vote_id) in index:
+                    uris, how = [index[linked[vote_id]]], "transcript"
+                elif vote_id in linked and linked[vote_id] is None:
+                    uris, how = [], "repeat_outside_bills"
                 else:
-                    stats["votes_bill_unknown"] += 1
+                    uris, how = [], "unresolved"
+                    stats["votes_bill_unknown"] += vote_id in linked
+                stats[f"votes_{how}"] += 1
+                on_act += [{"vote": vote_id, "uri": uri} for uri in uris]
+                # The acts found now replace the earlier ones; a vote left
+                # unresolved keeps what it has.
+                if uris or how in ("official_not_a_bill", "repeat_outside_bills"):
+                    settled[vote_id] = uris
 
-        s.run("""
-            UNWIND $rows AS row
-            MATCH (d:Debate {id: row.debate}) MATCH (a:ParliamentaryAct {uri: row.uri})
-            MERGE (d)-[:DISCUSSES]->(a)
-        """, rows=discusses)
-        stats["stale_on_act_removed"] = s.run("""
-            UNWIND $rows AS row
-            MATCH (v:Vote {id: row.vote})-[r:ON_ACT]->(a)
-            WHERE NOT a.uri IN row.uris
-            DELETE r
-            RETURN count(r) AS n
-        """, rows=[{"vote": v, "uris": u} for v, u in official.items()]).single()["n"]
-        s.run("""
-            UNWIND $rows AS row
-            MATCH (v:Vote {id: row.vote}) MATCH (a:ParliamentaryAct {uri: row.uri})
-            MERGE (v)-[:ON_ACT]->(a)
-        """, rows=on_act)
         stats["debates_linked"] = len(discusses)
         stats["votes_linked"] = len(on_act)
+        if args.dump:
+            with open(args.dump, "w", encoding="utf-8") as f:
+                json.dump({"discusses": discusses, "on_act": on_act, "settled": settled}, f)
+        if not args.dry_run:
+            s.run("""
+                UNWIND $rows AS row
+                MATCH (d:Debate {id: row.debate}) MATCH (a:ParliamentaryAct {uri: row.uri})
+                MERGE (d)-[:DISCUSSES]->(a)
+            """, rows=discusses)
+            stats["stale_on_act_removed"] = s.run("""
+                UNWIND $rows AS row
+                MATCH (v:Vote {id: row.vote})-[r:ON_ACT]->(a)
+                WHERE NOT a.uri IN row.uris
+                DELETE r
+                RETURN count(r) AS n
+            """, rows=[{"vote": v, "uris": u} for v, u in settled.items()]).single()["n"]
+            s.run("""
+                UNWIND $rows AS row
+                MATCH (v:Vote {id: row.vote}) MATCH (a:ParliamentaryAct {uri: row.uri})
+                MERGE (v)-[:ON_ACT]->(a)
+            """, rows=on_act)
     driver.close()
     for k, v in sorted(stats.items()):
         logger.info("%s: %d", k, v)

@@ -229,6 +229,21 @@ class Validator:
         self.check(r["nobody"] == 0, "ddl del Senato con firmatari o presentatori",
                    f"{r['nobody']} senza nessuno")
 
+        # build/link_senate_acts.py. Quorum checks, cancelled votes and
+        # re-counts aside, 89 of 8,181 votes had no act on 19/10/2026 (1.1%):
+        # Documents that are not nodes yet, Giunta reports, secret elections.
+        rows = self.q("""
+            MATCH (:Session {chamber: 'senato'})-[:HAS_VOTE]->(v:Vote)
+            WHERE coalesce(v.type, '') <> 'verifica numero legale'
+              AND NOT toLower(coalesce(v.subject, '')) CONTAINS 'annullata'
+              AND NOT toLower(coalesce(v.subject, '')) STARTS WITH 'controprova'
+            RETURN count(v) AS tot, sum(CASE WHEN NOT (v)-[:ON_ACT]->() THEN 1 ELSE 0 END) AS loose
+        """)
+        r = rows[0]
+        self.check(r["loose"] <= 0.02 * r["tot"],
+                   f"votazioni del Senato con l'atto {r['tot'] - r['loose']}/{r['tot']}",
+                   f"{r['loose']} senza ON_ACT, sopra il 2% (build/link_senate_acts.py)", warn_only=True)
+
     def check_acts_camera(self):
         print("\n[15] Atti della Camera XIX (build/ingest_acts_camera.py)")
         # Acts cited by votes but never described at the source (about 2,755
