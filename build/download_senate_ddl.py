@@ -3,7 +3,8 @@
 Download the Senate bills (osr:Ddl) of a legislature and their signatories.
 
 Produces:
-  - data/senato_{roman}_ddl.csv               one row per Ddl (a bill's passage in the Senate)
+  - data/senato_{roman}_ddl.csv               one row per Ddl (a bill's passage in the Senate),
+    with the number and date of the law it became (build/ingest_laws.py)
   - data/senato_{roman}_ddl_firmatari.csv     one row per (Ddl, senator)
   - data/senato_{roman}_ddl_presentatori.csv  one row per presenter who is not a
     senator, Senate branch only: ministers (a string, "Ministro della giustizia
@@ -48,7 +49,7 @@ def _value(binding: dict, key: str) -> str:
 
 def download_ddl(legislature: int) -> list[dict]:
     query = PREFIX + f"""
-SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo ?descr WHERE {{
+SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo ?descr ?legge ?dataLegge WHERE {{
   ?ddl a osr:Ddl ; osr:legislatura {legislature} ;
        osr:idDdl ?idDdl ; osr:numeroFase ?numero .
   OPTIONAL {{ ?ddl osr:titolo ?titolo }}
@@ -57,6 +58,8 @@ SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo ?descr WHERE {{
   OPTIONAL {{ ?ddl osr:statoDdl ?stato }}
   OPTIONAL {{ ?ddl osr:ramo ?ramo }}
   OPTIONAL {{ ?ddl osr:descrIniziativa ?descr }}
+  OPTIONAL {{ ?ddl osr:numeroLegge ?legge }}
+  OPTIONAL {{ ?ddl osr:dataLegge ?dataLegge }}
 }}
 """
     rows = _senato_sparql_get(query, strict=True)
@@ -76,6 +79,8 @@ SELECT ?ddl ?idDdl ?numero ?titolo ?data ?natura ?stato ?ramo ?descr WHERE {{
             "stato": _value(b, "stato"),
             "ramo": _value(b, "ramo"),
             "descrIniziativa": _value(b, "descr"),
+            "numeroLegge": _value(b, "legge"),
+            "dataLegge": _value(b, "dataLegge")[:10],
         })
     return list(seen.values())
 
@@ -200,7 +205,7 @@ def main() -> int:
     ddl = download_ddl(args.legislature)
     write_csv(os.path.join(DATA_DIR, f"senato_{roman}_ddl.csv"), ddl,
               ["ddl", "idDdl", "numero", "titolo", "dataPresentazione", "natura", "stato", "ramo",
-               "descrIniziativa"])
+               "descrIniziativa", "numeroLegge", "dataLegge"])
     max_number = max((_number_prefix(d["numero"]) for d in ddl), default=0)
     signers = download_signers(args.legislature, max_number)
     write_csv(os.path.join(DATA_DIR, f"senato_{roman}_ddl_firmatari.csv"), signers,
