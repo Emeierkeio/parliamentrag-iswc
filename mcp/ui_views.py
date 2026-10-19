@@ -105,7 +105,7 @@ a { color: var(--accento); text-decoration: underline; text-underline-offset: 2p
 .etichetta { font: 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--inchiostro-3); }
 .mark { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 700; color: #fff; flex: none; }
 .mark[data-e="pass"] { background: var(--si); } .mark[data-e="fail"] { background: var(--no); }
-.mark[data-e="na"] { background: var(--inchiostro-3); }
+.mark[data-e="na"] { background: var(--inchiostro-3); } .mark[data-e="warn"] { background: var(--forse); }
 .vuoto { color: var(--inchiostro-3); }
 """
 
@@ -125,6 +125,7 @@ VERIFY_VIEW = """<!doctype html><html lang="it"><head><meta charset="utf-8">
 .voce b { display: block; font-size: 13px; }
 .voce span.n { font: 12px var(--mono); color: var(--inchiostro-2); }
 .voce[data-e="fail"] { border-color: color-mix(in srgb, var(--no) 40%, var(--filetto)); }
+.voce[data-e="warn"] { border-color: color-mix(in srgb, var(--forse) 45%, var(--filetto)); }
 @media (max-width: 520px) { .sigillo { grid-template-columns: 1fr; } }
 details { border-top: 1px solid var(--filetto); padding: 8px 0; }
 summary { cursor: pointer; font-weight: 600; font-size: 13px; list-style: none; display: flex; justify-content: space-between; gap: 8px; }
@@ -134,6 +135,7 @@ details[open] summary::after { content: "–"; }
 .gruppi { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip { font: 12px var(--mono); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--filetto); background: var(--foglio); }
 .chip[data-c="no"] { color: var(--no); border-color: color-mix(in srgb, var(--no) 45%, var(--filetto)); text-decoration: line-through; }
+.chip[data-c="forse"] { color: var(--forse); border-color: color-mix(in srgb, var(--forse) 45%, var(--filetto)); }
 ul { list-style: none; margin: 8px 0 0; padding: 0; }
 li { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--filetto); font-size: 13px; }
 li:last-child { border-bottom: 0; }
@@ -150,7 +152,7 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
 (function () {
   var T = {
     it: { attesa: "Verifica in corso…", gruppi: "Tutti i gruppi", voci: "Voci autorevoli", cit: "Citazioni esatte",
-          presenti: "presenti", mancano: "Mancano", tutti: "Ci sono tutte le voci.", autorevoli: "autorevoli",
+          presenti: "presenti", mancano: "Mancano", muti: "Non hanno interventi su questo tema", tutti: "Ci sono tutte le voci.", autorevoli: "autorevoli",
           esatte: "esatte", nessuna: "nessuna", gov: "Governo", rel: "relatore", nom: "nominato",
           su: " su ", senza: "senza punteggio", tema: " tra chi ha parlato del tema", fuori: "non ha parlato del tema", res: "Resoconto", sbagliato: "scritto come",
           stati: { exact: "Esatta", omissions: "Salta delle parole", modified: "Non coincide", not_found: "Non trovata" },
@@ -158,7 +160,7 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
           piede: "Controllo deterministico sui dati ufficiali di Camera e Senato, senza modelli di AI.",
           sito: "Verifica una risposta su www.parliamentrag.it/verifica", ambito: "Parlamento · XIX legislatura" },
     en: { attesa: "Checking…", gruppi: "All groups", voci: "Authoritative voices", cit: "Exact quotes",
-          presenti: "present", mancano: "Missing", tutti: "Every voice is there.", autorevoli: "authoritative",
+          presenti: "present", mancano: "Missing", muti: "No speeches on this topic", tutti: "Every voice is there.", autorevoli: "authoritative",
           esatte: "exact", nessuna: "none", gov: "Government", rel: "rapporteur", nom: "named",
           su: " of ", senza: "not ranked", tema: " among those who spoke on the topic", fuori: "did not speak on the topic", res: "Record", sbagliato: "written as",
           stati: { exact: "Exact", omissions: "Skips words", modified: "Does not match", not_found: "Not found" },
@@ -167,7 +169,7 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
           sito: "Check an answer at www.parliamentrag.it/verifica", ambito: "Italian Parliament · 19th legislature" }
   };
   var L = function () { return T[window.lingua()]; };
-  var M = { pass: "✓", fail: "✕", na: "–" };
+  var M = { pass: "✓", warn: "!", fail: "✕", na: "–" };
   document.getElementById("attesa").textContent = L().attesa;
 
   window.disegna = function (p) {
@@ -183,7 +185,7 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
       return '<div class="voce" data-e="' + e + '"><span class="mark" data-e="' + e + '">' + M[e] + "</span><div><b>" + nome + '</b><span class="n">' + n + "</span></div></div>";
     }
     var h = '<div class="sigillo">' +
-      voce(o.groups, t.gruppi, (dett.length ? dett.filter(function (x) { return x.status !== "missing"; }).length + t.su + dett.length : (g.present || []).length) + " " + t.presenti) +
+      voce(o.groups, t.gruppi, (dett.length ? dett.filter(function (x) { return x.status !== "missing" && x.status !== "silent"; }).length + t.su + dett.length : (g.present || []).length) + " " + t.presenti) +
       voce(o.authority, t.voci, voci.length ? autorevoli + t.su + voci.length + " " + t.autorevoli : t.nessuna) +
       voce(o.quotes, t.cit, q.length ? esatte + t.su + q.length + " " + t.esatte : t.nessuna) + "</div>";
 
@@ -191,12 +193,13 @@ li .dx { font: 12px var(--mono); color: var(--inchiostro-2); white-space: nowrap
     var mancano = (g.missing || []);
     h += '<details' + (o.groups === "fail" ? " open" : "") + "><summary>" + t.gruppi + "<span></span></summary>";
     h += '<div class="gruppi">' + dett.map(function (x) {
-      return '<span class="chip" data-c="' + (x.status === "missing" ? "no" : "si") + '" title="' + esc(x.label) + '">' + esc(x.key === "Governo" && window.lingua() === "en" ? "Government" : x.key) + "</span>";
+      return '<span class="chip" data-c="' + (x.status === "missing" ? "no" : x.status === "silent" ? "forse" : "si") + '" title="' + esc(x.label) + '">' + esc(x.key === "Governo" && window.lingua() === "en" ? "Government" : x.key) + "</span>";
     }).join("") + "</div>";
     (r.group_mismatches || []).forEach(function (m) {
       h += '<p class="nota">' + esc(m.name) + " " + t.sbagliato + " (" + esc(m.group_written) + ") → " + esc(m.voice || m.group) + "</p>";
     });
     if (!dett.length && mancano.length) h += '<p class="nota">' + t.mancano + ": " + esc(mancano.join(", ")) + "</p>";
+    if ((g.silent || []).length) h += '<p class="nota">' + t.muti + ": " + esc(g.silent.join(", ")) + "</p>";
     h += "</details>";
 
     /* Voci */

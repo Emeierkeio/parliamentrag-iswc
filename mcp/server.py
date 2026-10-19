@@ -287,7 +287,7 @@ async def search_parliament(
     return {"total": data.get("total"), "results": results, **_law_note(results), "next_step": _VERIFY_NEXT}
 
 
-_MARK = {"pass": "✅", "fail": "❌", "na": "➖"}
+_MARK = {"pass": "✅", "warn": "⚠️", "fail": "❌", "na": "➖"}
 
 
 def _verdict(r: dict) -> list[str]:
@@ -298,6 +298,9 @@ def _verdict(r: dict) -> list[str]:
     groups = f"{g['named']}/{g['total']} groups, Mixed Group components and Government present"
     if missing:
         groups += " — missing: " + ", ".join(missing)
+    silent = [x["key"] for x in g["items"] if x["status"] == "silent"]
+    if silent:
+        groups += " — no speeches on the topic: " + ", ".join(silent)
     for m in g.get("mismatches", []):
         groups += f" — {m['name']} is written as ({m['group_written']}) but belongs to {m['voice'] or m['group']}"
 
@@ -409,8 +412,10 @@ async def verify_answer(
         "scope": r.get("scope"),
         "outcome": r["summary"],
         "groups": {
-            "present": [g["key"] for g in r["groups"]["items"] if g["status"] != "missing"],
+            "present": [g["key"] for g in r["groups"]["items"] if g["status"] not in ("missing", "silent")],
             "missing": [g["label"] for g in r["groups"]["items"] if g["status"] == "missing"],
+            # Expected groups with no speech on the topic: a warning, not a failure.
+            "silent": [g["label"] for g in r["groups"]["items"] if g["status"] == "silent"],
         },
         "groups_detail": [
             {k: g[k] for k in ("key", "label", "status")} for g in r["groups"]["items"]
