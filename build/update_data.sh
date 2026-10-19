@@ -253,6 +253,15 @@ if [ -n "$LOCAL_UP" ]; then
 		|| warn "vote titles refresh failed on local snapshot"
 fi
 
+# ── Voti sulla lettura votata ────────────────────────────────────────────────
+# dati.camera.it collega i voti di una seconda lettura (C.2822-B) alla prima
+# (C.2822), e i due passi sopra li ricollegano così ogni notte: qui l'ON_ACT
+# passa alla lettura che la descrizione del voto nomina. Toglie anche l'EuroVoc
+# 7816, che la classificazione provvisoria della Camera usa per «Repubblica».
+run "Voti sulla lettura votata" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/repair_vote_readings.py --neo4j-uri "$DEMO_NEO4J" --neo4j-user neo4j \
+	|| warn "repair_vote_readings failed — will retry at next update-data"
+
 # ── Documenti (Doc.) della Camera ────────────────────────────────────────────
 # Un nodo per documento discusso o votato (DEF, relazioni della Giunta,
 # inchieste...): titolo e testi da ocd:DOC (una query SPARQL, copia in data/),
