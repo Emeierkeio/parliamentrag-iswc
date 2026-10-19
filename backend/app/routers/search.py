@@ -9,7 +9,9 @@ from fastapi import APIRouter, Query, HTTPException
 
 from ..services.archive import fill_rows, get_archive
 from ..services.retrieval.scope import CURRENT_LEGISLATURE, loaded_chambers
-from ..services.laws import laws_for_acts
+from ..services.laws import acts_of_law, laws_for_acts
+from ..services.links import act_public_url, camera_speech_url
+from ..services.timeline_service import MISTO_WITHOUT_COMPONENT
 from ..services.neo4j_client import Neo4jClient
 from ..config import get_settings
 from ..key_pool import make_client
@@ -110,6 +112,65 @@ ACT_GROUP = ("coalesce(g.name, CASE WHEN gov IS NOT NULL OR d:GovernmentMember "
              "THEN 'Governo' END, 'MISTO')")
 ACT_BY_PERSON = ("(d.id = $deputy_id OR EXISTS { MATCH (:Person {id: $deputy_id})"
                  "-[:PRESENTED {role: 'proponente'}]->(a) })")
+
+
+# dati.camera.it tags Camera acts with EuroVoc 7816 ("regioni della
+# Repubblica ceca") where its provisional automatic classification means
+# "Repubblica" (the label aic.camera.it shows): 95 acts on 2026-10-19, none
+# about the Czech Republic. Repair of the graph: build/repair_eurovoc_camera.py.
+EUROVOC_MISMATCHED = ["http://eurovoc.europa.eu/7816"]
+
+# Misto component of a speaker at the speech date, or of an act's primary
+# signatory at the presentation date (memory misto-componenti).
+_MISTO_COMPONENTS = """
+UNWIND $speeches AS cid
+MATCH (c:Chunk {id: cid})<-[:HAS_CHUNK]-(i:Speech)-[:SPOKEN_BY]->(d)
+MATCH (i)<-[:CONTAINS_SPEECH]-(:Phase)<-[:HAS_PHASE]-(:Debate)<-[:HAS_DEBATE]-(s:Session)
+MATCH (d)-[mc:MEMBER_OF_COMPONENT]->(m:MistoComponent)
+WHERE mc.start_date <= s.date AND (mc.end_date IS NULL OR mc.end_date >= s.date)
+  AND coalesce(m.chamber, 'camera') = coalesce(s.chamber, 'camera')
+RETURN cid AS id, head(collect(DISTINCT m.name)) AS component
+UNION
+UNWIND $acts AS uri
+MATCH (d)-[:PRIMARY_SIGNATORY]->(a:ParliamentaryAct {uri: uri})
+MATCH (d)-[mc:MEMBER_OF_COMPONENT]->(m:MistoComponent)
+WHERE mc.start_date <= a.presentation_date
+  AND (mc.end_date IS NULL OR mc.end_date >= a.presentation_date)
+  AND coalesce(m.chamber, 'camera') = coalesce(a.chamber, 'camera')
+RETURN uri AS id, head(collect(DISTINCT m.name)) AS component
+"""
+
+
+def _attribute_misto(client: Neo4jClient, results: List[Dict[str, Any]]) -> None:
+    """Replace "MISTO" in `group` with the component, keeping the group in
+    `parliamentary_group` and the component in `misto_component`."""
+    misto = [r for r in results if "misto" in (r.get("group") or "").lower()]
+    if not misto:
+        return
+    rows = client.query(_MISTO_COMPONENTS, {
+        "speeches": [r["id"] for r in misto if r["type"] == "speech"],
+        "acts": [r["id"] for r in misto if r["type"] == "act"],
+    })
+    components = {row["id"]: row["component"] for row in rows if row.get("component")}
+    for r in misto:
+        component = components.get(r["id"])
+        r["parliamentary_group"] = r["group"]
+        r["misto_component"] = component
+        r["group"] = component or MISTO_WITHOUT_COMPONENT
+
+
+def _add_links(results: List[Dict[str, Any]]) -> None:
+    """Public page of every result: the stenographic record of a Camera
+    speech (Senate speeches carry their url), the page of an act."""
+    for r in results:
+        if r["type"] == "act" and not r.get("chamber"):
+            r["chamber"] = "senato" if r["id"].startswith(("http://dati.senato.it/", "senato:")) else "camera"
+        if r.get("url"):
+            continue
+        if r["type"] == "speech" and r.get("chamber", "camera") == "camera":
+            r["url"] = camera_speech_url(r["id"])
+        elif r["type"] == "act":
+            r["url"] = act_public_url(r["id"])
 
 
 def _graph_chambers(chambers: tuple) -> List[str]:
@@ -311,12 +372,16 @@ def _search_acts_text(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     chambers: tuple = ("camera",),
+    uris: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Text search on ParliamentaryAct title and description; with an
-    empty query it lists the author's acts."""
+    empty query it lists the author's acts; with `uris`, those acts."""
     where_clauses = [_act_clause(chambers)]
-    params: Dict[str, Any] = {"limit": limit}
-    if q:
+    params: Dict[str, Any] = {"limit": limit, "eurovoc_mismatched": EUROVOC_MISMATCHED}
+    if uris is not None:
+        where_clauses.append("a.uri IN $uris")
+        params["uris"] = list(uris)
+    elif q:
         where_clauses.append(
             "(toLower(a.title) CONTAINS toLower($search_text) OR toLower(a.description) CONTAINS toLower($search_text))"
         )
@@ -348,12 +413,13 @@ def _search_acts_text(
     WHERE {where_clause}
     {ACT_AUTHOR}
     WITH a, d, g, gov WHERE {" AND ".join(author_filters)}
-    OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept)
+    OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept) WHERE NOT ev.uri IN $eurovoc_mismatched
     WITH a, d, g, gov, collect(ev.label_it) AS eurovoc_labels
     RETURN a.uri AS act_uri,
            a.type AS act_type,
            a.kind AS act_kind,
            a.title AS act_title,
+           a.subject AS act_subject,
            a.description AS description,
            toString(a.presentation_date) AS date_raw,
            a.number AS act_number,
@@ -391,6 +457,7 @@ def _search_acts_text(
                 "act_type": record["act_type"] or "",
                 "act_kind": record["act_kind"],
                 "act_title": record["act_title"] or "",
+                "act_subject": record.get("act_subject"),
                 "act_number": record["act_number"] or "",
                 "destinatario": record["destinatario"] or "",
                 "eurovoc": record["eurovoc"] or "",
@@ -518,6 +585,7 @@ def _search_acts_semantic(
         "embedding": embedding,
         "threshold": threshold,
         "limit": limit,
+        "eurovoc_mismatched": EUROVOC_MISMATCHED,
     }
 
     if deputy_id:
@@ -546,12 +614,13 @@ def _search_acts_semantic(
     {ACT_AUTHOR}
     WITH a, d, g, gov, score
     {filter_clause}
-    OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept)
+    OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept) WHERE NOT ev.uri IN $eurovoc_mismatched
     WITH a, d, g, gov, score, collect(ev.label_it) AS eurovoc_labels
     RETURN a.uri AS act_uri,
            a.type AS act_type,
            a.kind AS act_kind,
            a.title AS act_title,
+           a.subject AS act_subject,
            a.description AS description,
            toString(a.presentation_date) AS date_raw,
            a.number AS act_number,
@@ -591,6 +660,7 @@ def _search_acts_semantic(
             "act_type": r.get("act_type") or "",
             "act_kind": r.get("act_kind"),
             "act_title": r.get("act_title") or "",
+            "act_subject": r.get("act_subject"),
             "act_number": r.get("act_number") or "",
             "destinatario": r.get("destinatario") or "",
             "eurovoc": r.get("eurovoc") or "",
@@ -674,6 +744,14 @@ async def search_results(
                         act_text = _search_acts_text(client, q, fetch_limit, deputy_id, group, start_date, end_date, chambers=chambers)
                         all_results.extend(act_text)
 
+        # A query naming a published law ("legge 180/2026", "L. 180/2026")
+        # returns the readings of that law first, as exact matches.
+        law_uris = acts_of_law(client, q) if search_acts and q else []
+        if law_uris:
+            law_acts = _search_acts_text(client, "", fetch_limit, start_date=start_date, end_date=end_date,
+                                         chambers=chambers, uris=law_uris)
+            all_results = law_acts + all_results
+
         # Deduplicate by id, merging text (exact) and semantic hits for the same item:
         # keep the exact-match flag and the semantic score
         merged: Dict[str, Dict[str, Any]] = {}
@@ -691,6 +769,8 @@ async def search_results(
         # Semantic-only hits whose snippet/title contains the query are exact citations too
         q_lower = q.lower()
         for r in unique_results:
+            if r["id"] in law_uris:
+                r["is_exact"] = True
             if not r.get("is_exact") and (
                 q_lower in (r.get("text") or "").lower()
                 or q_lower in (r.get("act_title") or "").lower()
@@ -709,7 +789,7 @@ async def search_results(
         else:
             # relevance: within each block score desc, date desc as tiebreak
             unique_results.sort(key=lambda r: r.get("date") or "", reverse=True)
-            unique_results.sort(key=lambda r: (exact_first(r), -(r["score"] or 0.0)))
+            unique_results.sort(key=lambda r: (r["id"] not in law_uris, exact_first(r), -(r["score"] or 0.0)))
 
         total = len(unique_results)
         exact_count = sum(1 for r in unique_results if r.get("is_exact"))
@@ -717,6 +797,8 @@ async def search_results(
         start = (page - 1) * page_size
         end = start + page_size
         page_results = unique_results[start:end]
+        _attribute_misto(client, page_results)
+        _add_links(page_results)
         laws = laws_for_acts(client, (r["id"] for r in page_results if r["type"] == "act"))
         for r in page_results:
             if r["type"] == "act":
@@ -911,12 +993,13 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
         cypher = f"""
         MATCH (a:ParliamentaryAct {{uri: $act_uri}})
         {ACT_AUTHOR}
-        OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept)
+        OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(ev:EurovocConcept) WHERE NOT ev.uri IN $eurovoc_mismatched
         WITH a, d, g, gov, collect(ev.label_it) AS eurovoc_labels
         RETURN a.uri AS act_uri,
                a.type AS act_type,
            a.kind AS act_kind,
                a.title AS act_title,
+               a.subject AS act_subject,
                a.description AS description,
                toString(a.presentation_date) AS date_raw,
                a.number AS act_number,
@@ -930,7 +1013,7 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
         """
 
         with client.session() as session:
-            result = session.run(cypher, act_uri=act_uri)
+            result = session.run(cypher, act_uri=act_uri, eurovoc_mismatched=EUROVOC_MISMATCHED)
             record = result.single()
 
             if not record:
@@ -950,6 +1033,7 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
                 "act_type": record["act_type"] or "",
                 "act_kind": record["act_kind"],
                 "act_title": record["act_title"] or "",
+                "act_subject": record.get("act_subject"),
                 "description": record["description"] or "",
                 "date": formatted_date,
                 "act_number": record["act_number"] or "",
