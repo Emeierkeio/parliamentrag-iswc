@@ -119,8 +119,8 @@ def test_amendment_properties_text_and_outcome_provenance():
     assert (amendment, DCTERMS.identifier, Literal("1.1")) in g
     assert (amendment, DCTERMS.type, Literal("emendamento")) in g
     assert (amendment, pr.article, Literal("1")) in g
-    assert (amendment, pr.outcome, Literal("rejected")) in g
-    assert (amendment, pr.outcomeSource, Literal("floor_vote")) in g
+    assert (amendment, pr.outcome, Literal("respinto")) in g
+    assert (amendment, pr.outcomeSource, Literal("voto_aula")) in g
     assert (amendment, pr.text,
             Literal("Al comma 1, sopprimere le parole: e maggiormente.", lang="it")) in g
     assert (amendment, FOAF.page,
@@ -164,7 +164,7 @@ def test_amendments_to_a_bill_with_outcome_by_sparql():
         } ORDER BY ?number ?source
     """
     rows = [(str(r.number), str(r.outcome or ""), str(r.source or "")) for r in g.query(query)]
-    assert sorted(rows) == [("1.1", "approved", "source"), ("1.1", "rejected", "floor_vote"),
+    assert sorted(rows) == [("1.1", "approvato", "fonte"), ("1.1", "respinto", "voto_aula"),
                             ("1.1.1", "", "")]
 
 
@@ -233,3 +233,16 @@ def test_turtle_round_trip():
     exporter = exported()
     data = exporter.g.serialize(format="turtle")
     assert len(Graph().parse(data=data, format="turtle")) == len(exporter.g)
+
+
+def test_every_outcome_in_the_graph_is_published_in_italian():
+    # Outcome codes found in the production graph on 19/10/2026.
+    from export_rdf import OUTCOME_IT, OUTCOME_SOURCE_IT
+    graph_codes = {
+        "rejected", "precluded", "inadmissible", "withdrawn", "approved", "superseded",
+        "identical", "accepted", "lapsed", "absorbed", "not_accepted",
+        "accepted_as_recommendation", "not_voted", "mixed", "other",
+        "favor", "against", "abstain", "absent", "secret",
+    }
+    assert graph_codes <= OUTCOME_IT.keys()
+    assert set(OUTCOME_SOURCE_IT) == {"source", "floor_vote"}

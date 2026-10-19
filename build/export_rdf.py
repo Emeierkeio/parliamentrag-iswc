@@ -217,12 +217,13 @@ ONTOLOGY = {
                 "record (debate title or vote label), never generated text.", None),
     "subjectSource": ("data", "Where pr:subject was read from (debate, vote, fallback).", None),
     "voteType": ("data", "Kind of roll-call vote.", None),
-    "outcome": ("data", "Outcome of a vote or of an act (approvato, respinto, accolto, ...); "
-                "for amendments a normalized English value (approved, rejected, withdrawn, "
-                "precluded, inadmissible, ...).", None),
+    "outcome": ("data", "Outcome, always in Italian: of an act or amendment (approvato, "
+                "respinto, accolto, ritirato, precluso, inammissibile, ...), of a roll-call vote "
+                "(approvato, respinto) or of an individual vote (favorevole, contrario, astenuto, "
+                "assente, segreto).", None),
     "outcomeSource": ("data", "Where the outcome comes from. Acts: voto (roll-call votes on "
                       "it) or esito_senato (the Senate outcome of the amendment G). "
-                      "Amendments: source (published by the chamber) or floor_vote (result "
+                      "Amendments: fonte (published by the chamber) or voto_aula (result "
                       "of the floor roll-call vote on it, when the chamber publishes no "
                       "outcome).", None),
     "outcomeRaw": ("data", "Outcome of the act or amendment as written by the source.", None),
@@ -274,6 +275,21 @@ SOURCE_BY_CHAMBER = {
 # ~1536 floats per node and streaming them over the SSH tunnel only to drop them
 # made the export take minutes per label and drop the connection.
 EXCLUDED_PROP = "embedding"
+
+# The graph keeps amendment, roll-call and individual-vote outcomes as English
+# codes; the dump publishes every outcome in Italian, like the acts and the
+# sources (Mirko, 19/10/2026). Values not listed here pass through unchanged.
+OUTCOME_IT = {
+    "approved": "approvato", "rejected": "respinto", "withdrawn": "ritirato",
+    "precluded": "precluso", "inadmissible": "inammissibile", "accepted": "accolto",
+    "not_accepted": "non_accolto", "accepted_as_recommendation": "accolto_come_raccomandazione",
+    "lapsed": "decaduto", "absorbed": "assorbito", "identical": "identico",
+    "superseded": "rinvio_ad_altro", "not_voted": "non_posto_in_votazione",
+    "mixed": "approvato_in_parte", "other": "altro",
+    "favor": "favorevole", "against": "contrario", "abstain": "astenuto",
+    "absent": "assente", "secret": "segreto",
+}
+OUTCOME_SOURCE_IT = {"source": "fonte", "floor_vote": "voto_aula"}
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -379,6 +395,10 @@ class RdfExporter:
             value = props.get(key)
             if value is None or value == "":
                 continue
+            if predicate == self.PRO.outcome:
+                value = OUTCOME_IT.get(value, value)
+            elif predicate == self.PRO.outcomeSource:
+                value = OUTCOME_SOURCE_IT.get(value, value)
             self.g.add((subject, predicate, self.to_literal(value)))
 
     # ---- node passes -------------------------------------------------------
@@ -974,7 +994,7 @@ class RdfExporter:
                 fh.write(nt(ivote, RDF.type, f"<{OCD.voto}>"))
                 fh.write(nt(ivote, PRO.voter, f"<{person}>"))
                 fh.write(nt(ivote, PRO.onVote, f"<{vote}>"))
-                fh.write(nt(ivote, PRO.outcome, f'"{rec["outcome"]}"'))
+                fh.write(nt(ivote, PRO.outcome, f'"{OUTCOME_IT.get(rec["outcome"], rec["outcome"])}"'))
                 count += 1
                 if count % 500_000 == 0:
                     print(f"  {count:,} individual votes...")
