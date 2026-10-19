@@ -79,6 +79,8 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `download_emendamenti_senato.py` | Senate readings (SPARQL) and committee amendment pages |
 | `download_esiti_senato.py` | Senate amendment outcomes and the floor texts missing from Akoma Ntoso |
 | `parse_emendamenti.py` | both chambers' amendments in one JSONL (`downloads/emendamenti/`) |
+| `link_agenda_orders.py` | agenda orders `REFERS_TO` their bill (from the number), outcome from votes (Camera) and from the G amendments (Senato) |
+| `ingest_reporters.py` | bill rapporteurs, `(:Bill)-[:REPORTED_BY]->(:Person)`, from dati.camera.it and dati.senato.it |
 
 ## Notes
 
