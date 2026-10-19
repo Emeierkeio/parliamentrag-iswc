@@ -62,6 +62,9 @@ class VoteInfo(BaseModel):
     in_favor: Optional[int] = None
     against: Optional[int] = None
     abstained: Optional[int] = None
+    # Readable subject of the motion or resolution voted on, from the debate
+    # title (build/act_subjects.py); None for other votes.
+    act_subject: Optional[str] = None
 
 
 class VoteParticipant(BaseModel):
@@ -108,6 +111,9 @@ class VoteActRef(BaseModel):
     """Act a roll call voted on (bill, ODG, motion), with its public page."""
 
     title: Optional[str] = None
+    # Motions and resolutions: what the act is about, from official text
+    # (build/act_subjects.py); the title is only their code.
+    subject: Optional[str] = None
     url: Optional[str] = None  # camera.it / aic.camera.it page (iter, dossier)
     text_url: Optional[str] = None  # direct PDF of the full text (stampato)
     law: Optional[LawRef] = None
@@ -154,6 +160,7 @@ class ActInfo(BaseModel):
 
     id: str
     title: Optional[str] = None
+    subject: Optional[str] = None  # motions and resolutions, see VoteActRef
     type: Optional[str] = None
     law: Optional[LawRef] = None
 

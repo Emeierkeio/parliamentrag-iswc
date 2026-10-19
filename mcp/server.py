@@ -489,7 +489,9 @@ async def list_sessions(
 @mcp.tool(annotations=_ro("List roll-call votes of a sitting"))
 async def get_session_votes(session_id: str) -> dict:
     """List every roll-call vote of one sitting: subject, description, kind
-    (final vote flag), outcome and aggregate counts.
+    (final vote flag), outcome and aggregate counts. A vote on a motion or
+    resolution carries `act_subject`, what the act is about, taken from the
+    official debate title: prefer it to the act code in the subject.
 
     Args:
         session_id: Session id from list_sessions (e.g. "leg19_sed700").
@@ -508,6 +510,7 @@ async def get_session_votes(session_id: str) -> dict:
                 "in_favor": v.get("in_favor"),
                 "against": v.get("against"),
                 "abstained": v.get("abstained"),
+                "act_subject": v.get("act_subject"),
             }
             for v in votes
         ],
@@ -522,7 +525,9 @@ async def get_vote_details(
     group: Optional[str] = None,
 ) -> dict:
     """Full detail of one roll-call vote: aggregates, per-group breakdown,
-    linked act (with official page and full-text PDF), secret-ballot flag,
+    linked act (with official page and full-text PDF; motions and resolutions
+    also with `subject`, what they are about, from official text: name the
+    act by it rather than by its code), secret-ballot flag,
     and optionally the individual votes (~400 deputies or ~200 senators;
     `chamber` says which house voted). A linked act that became law carries
     `law`, with the Normattiva link to cite.

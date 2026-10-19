@@ -362,7 +362,9 @@ async def get_debate_detail(
                v.outcome AS outcome,
                v.inFavor AS in_favor,
                v.against AS against,
-               v.abstained AS abstained
+               v.abstained AS abstained,
+               COLLECT { MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct) WHERE a.subject IS NOT NULL
+                         RETURN a.subject }[0] AS act_subject
         ORDER BY v.number
         """,
         {"debate_id": debate_id},
@@ -378,6 +380,7 @@ async def get_debate_detail(
             in_favor=r["in_favor"],
             against=r["against"],
             abstained=r["abstained"],
+            act_subject=r["act_subject"],
         )
         for r in vote_rows
     ]
@@ -387,6 +390,7 @@ async def get_debate_detail(
         MATCH (d:Debate {id: $debate_id})-[:DISCUSSES]->(a:ParliamentaryAct)
         RETURN coalesce(a.id, a.uri) AS id,
                a.title AS title,
+               a.subject AS subject,
                a.type AS type
         ORDER BY a.title
         """,
@@ -397,6 +401,7 @@ async def get_debate_detail(
         ActInfo(
             id=r["id"],
             title=r["title"],
+            subject=r["subject"],
             type=r["type"],
             law=laws.get(r["id"]),
         )
@@ -437,7 +442,9 @@ async def get_session_votes(
                v.outcome AS outcome,
                v.inFavor AS in_favor,
                v.against AS against,
-               v.abstained AS abstained
+               v.abstained AS abstained,
+               COLLECT { MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct) WHERE a.subject IS NOT NULL
+                         RETURN a.subject }[0] AS act_subject
         ORDER BY v.number
         """,
         {"session_id": session_id},
@@ -453,6 +460,7 @@ async def get_session_votes(
             in_favor=r["in_favor"],
             against=r["against"],
             abstained=r["abstained"],
+            act_subject=r["act_subject"],
         )
         for r in vote_rows
     ]
@@ -485,7 +493,7 @@ async def get_vote_detail(
                v.number AS number,
                v.subject AS subject,
                v.description AS description,
-               collect(DISTINCT {uri: a.uri, title: a.title, text_pdf: a.textPdfUrl}) AS acts,
+               collect(DISTINCT {uri: a.uri, title: a.title, subject: a.subject, text_pdf: a.textPdfUrl}) AS acts,
                v.secretVote AS secret_vote,
                v.outcome AS outcome,
                v.type AS vote_type,
@@ -582,7 +590,8 @@ async def get_vote_detail(
         if url and "aic.camera.it" in url and not title:
             url = None
         act_refs.append(VoteActRef(
-            title=title, url=url, text_url=a.get("text_pdf"), law=laws.get(a["uri"]),
+            title=title, subject=a.get("subject"), url=url, text_url=a.get("text_pdf"),
+            law=laws.get(a["uri"]),
         ))
     acts = sorted(
         act_refs,
