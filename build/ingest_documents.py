@@ -214,8 +214,8 @@ def iso(raw: Optional[str]) -> Optional[str]:
 # Sources
 # ---------------------------------------------------------------------------
 
-def load_camera_records(leg: int, download: bool) -> list[dict]:
-    """ocd:DOC rows of the legislature, from dati.camera.it or the cached copy."""
+def load_camera_records(leg: int, download: bool) -> Optional[list[dict]]:
+    """ocd:DOC rows of the legislature, from dati.camera.it or the cached copy; None without either."""
     path = os.path.join(DATA_DIR, f"camera_{ROMAN[leg]}_documenti.json")
     if download:
         from ingest_acts_camera import VIRTUOSO_CAP, Sparql
@@ -232,7 +232,7 @@ def load_camera_records(leg: int, download: bool) -> list[dict]:
         except RuntimeError as exc:
             logger.warning("dati.camera.it non risponde (%s): uso la copia in data/", exc)
     if not os.path.exists(path):
-        raise SystemExit(f"{path} assente: lanciare con --download")
+        return None
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
@@ -762,13 +762,19 @@ def main() -> int:
             "MATCH (a:ParliamentaryDocument {chamber: $c, legislature: $leg}) WHERE a.doc_series IS NOT NULL "
             "RETURN a.doc_series AS series, a.number AS number", c=args.chamber, leg=leg)}
         if args.chamber == "camera":
-            records = camera_index(load_camera_records(leg, args.download))
+            rows = load_camera_records(leg, args.download)
+            records = camera_index(rows or [])
             ph = [r.data() for r in s.run(CAMERA_PLACEHOLDER_DEBATES)]
             votes = [r.data() for r in s.run(CAMERA_VOTES, leg=leg)]
             debates = [{"title": t} for p in ph for t in p["titles"]] + [dict(r) for r in s.run("""
                 MATCH (d:Debate)-[:DISCUSSES]->(:ParliamentaryDocument {chamber: 'camera'}) RETURN d.title AS title""")]
             plan = plan_camera(leg, records, senate, ph, votes, debates, existing, stats)
             check_camera_pdfs(leg, plan["nodes"], args.download or args.check_pdfs, stats)
+            if rows is None:
+                # No record at hand: the new documents still take their
+                # debates and votes, the described ones keep their data.
+                logger.warning("ocd:DOC non disponibile: scrivo solo i documenti nuovi")
+                plan["nodes"] = [n for n in plan["nodes"] if (n["series"], n["number"]) not in existing]
             plan["discusses"] = []
         else:
             vote_docs = senate_vote_docs(leg, {u: k for k, v in senate.items() for u in v["uris"]})
