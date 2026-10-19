@@ -162,6 +162,15 @@ class Validator:
                        f"mai visti da build/ingest_misto_senato.py: {r['unseen']}" if r["unseen"]
                        else "nessuna componente: lanciare build/ingest_misto_senato.py")
 
+        # Recaps (generate_summaries.py): the 11 sittings without one on
+        # 19/10/2026 have no debates at all (opening, adjourned sittings).
+        rows = self.q("""
+            MATCH (s:Session {chamber: 'senato'}) WHERE s.recapIt IS NULL AND (s)-[:HAS_DEBATE]->()
+            RETURN count(s) AS c, collect(s.number)[..10] AS nums
+        """)
+        self.check(rows[0]["c"] == 0, "sedute del Senato con dibattiti e riassunto",
+                   f"{rows[0]['c']} senza riassunto: {rows[0]['nums']}", warn_only=True)
+
         # Group offices from osr:carica (build/ingest_group_offices.py
         # --chamber senato): each group with members has its president.
         rows = self.q("""
