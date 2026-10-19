@@ -119,6 +119,8 @@ def test_pick_candidate():
 def test_sub_parent():
     assert L.sub_parent("senato", "emendamento", "7.0.100/10") == ("7.0.100", None)
     assert L.sub_parent("senato", "emendamento", "1.1 (testo 2)/3") == ("1.1", "testo 2")
+    assert L.sub_parent("senato", "emendamento", "13.0.400 testo 2/1") == ("13.0.400", "testo 2")
+    assert L.sub_parent("senato", "emendamento", "7.9 (testo 3) e identici/12") == ("7.9", "testo 3")
     assert L.sub_parent("senato", "emendamento", "4.1/5ª Commissione") is None
     assert L.sub_parent("senato", "ordine_del_giorno", "G/2036/1/6") is None
     assert L.sub_parent("camera", "subEmendamento", "0.15.800.10") == ("15.800", None)
@@ -185,6 +187,8 @@ def _index(votes=()):
         L.CAMERA_PERSON + "300": L.CAMERA_PERSON + "300",
         L.CAMERA_PERSON + "301": None,  # two persons claim this id
     }
+    gi.deputy_by_name = {"zingaretti": L.CAMERA_PERSON + "302", "nicola zingaretti": L.CAMERA_PERSON + "302",
+                         "rossi": None}
     gi.camera_acts = {L.CAMERA_ACT.format(leg=19) + "5"}
     gi.senate_act_by_number = {"10": "http://dati.senato.it/ddl/100"}
     gi.senate_number_by_uri = {"http://dati.senato.it/ddl/100": "10"}
@@ -205,6 +209,7 @@ def test_signatories_matched_by_source_id():
             {"id": "C:300", "nome": "B", "tipo": "deputato", "primo": True},
             {"id": "C:301", "nome": "Doppio", "tipo": "deputato", "primo": False},
             {"id": "C:XXX", "nome": "Zingaretti", "tipo": "deputato", "primo": False},
+            {"id": "C:XXX", "nome": "Rossi", "tipo": "deputato", "primo": False},
         ]),
     ]
     stats, unlinked = Counter(), {}
@@ -213,7 +218,9 @@ def test_signatories_matched_by_source_id():
         ("S|1", "http://dati.senato.it/senatore/1", True),
         ("S|1", "gov_rossi_mario", False),
         ("C|1", L.CAMERA_PERSON + "300", True),
+        ("C|1", L.CAMERA_PERSON + "302", False),
     }
+    assert stats["camera.sign_by_name"] == 1
     assert stats["senato.sign_total"] == 3 and stats["senato.sign_not_member"] == 1
     reasons = sorted(r[2].split(" (")[0] for r in unlinked["camera.sign"] + unlinked["senato.sign"])
     assert reasons == ["id non valido 'C:XXX'", "persona ambigua", "persona assente nel grafo"]
@@ -321,3 +328,31 @@ def test_row_hash_tracks_content():
     assert L.row_hash(b) == a["_hash"]
     b["testo"] = "altro"
     assert L.row_hash(b) != a["_hash"]
+
+
+def test_outcome_from_floor_votes():
+    rows = [_row("S|1", numero="2.1", esito=None), _row("S|2", numero="2.2", esito=None),
+            _row("S|3", numero="2.3")]
+    d = _Date(dt.date(2024, 1, 12))
+    act = ["http://dati.senato.it/ddl/100"]
+    votes = [
+        {"id": "v1", "session": "s", "chamber": "senato", "date": d, "subject": "Em. 2.1, Bianchi",
+         "description": None, "acts": act, "outcome": "rejected"},
+        {"id": "v2", "session": "s", "chamber": "senato", "date": d, "subject": "Em. 2.2 (prima parte)",
+         "description": None, "acts": act, "outcome": "approved"},
+        {"id": "v3", "session": "s", "chamber": "senato", "date": d, "subject": "Em. 2.2 (seconda parte)",
+         "description": None, "acts": act, "outcome": "rejected"},
+        {"id": "v4", "session": "s", "chamber": "senato", "date": d, "subject": "Em. 2.3, Verdi",
+         "description": None, "acts": act, "outcome": "approved"},
+    ]
+    gi = _index(votes)
+    voted = L.vote_outcomes(L.derive_relations(rows, gi, Counter(), {}), gi)
+    assert voted == {"S|1": "rejected", "S|2": "mixed", "S|3": "approved"}
+    p1 = L.node_props(rows[0], 19, voted["S|1"])
+    assert (p1["outcome"], p1["outcome_source"]) == ("rejected", "floor_vote")
+    assert p1["row_hash"] != rows[0]["_hash"]
+    # the source outcome ("Respinto") wins over the vote
+    p3 = L.node_props(rows[2], 19, voted["S|3"])
+    assert (p3["outcome"], p3["outcome_source"]) == ("rejected", "source")
+    p0 = L.node_props(rows[0], 19)
+    assert "outcome" not in p0 and p0["row_hash"] == rows[0]["_hash"]

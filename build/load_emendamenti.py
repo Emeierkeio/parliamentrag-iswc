@@ -7,7 +7,8 @@ Input: downloads/emendamenti/emendamenti_leg19.jsonl (parse_emendamenti.py).
 Graph:
   (:Amendment {id, chamber, legislature, act, number, version, kind, venue,
                committee, article, outcome, outcome_raw, presented_on,
-               sitting_date, group_id, source_url, member_signatories, row_hash})
+               sitting_date, group_id, source_url, member_signatories, row_hash,
+               outcome_source: "source" | "floor_vote"})
   (Amendment)-[:AMENDS {joint}]->(ParliamentaryAct)
   (Person)-[:SIGNED_AMENDMENT {first}]->(Amendment)
   (Vote)-[:ON_AMENDMENT {method}]->(Amendment)        floor votes only
@@ -161,6 +162,11 @@ def signer_person_key(signer: dict) -> str | None:
     return None
 
 
+def name_key(name: str | None) -> str:
+    """'Schiano Di Visconti' and 'SCHIANO DI VISCONTI' -> 'schiano di visconti'."""
+    return re.sub(r"\s+", " ", (name or "").strip().lower())
+
+
 def act_number(atto: str | None) -> str | None:
     """'S.1896' -> '1896', 'S.1038-B' -> '1038-B'."""
     if not atto or "." not in atto:
@@ -176,7 +182,8 @@ def row_hash(row: dict) -> str:
 def sub_parent(chamber: str, kind: str, numero: str) -> tuple[str, str | None] | None:
     """Number (and version) of the amendment a sub-amendment refers to.
 
-    Senate: '7.0.100/10' -> ('7.0.100', None), '1.1 (testo 2)/3' -> ('1.1', 'testo 2').
+    Senate: '7.0.100/10' -> ('7.0.100', None), '1.1 (testo 2)/3' and '1.1 testo 2/3'
+    -> ('1.1', 'testo 2').
     Chamber: '0.15.800.10' -> ('15.800', None); only rows of kind subEmendamento.
     """
     key = number_key(numero)
@@ -185,10 +192,13 @@ def sub_parent(chamber: str, kind: str, numero: str) -> tuple[str, str | None] |
         m = re.match(r"^(\d.*?)\s*/\s*\d+$", key)
         if not m:
             return None
-        parent = m.group(1)
-        m = re.match(r"^(.*?)\s*\((testo[^)]*)\)$", parent)
+        # "7.9 (testo 3) e identici/12" sub-amends 7.9 (testo 3) and the
+        # amendments identical to it: linked to 7.9 (testo 3).
+        parent = re.sub(r"\s*e identici$", "", m.group(1))
+        # "1.1 (testo 2)/3" and, in 5 Senate rows of 2026-10, "13.0.400 testo 2/1"
+        m = re.match(r"^(.*?)\s*(?:\((testo[^)]*)\)|(testo\s*\d+))$", parent)
         if m:
-            return m.group(1).strip(), normalize_version(m.group(2))
+            return m.group(1).strip(), normalize_version(m.group(2) or m.group(3))
         return parent, None
     if kind != "subEmendamento":
         return None
@@ -353,8 +363,20 @@ def read_rows(path: Path, limit: int | None) -> list[dict]:
     return rows
 
 
-def node_props(row: dict, leg: int) -> dict:
+def node_hash(row: dict, vote_outcome: str | None) -> str:
+    """Hash of the node: the source row, plus the outcome read from floor votes when there is one."""
+    if not vote_outcome:
+        return row["_hash"]
+    return hashlib.sha1(f"{row['_hash']}|{vote_outcome}".encode()).hexdigest()[:16]
+
+
+def node_props(row: dict, leg: int, vote_outcome: str | None = None) -> dict:
+    """Node properties; the source outcome wins, the floor-vote outcome fills its absence."""
     members = sum(1 for f in row.get("firmatari") or [] if f.get("tipo") in ("deputato", "senatore"))
+    outcome = normalize_outcome(row.get("esito"))
+    source = "source" if outcome else None
+    if outcome is None and vote_outcome:
+        outcome, source = vote_outcome, "floor_vote"
     props = {
         "id": row["id"],
         "chamber": row["_chamber"],
@@ -366,14 +388,15 @@ def node_props(row: dict, leg: int) -> dict:
         "venue": row.get("sede"),
         "committee": row.get("commissione"),
         "article": row.get("articolo"),
-        "outcome": normalize_outcome(row.get("esito")),
+        "outcome": outcome,
+        "outcome_source": source,
         "outcome_raw": row.get("esito"),
         "presented_on": parse_date(row.get("data_presentazione")),
         "sitting_date": parse_date(row.get("seduta_data")),
         "group_id": row.get("gruppo_id"),
         "source_url": row.get("fonte"),
         "member_signatories": members,
-        "row_hash": row["_hash"],
+        "row_hash": node_hash(row, vote_outcome),
     }
     return {k: v for k, v in props.items() if v is not None and v != ""}
 
@@ -432,17 +455,15 @@ MATCH (s:Session {legislature: $leg})-[:HAS_VOTE]->(v:Vote)
 WHERE s.chamber IN ['camera', 'senato']
 OPTIONAL MATCH (v)-[:ON_ACT]->(x:ParliamentaryAct)
 RETURN v.id AS id, s.id AS session, s.chamber AS chamber, s.date AS date, v.subject AS subject,
-       v.description AS description, collect(x.uri) AS acts
+       v.description AS description, v.outcome AS outcome, collect(x.uri) AS acts
 """
 
 SESSION_BILLS = """
 MATCH (s:Session {legislature: $leg})-[:HAS_DEBATE]->(:Debate)-[:DISCUSSES]->(x:ParliamentaryAct)
 WHERE s.chamber IN ['camera', 'senato']
-  AND (x.uri STARTS WITH 'http://dati.camera.it/ocd/attocamera.rdf/' OR x.uri STARTS WITH 'placeholder:'
-       OR x.uri STARTS WITH 'http://dati.senato.it/ddl/')
+  AND (x.uri STARTS WITH 'http://dati.camera.it/ocd/attocamera.rdf/' OR x.uri STARTS WITH 'http://dati.senato.it/ddl/')
 RETURN s.id AS session, collect(DISTINCT x.uri) AS acts
 """
-PLACEHOLDER_BILL_RE = re.compile(r"^placeholder:(?:camera:leg\d+:)?pdl:(\d+)")
 
 
 class GraphIndex:
@@ -451,7 +472,13 @@ class GraphIndex:
     def __init__(self, session, leg: int):
         self.leg = leg
         self.person_by_key: dict[str, str | None] = {}
-        for r in session.run("MATCH (p:Person) RETURN p.id AS id, p.camera_id AS cam, p.senato_id AS sen"):
+        self.deputy_by_name: dict[str, str | None] = {}
+        for r in session.run("MATCH (p:Person) RETURN p.id AS id, p.camera_id AS cam, p.senato_id AS sen, "
+                             "p.first_name AS first, p.last_name AS last, p.mandates AS mandates"):
+            if r["cam"] and f"camera_{leg}" in (r["mandates"] or []) and r["last"]:
+                for name in {f"{r['first'] or ''} {r['last']}", r["last"]}:
+                    k = name_key(name)
+                    self.deputy_by_name[k] = r["id"] if self.deputy_by_name.get(k, r["id"]) == r["id"] else None
             keys = {r["sen"], r["cam"]}
             if r["id"].startswith(CAMERA_PERSON) or r["id"].startswith(SENATO_PERSON):
                 keys.add(r["id"])
@@ -484,11 +511,8 @@ class GraphIndex:
         prefix = CAMERA_ACT.format(leg=self.leg)
         for u in uris:
             if chamber == "camera":
-                m = PLACEHOLDER_BILL_RE.match(u)
                 if u.startswith(prefix):
                     out.append(u[len(prefix):].split("-")[0])
-                elif m:
-                    out.append(m.group(1))
             elif u in self.senate_number_by_uri:
                 out.append(self.senate_number_by_uri[u])
         return list(dict.fromkeys(out))
@@ -530,15 +554,23 @@ def derive_relations(rows: list[dict], gi: GraphIndex, stats: Counter, unlinked:
             stats[f"{ch}.sign_total"] += 1
             key = signer_person_key(f)
             if key is None:
-                stats[f"{ch}.sign_bad_id"] += 1
-                unlinked.setdefault(f"{ch}.sign", []).append((r["id"], f.get("nome"), f"id non valido {f.get('id')!r}"))
-                continue
-            pid = gi.person_by_key.get(key)
-            if pid is None:
-                reason = "persona ambigua" if key in gi.person_by_key else "persona assente nel grafo"
-                stats[f"{ch}.sign_missing"] += 1
-                unlinked.setdefault(f"{ch}.sign", []).append((r["id"], f.get("nome"), f"{reason} ({key})"))
-                continue
+                # The Chamber writes idProponente="XXX" for some deputies (83
+                # signatures of 8 names, 2026-10): matched by full name or
+                # surname when exactly one deputy of the legislature has it.
+                pid = gi.deputy_by_name.get(name_key(f.get("nome"))) if ch == "camera" else None
+                if pid is None:
+                    stats[f"{ch}.sign_bad_id"] += 1
+                    unlinked.setdefault(f"{ch}.sign", []).append(
+                        (r["id"], f.get("nome"), f"id non valido {f.get('id')!r}"))
+                    continue
+                stats[f"{ch}.sign_by_name"] += 1
+            else:
+                pid = gi.person_by_key.get(key)
+                if pid is None:
+                    reason = "persona ambigua" if key in gi.person_by_key else "persona assente nel grafo"
+                    stats[f"{ch}.sign_missing"] += 1
+                    unlinked.setdefault(f"{ch}.sign", []).append((r["id"], f.get("nome"), f"{reason} ({key})"))
+                    continue
             if pid in seen:
                 continue
             seen.add(pid)
@@ -628,6 +660,21 @@ def link_votes(rows: list[dict], gi: GraphIndex, rels: dict, stats: Counter, unl
                  "; ".join(reasons)))
 
 
+def vote_outcomes(rels: dict, gi: GraphIndex) -> dict[str, str]:
+    """Outcome of each amendment voted on the floor: 'approved', 'rejected', or 'mixed' over several votes.
+
+    The Chamber's open data gives an outcome to 682 of 33,332 floor amendments
+    and never 'rejected' (2026-10), so the roll-call result is the only source
+    for most of them; amendments not voted by roll call stay without outcome.
+    """
+    by_vote = {v["id"]: v.get("outcome") for v in gi.votes}
+    seen: dict[str, set] = defaultdict(set)
+    for amendment, vote, _ in rels["ON_AMENDMENT"]:
+        if by_vote.get(vote) in ("approved", "rejected"):
+            seen[amendment].add(by_vote[vote])
+    return {a: next(iter(o)) if len(o) == 1 else "mixed" for a, o in seen.items()}
+
+
 def apply_relations(driver, leg: int, rels: dict[str, set], batch: int, dry_run: bool,
                     only_ids: set[str] | None, stats: Counter) -> None:
     """Create missing relations and delete those no longer derived.
@@ -670,7 +717,13 @@ def load_graph(rows: list[dict], args, stats: Counter, unlinked: dict) -> None:
                 len(existing), len(gi.person_by_key), len(gi.camera_acts), len(gi.senate_act_by_number),
                 len(gi.votes))
 
-    changed = [r for r in rows if existing.get(r["id"]) != r["_hash"]]
+    rels = derive_relations(rows, gi, stats, unlinked)
+    voted = vote_outcomes(rels, gi)
+    for r in rows:
+        if r["id"] in voted:
+            stats[f"{r['_chamber']}.outcome_from_vote" if not normalize_outcome(r.get("esito"))
+                  else f"{r['_chamber']}.outcome_source_and_vote"] += 1
+    changed = [r for r in rows if existing.get(r["id"]) != node_hash(r, voted.get(r["id"]))]
     stale: list[str] = []
     if args.limit is None:
         ids = {r["id"] for r in rows}
@@ -685,7 +738,7 @@ def load_graph(rows: list[dict], args, stats: Counter, unlinked: dict) -> None:
     logger.info("amendments: %d new, %d changed, %d stale", stats["node.created"], stats["node.updated"],
                 len(stale))
     if not args.dry_run:
-        props = [node_props(r, leg) for r in changed]
+        props = [node_props(r, leg, voted.get(r["id"])) for r in changed]
         for i in range(0, len(props), args.batch):
             with driver.session() as s:
                 s.execute_write(lambda tx, c=props[i:i + args.batch]: tx.run(WRITE_NODES, rows=c).consume())
@@ -694,7 +747,6 @@ def load_graph(rows: list[dict], args, stats: Counter, unlinked: dict) -> None:
                 s.execute_write(lambda tx, c=stale[i:i + args.batch]: tx.run(
                     "UNWIND $ids AS i MATCH (a:Amendment {id: i}) DETACH DELETE a", ids=c).consume())
 
-    rels = derive_relations(rows, gi, stats, unlinked)
     only_ids = {r["id"] for r in rows} if args.limit is not None else None
     apply_relations(driver, leg, rels, args.batch, args.dry_run, only_ids, stats)
     driver.close()
@@ -937,9 +989,11 @@ def report(stats: Counter, unlinked: dict, examples: int) -> None:
             return f"{stats[a]}/{stats[b]} ({100 * stats[a] / stats[b]:.1f}%)" if stats[b] else "0/0"
         acts = stats[f"{ch}.act_linked"] + stats[f"{ch}.act_missing"]
         stats[f"{ch}.act_total"] = acts
-        logger.info("%s: act %s, signatures %s, floor votes on amendments %s, sub-amendments %s",
+        logger.info("%s: act %s, signatures %s (%d by name), floor votes on amendments %s, sub-amendments %s, "
+                    "outcome from floor votes %d",
                     ch, pct(f"{ch}.act_linked", f"{ch}.act_total"), pct(f"{ch}.sign_linked", f"{ch}.sign_total"),
-                    pct(f"{ch}.vote_linked", f"{ch}.vote_total"), pct(f"{ch}.sub_linked", f"{ch}.sub_total"))
+                    stats[f"{ch}.sign_by_name"], pct(f"{ch}.vote_linked", f"{ch}.vote_total"),
+                    pct(f"{ch}.sub_linked", f"{ch}.sub_total"), stats[f"{ch}.outcome_from_vote"])
     for key, items in sorted(unlinked.items()):
         reasons = Counter(re.sub(r"\(.*\)|'.*'|\d[\d.\-/a-z]*", "…", i[2]) for i in items)
         logger.info("unlinked %s: %d, reasons %s", key, len(items), reasons.most_common(4))
