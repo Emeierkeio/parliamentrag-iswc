@@ -246,7 +246,13 @@ async def search_parliament(
     Uses hybrid search (full-text + semantic), so Italian queries work best
     ("salario minimo", "intelligenza artificiale", company names, people).
 
-    Acts that became law carry `law`, with the Normattiva link to cite.
+    Acts that became law carry `law`, with the Normattiva link to cite. A
+    query naming a law ("legge 180/2026", "L. 180/2026", "legge n. 180 del
+    2026") returns the bills that became that law first. Every result has
+    `url`, its official page; motions carry `act_subject`, what they are
+    about. For a speaker of the Mixed Group, `group` is the component they
+    belonged to that day (`parliamentary_group` says Misto): attribute the
+    position to the component, never to the Mixed Group as a whole.
 
     Args:
         query: Search query, ideally in Italian.
@@ -449,7 +455,8 @@ async def list_sessions(
     Args:
         limit: Sittings per page (1-30).
         before: ISO date cursor for pagination (returns sittings before it).
-        search: Optional keyword filter on debate titles/recaps.
+        search: Optional keyword filter on debate titles/recaps; a law
+            ("legge 180/2026") finds the sittings that debated or voted it.
         from_date / to_date: Optional YYYY-MM-DD bounds.
         chamber: "both" (default), "camera" or "senato".
     """
@@ -491,7 +498,11 @@ async def get_session_votes(session_id: str) -> dict:
     """List every roll-call vote of one sitting: subject, description, kind
     (final vote flag), outcome and aggregate counts. A vote on a motion or
     resolution carries `act_subject`, what the act is about, taken from the
-    official debate title: prefer it to the act code in the subject.
+    official debate title: prefer it to the act code in the subject. A
+    Senate vote's `description` names the bill it was on. `kind`
+    "quorum_check" marks a Senate check of the quorum (Verifica del numero
+    legale): it counts who is present and decides nothing, so it has no
+    outcome; never report it as a rejected vote.
 
     Args:
         session_id: Session id from list_sessions (e.g. "leg19_sed700").
@@ -511,6 +522,7 @@ async def get_session_votes(session_id: str) -> dict:
                 "against": v.get("against"),
                 "abstained": v.get("abstained"),
                 "act_subject": v.get("act_subject"),
+                **({"kind": v["kind"]} if v.get("kind") else {}),
             }
             for v in votes
         ],
@@ -551,6 +563,7 @@ async def get_vote_details(
         "id": d["id"],
         "subject": d.get("subject"),
         "description": d.get("description"),
+        **({"kind": d["kind"]} if d.get("kind") else {}),
         "outcome": d.get("outcome"),
         "secret_vote": d.get("secret_vote"),
         "in_favor": d.get("in_favor"),
@@ -589,11 +602,13 @@ async def get_vote_details(
 
 @mcp.tool(annotations=_ro("Get the voted amendment/article text"))
 async def get_voted_text(vote_id: str) -> dict:
-    """Exact full text of the amendment or article a roll call voted on,
-    extracted from the official sitting minutes (Allegato A).
+    """Exact full text of the amendment or article a roll call voted on:
+    from the official sitting minutes (Allegato A) for the Chamber, from the
+    amendment text published by the Senate for Senate amendments.
 
-    Only works for votes on amendments and articles; returns a clear message
-    for other vote kinds (final votes, agenda items, procedural votes).
+    Only works for votes on amendments and articles (Senate articles have no
+    text here); returns a clear message for other vote kinds (final votes,
+    agenda items, procedural votes).
 
     Args:
         vote_id: Vote id from get_session_votes.
@@ -614,8 +629,10 @@ async def get_voted_text(vote_id: str) -> dict:
 @mcp.tool(annotations=_ro("Get debate details"))
 async def get_debate(debate_id: str) -> dict:
     """Detail of one debate: AI recap (Italian), discussed acts (with `law`
-    when an act became law), phases and the list of speakers with their
-    groups and speech counts.
+    when an act became law, and the joint bills absorbed into them), phases,
+    the speakers with their party (for the Mixed Group, the component they
+    belonged to on that day) and speech counts, and the roll calls on the
+    discussed acts (get_session_votes lists every vote of the sitting).
 
     Args:
         debate_id: Debate id from list_sessions.
@@ -626,6 +643,7 @@ async def get_debate(debate_id: str) -> dict:
         "id": d["id"],
         "title": d.get("title"),
         "recap": _trim(d.get("recap"), 1200),
+        **({"includes_continuations": d["continuation_ids"]} if d.get("continuation_ids") else {}),
         "acts": d.get("acts"),
         **_law_note(d.get("acts")),
         "phases": [
@@ -636,6 +654,7 @@ async def get_debate(debate_id: str) -> dict:
             {
                 "name": f"{s['first_name']} {s['last_name']}",
                 "party": s.get("party"),
+                **({"parliamentary_group": s["parliamentary_group"]} if s.get("parliamentary_group") else {}),
                 "role": s.get("speaking_role"),
                 "government_member": s.get("is_government_member"),
                 "speech_count": s.get("speech_count"),
@@ -648,6 +667,7 @@ async def get_debate(debate_id: str) -> dict:
                 "subject": v.get("subject"),
                 "description": v.get("description"),
                 "outcome": v.get("outcome"),
+                "final_vote": v.get("final_vote"),
             }
             for v in d.get("votes", [])
         ],
@@ -705,6 +725,17 @@ async def get_vote_hemicycle(vote_id: str, format: str = "png"):
             ),
             "official_totals": totals,
             "outcome": d.get("outcome"),
+            "chamber": d.get("chamber"),
+        }
+    if d.get("kind") == "quorum_check":
+        return {
+            "available": False,
+            "kind": "quorum_check",
+            "reason": (
+                "Quorum check (Verifica del numero legale): it counts the senators "
+                "present and decides nothing, so there are no votes to draw."
+            ),
+            "present": d.get("present"),
             "chamber": d.get("chamber"),
         }
     participants = d.get("participants", [])
