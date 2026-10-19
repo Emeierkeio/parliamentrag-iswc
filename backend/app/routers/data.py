@@ -34,6 +34,7 @@ STATS_LABELS = {
     "individual_votes": "IndividualVote",
     "eurovoc_concepts": "EurovocConcept",
     "chunks": "Chunk",
+    "amendments": "Amendment",
 }
 _STATS_TTL_S = 3600
 _stats_cache: dict = {"at": 0.0, "data": None}
@@ -71,6 +72,11 @@ CHAMBER_GROUPED_COUNTS = {
         "MATCH (:Person)-[r:MEMBER_OF_GROUP]->(g:ParliamentaryGroup) "
         "WHERE coalesce(r.affiliation, false) = false "
         "RETURN coalesce(r.chamber, 'camera') AS chamber, count(DISTINCT g) AS c"
+    ),
+    # build/load_emendamenti.py: every Amendment has its chamber
+    "amendments": (
+        "MATCH (a:Amendment) WHERE coalesce(a.legislature, 19) = 19 "
+        "RETURN a.chamber AS chamber, count(a) AS c"
     ),
 }
 

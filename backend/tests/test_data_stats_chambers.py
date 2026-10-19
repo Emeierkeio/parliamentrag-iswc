@@ -14,6 +14,7 @@ GROUPED = {
     "MATCH (s:Session)-[:HAS_VOTE]": [{"chamber": "camera", "c": 300}, {"chamber": "senato", "c": 90}],
     "MATCH (p:Person)": [{"chamber": "camera", "c": 430}, {"chamber": "senato", "c": 210}],
     "MATCH (:Person)": [{"chamber": "camera", "c": 12}],
+    "MATCH (a:Amendment)": [{"chamber": "camera", "c": 150}, {"chamber": "senato", "c": 60}],
 }
 
 
@@ -53,6 +54,7 @@ def test_grouped_counts_and_missing_chamber():
     assert out["senato"]["votes"] == 90
     assert out["senato"]["people"] == 210
     assert out["senato"]["groups"] == 0
+    assert out["camera"]["amendments"] == 150 and out["senato"]["amendments"] == 60
 
 
 def test_people_in_office_former_and_life_senators():
