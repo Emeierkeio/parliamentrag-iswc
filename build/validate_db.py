@@ -365,6 +365,39 @@ class Validator:
             self.check(r["bad_role"] == 0 and r["not_person"] == 0, f"{ch}: REPORTED_BY con ruolo nel vocabolario",
                        f"{r['bad_role']} ruoli fuori vocabolario, {r['not_person']} verso nodi non Person")
 
+    def check_laws(self):
+        print("\n[20] Leggi (decisione D5, build/ingest_laws.py)")
+        rows = self.q("""
+            MATCH (l:Law)
+            RETURN count(l) AS tot,
+                   sum(CASE WHEN NOT ()-[:BECAME_LAW]->(l) THEN 1 ELSE 0 END) AS loose,
+                   sum(CASE WHEN l.date IS NULL OR l.date >= date('2100-01-01') THEN 1 ELSE 0 END) AS bad_date,
+                   sum(CASE WHEN l.eli IS NULL THEN 1 ELSE 0 END) AS no_eli
+        """)
+        r = rows[0]
+        self.check(r["tot"] > 0, f"leggi ({r['tot']})", "nessuna", warn_only=True)
+        self.check(r["loose"] == 0, "leggi con il processo legislativo", f"{r['loose']} senza BECAME_LAW")
+        self.check(r["bad_date"] == 0, "leggi con una data vera", f"{r['bad_date']} senza data o con 2100-01-01")
+        self.check(r["no_eli"] == 0, "leggi trovate su Normattiva", f"{r['no_eli']} senza ELI", warn_only=True)
+        # «appr. def. non pubbl»: approved, waiting for promulgation and the
+        # Gazzetta (constitutional laws also for the referendum): no law yet.
+        rows = self.q("""
+            MATCH (a:Bill {chamber: 'senato', legislature: 19})
+            WHERE a.status IN ['appr. definit. Legge', 'appr. def. non pubbl']
+            RETURN a.status AS st, count(a) AS tot,
+                   sum(CASE WHEN NOT (a)-[:PART_OF]->(:LegislativeProcess)-[:BECAME_LAW]->(:Law)
+                       THEN 1 ELSE 0 END) AS no_law,
+                   [x IN collect(CASE WHEN NOT (a)-[:PART_OF]->(:LegislativeProcess)-[:BECAME_LAW]->(:Law)
+                       THEN 'S.' + a.number END) WHERE x IS NOT NULL][..10] AS sample
+            ORDER BY st
+        """)
+        for r in rows:
+            if r["st"] == "appr. definit. Legge":
+                self.check(r["no_law"] == 0, f"ddl «appr. definit. Legge» con la legge ({r['tot']})",
+                           f"{r['no_law']} senza BECAME_LAW: {r['sample']}")
+            else:
+                print(f"  [info] ddl «{r['st']}»: {r['tot']}, senza legge {r['no_law']} {r['sample']}")
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""
@@ -580,6 +613,7 @@ class Validator:
         self.check_act_identity()
         self.check_agenda_orders()
         self.check_reporters()
+        self.check_laws()
 
         rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
         if rows[0]["c"]:

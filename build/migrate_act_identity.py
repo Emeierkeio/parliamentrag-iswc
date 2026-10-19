@@ -162,8 +162,9 @@ def main() -> int:
                   "FOR (lp:LegislativeProcess) REQUIRE lp.id IS UNIQUE").consume()
             for i in range(0, len(rows), 2000):
                 s.run(WRITE, rows=rows[i:i + 2000], leg=leg).consume()
-            # A reading moved to another process leaves the old one empty.
-            s.run("MATCH (lp:LegislativeProcess) WHERE NOT ()-[:PART_OF]->(lp) DELETE lp").consume()
+            # A reading moved to another process leaves the old one empty; its
+            # BECAME_LAW, if any, is rewritten by ingest_laws.py on the new one.
+            s.run("MATCH (lp:LegislativeProcess) WHERE NOT ()-[:PART_OF]->(lp) DETACH DELETE lp").consume()
         if args.versions:
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
             from ingest_acts_camera import Sparql

@@ -376,6 +376,12 @@ run "ODG Camera → progetto di legge ed esito" env NEO4J_PASSWORD="$NEO4J_PASS_
 run "Relatori Camera" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/ingest_reporters.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera \
 	|| warn "relatori Camera: SPARQL non raggiungibile, restano quelli del giro precedente"
+# Leggi pubblicate collegate al processo (decisione D5): numero e data dalle
+# fasi del Senato appena scaricate, Gazzetta dallo SPARQL della Camera (una
+# query), ELI e codice redazionale da Normattiva solo per le leggi nuove.
+run "Leggi" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/ingest_laws.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
+	|| warn "leggi: ingest fallito, riprende al prossimo giro"
 
 # ── Emendamenti XIX → grafo e archivio ───────────────────────────────────────
 # Spento di default: si accende con EMENDAMENTI_GRAFO=1 (ambiente o .env).
