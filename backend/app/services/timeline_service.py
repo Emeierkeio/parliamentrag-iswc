@@ -16,8 +16,8 @@ Implementation notes:
 """
 from __future__ import annotations
 
+import asyncio
 import re
-import urllib.parse
 
 from ..models.timeline import (
     ActInfo,
@@ -128,6 +128,11 @@ def _bill_label(act: dict) -> str | None:
     if title and subject and subject.lower() not in title.lower():
         return f"{title}: {subject}"
     return title or subject or None
+
+
+def _main_act(acts: list[dict]) -> dict | None:
+    acts = [a for a in acts or [] if a and (a.get("number") or a.get("title"))]
+    return sorted(acts, key=lambda a: (_absorbed(a), str(a.get("number") or "")))[0] if acts else None
 
 
 def senate_vote_description(acts: list[dict]) -> str | None:
@@ -393,12 +398,12 @@ async def get_debate_detail(
         MATCH (d:Debate)-[:HAS_PHASE]->(p:Phase)
         WHERE d.id IN $debate_ids
         OPTIONAL MATCH (p)-[:CONTAINS_SPEECH]->(sp:Speech)
-        WITH p, count(DISTINCT sp) AS speechCount
+        WITH d, p, count(DISTINCT sp) AS speechCount
         RETURN p.id AS id,
                p.title AS title,
                p.phaseType AS phase_type,
                speechCount
-        ORDER BY p.id
+        ORDER BY coalesce(d.order, 0), p.id
         """,
         params,
     )
@@ -599,6 +604,7 @@ def _vote_info(r: dict) -> VoteInfo:
     if not description and r.get("chamber") == "senato" and not is_quorum_check(r.get("subject")):
         description = senate_vote_description(r.get("acts") or [])
     fields = _vote_kind_fields(r.get("subject"), r.get("outcome"), description, r.get("present"))
+    main = _main_act(r.get("acts") or [])
     return VoteInfo(
         id=r["id"],
         number=r["number"] or 0,
@@ -611,6 +617,8 @@ def _vote_info(r: dict) -> VoteInfo:
         abstained=r["abstained"],
         act_subject=r["act_subject"],
         kind=fields["kind"],
+        act_number=(main or {}).get("number"),
+        act_title=((main or {}).get("title") or "").strip() or None,
     )
 
 
@@ -734,6 +742,7 @@ async def get_vote_detail(
                s.date AS session_date,
                s.number AS session_number,
                s.legislature AS legislature,
+               s.record_url AS record_url,
                coalesce(s.chamber, 'camera') AS chamber
         """,
         {"vote_id": vote_id},
@@ -817,7 +826,7 @@ async def get_vote_detail(
         if url and "aic.camera.it" in url and not title:
             url = None
         act_refs.append(VoteActRef(
-            title=title, subject=a.get("subject"), number=a.get("number"), status=a.get("status"),
+            uri=a["uri"], title=title, subject=a.get("subject"), number=a.get("number"), status=a.get("status"),
             url=url, text_url=act_text_url(a["uri"], a.get("text_pdf"), a.get("version_url")),
             law=laws.get(a["uri"]),
         ))
@@ -832,7 +841,8 @@ async def get_vote_detail(
         description = senate_vote_description(raw_acts)
     kind_fields = _vote_kind_fields(meta["subject"], meta["outcome"], description, meta["present"])
 
-    annex_url = _annex_url(meta["chamber"], meta["legislature"], meta["session_number"])
+    annex_url = (_annex_url(meta["chamber"], meta["legislature"], meta["session_number"])
+                 or https(meta.get("record_url")))
 
     return VoteDetailResponse(
         id=meta["id"],
@@ -891,7 +901,7 @@ def _fetch_annex_paragraphs(url: str) -> list[tuple[str | None, str]]:
     if url in _ANNEX_CACHE:
         return _ANNEX_CACHE[url]
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 ParliamentRAG"})
-    with urllib.request.urlopen(req, timeout=25) as resp:
+    with urllib.request.urlopen(req, timeout=12) as resp:
         raw = resp.read().decode("utf-8", errors="ignore")
     start = raw.find('id="allegato_a"')
     if start > 0:
@@ -987,21 +997,32 @@ def _extract_article(paras: list[tuple[str | None, str]], num: str, act: str | N
     return seg or None
 
 
-# A bill's articles and amendments are printed in Allegato A of the sitting
-# where its examination starts; the votes can come sittings later (C.2822-B:
-# articles in sitting 720, article 8 voted in 722).
-_ANNEX_LOOKBACK = 6
+# A bill's articles are printed in Allegato A of the sitting where their
+# examination starts; the votes can come sittings later (C.2822-B: articles
+# in sitting 720, article 8 voted in 722). The candidates are the earlier
+# sittings that discussed the bill, newest first. camera.it answers Railway
+# in seconds per page: the walk has a time budget.
+_ANNEX_CANDIDATES = 4
+_ANNEX_BUDGET_S = 30.0
 _ACT_CODE = re.compile(r"\b(?:PDL|DDL|A\.?C\.?)\s*(\d+(?:-\d+)*(?:-[A-Z]+)?)\b", re.IGNORECASE)
 
 
 def _annex_block(meta: dict, kind: str, num: str) -> tuple[list[str], str] | None:
     """(paragraphs, url) of the voted block in the sitting's Allegato A or,
-    for articles of a known bill, in one of the sittings before it."""
+    for an article of a named bill, in an earlier sitting that discussed it
+    (meta["earlier_sittings"])."""
+    import time
+
     code = _ACT_CODE.search(f"{meta.get('subject') or ''} {meta.get('description') or ''}")
     act = code.group(1).upper() if code else None
-    number = meta.get("session_number") or 0
-    lookback = _ANNEX_LOOKBACK if (kind == "article" and act) else 0
-    for n in range(int(number), max(int(number) - lookback, 0) - 1, -1):
+    number = int(meta.get("session_number") or 0)
+    sittings = [(number, None)]
+    if kind == "article" and act:
+        sittings += [(int(n), act) for n in (meta.get("earlier_sittings") or [])[:_ANNEX_CANDIDATES]]
+    deadline = time.monotonic() + _ANNEX_BUDGET_S
+    for n, bill in sittings:
+        if time.monotonic() > deadline:
+            break
         url = _annex_url(meta["chamber"], meta["legislature"], n)
         if not url:
             return None
@@ -1009,11 +1030,7 @@ def _annex_block(meta: dict, kind: str, num: str) -> tuple[list[str], str] | Non
             paras = _fetch_annex_paragraphs(url)
         except Exception:
             continue
-        if kind == "amendment":
-            seg = _extract_amendment(paras, num)
-        else:
-            # Earlier sittings may print other bills' articles: match the bill.
-            seg = _extract_article(paras, num, None if n == number else act)
+        seg = _extract_amendment(paras, num) if kind == "amendment" else _extract_article(paras, num, bill)
         if seg:
             return seg, url
     return None
@@ -1060,7 +1077,12 @@ async def get_vote_act_text(
                s.number AS session_number,
                s.legislature AS legislature,
                coalesce(s.chamber, 'camera') AS chamber,
-               [(v)-[:ON_AMENDMENT]->(e:Amendment) | e.id] AS amendments
+               [(v)-[:ON_AMENDMENT]->(e:Amendment) | e.id] AS amendments,
+               COLLECT { MATCH (v)-[:ON_ACT]->()-[:NEXT_READING*0..3]->(a:ParliamentaryAct)
+                               <-[:DISCUSSES]-(:Debate)<-[:HAS_DEBATE]-(e:Session)
+                         WHERE e.chamber = s.chamber AND e.legislature = s.legislature
+                           AND e.number < s.number
+                         RETURN DISTINCT e.number AS n ORDER BY n DESC LIMIT 6 } AS earlier_sittings
         """,
         {"vote_id": vote_id},
     )
@@ -1068,10 +1090,11 @@ async def get_vote_act_text(
         return None
     target = _annex_target(meta["subject"], meta["description"])
     if target and _annex_url(meta["chamber"], meta["legislature"], meta["session_number"]):
-        found = _annex_block(meta, *target)
+        # Blocking downloads: off the event loop, or every request waits.
+        found = await asyncio.to_thread(_annex_block, meta, *target)
         if found:
             return VoteActTextResponse(paragraphs=found[0], source_url=found[1])
-    archived = _archived_amendment(meta.get("amendments") or [])
+    archived = await asyncio.to_thread(_archived_amendment, meta.get("amendments") or [])
     if archived and archived[1]:
         return VoteActTextResponse(paragraphs=archived[0], source_url=https(archived[1]))
     return None

@@ -1,8 +1,8 @@
 """Public pages of Chamber and Senate records, built from graph ids.
 
 Camera speech anchors and bill pages were checked against camera.it on
-2026-10-02, the Senate bill page (scheda-ddl?did=<idFase>) on 2026-10-14
-(Stenografo, apps/api/app/links.py).
+2026-10-02, the Senate bill pages on 2026-10-14 (Stenografo,
+apps/api/app/links.py) and 2026-10-19 (Scranno).
 """
 from __future__ import annotations
 
@@ -30,7 +30,10 @@ def camera_speech_url(record_id: str | None) -> str | None:
     return f"https://www.camera.it/leg{leg}/410?idSeduta={sed}&tipo=stenografico#sed{sed}.stenografico.{rest}"
 
 
-SENATE_BILL_PAGE = "https://www.senato.it/leggi-e-documenti/disegni-di-legge/scheda-ddl?did={id}"
+# The bill card on senato.it, by the id of dati.senato.it/ddl/<id> (checked
+# by Scranno on 2026-10-19: 59875 is S.1786). Senate acts in the graph are
+# all of the XIX legislature.
+SENATE_BILL_PAGE = "https://www.senato.it/leg/19/BGT/Schede/Ddliter/{id}.htm"
 # The "Testi ed emendamenti" tab of the bill page lists every text of the
 # reading (download_esiti_senato.py reads the same tab).
 SENATE_BILL_TEXTS = "https://www.senato.it/leggi-e-documenti/disegni-di-legge/scheda-ddl?tab=testiEmendamenti&did={id}"

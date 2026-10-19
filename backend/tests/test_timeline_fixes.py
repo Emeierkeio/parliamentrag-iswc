@@ -12,8 +12,8 @@ ACT_610 = {"number": "610", "title": "Legge quadro", "type": "Disegno di legge",
 
 
 def test_senate_bill_links():
-    assert act_public_url("http://dati.senato.it/ddl/60149") == (
-        "https://www.senato.it/leggi-e-documenti/disegni-di-legge/scheda-ddl?did=60149")
+    assert act_public_url("http://dati.senato.it/ddl/59875") == (
+        "https://www.senato.it/leg/19/BGT/Schede/Ddliter/59875.htm")
     assert act_text_url("http://dati.senato.it/ddl/60149") == (
         "https://www.senato.it/leggi-e-documenti/disegni-di-legge/scheda-ddl?tab=testiEmendamenti&did=60149")
 
@@ -58,6 +58,7 @@ def test_senate_vote_gets_a_description():
     vote = ts._vote_info(row)
     assert vote.outcome == "approved" and vote.kind is None
     assert "1903" in vote.description
+    assert vote.act_number == "1903" and vote.act_title.startswith("Delega al Governo")
 
 
 def test_debate_titles():
@@ -161,3 +162,20 @@ def test_debate_votes_are_filtered_by_the_discussed_acts():
 
     detail = asyncio.run(ts.get_debate_detail(Graph(), "d", "it"))
     assert detail.votes == []
+
+
+def test_article_candidates_include_earlier_sittings(monkeypatch):
+    fetched = []
+
+    def fake_fetch(url):
+        fetched.append(url)
+        if "idSeduta=0720" in url:
+            return [("ac.2822-B.art_8", "Art. 8."), (None, "1. Testo")]
+        return [(None, "altro")]
+
+    monkeypatch.setattr(ts, "_fetch_annex_paragraphs", fake_fetch)
+    meta = {"subject": "Votazione Articolo 8", "description": "PDL 2822-B - ARTICOLO 8",
+            "session_number": 722, "legislature": 19, "chamber": "camera", "earlier_sittings": [721, 720, 718]}
+    seg, url = ts._annex_block(meta, "article", "8")
+    assert seg == ["Art. 8.", "1. Testo"] and "idSeduta=0720" in url
+    assert len(fetched) == 3

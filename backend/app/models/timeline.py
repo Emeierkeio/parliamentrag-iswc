@@ -71,6 +71,9 @@ class VoteInfo(BaseModel):
     # "quorum_check" for a Senate check of the quorum (Verifica del numero
     # legale): not a vote on anything, outcome is None. None otherwise.
     kind: Optional[str] = None
+    # The main act voted on (the bill, not the joint ones absorbed into it)
+    act_number: Optional[str] = None
+    act_title: Optional[str] = None
 
 
 class VoteParticipant(BaseModel):
@@ -116,6 +119,7 @@ class LawRef(BaseModel):
 class VoteActRef(BaseModel):
     """Act a roll call voted on (bill, ODG, motion), with its public page."""
 
+    uri: Optional[str] = None  # graph and open-data URI (dati.camera.it / dati.senato.it)
     title: Optional[str] = None
     # Motions and resolutions: what the act is about, from official text
     # (build/act_subjects.py); the title is only their code.
@@ -145,8 +149,9 @@ class VoteDetailResponse(BaseModel):
     description: Optional[str] = None
     kind: Optional[str] = None  # see VoteInfo.kind
     acts: list[VoteActRef] = []
-    # Allegato A del resoconto di seduta: testi integrali di emendamenti,
-    # articoli e odg votati in quella seduta (documenti.camera.it).
+    # Camera: Allegato A of the sitting record (full texts of the amendments,
+    # articles and agenda orders voted). Senate: the sitting record, which
+    # carries its annexes.
     session_annex_url: Optional[str] = None
     # Scrutinio segreto: le espressioni individuali non sono pubbliche
     # (restano noti solo gli astenuti).

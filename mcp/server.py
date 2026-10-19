@@ -522,6 +522,8 @@ async def get_session_votes(session_id: str) -> dict:
                 "against": v.get("against"),
                 "abstained": v.get("abstained"),
                 "act_subject": v.get("act_subject"),
+                **({"act_number": v["act_number"], "act_title": v.get("act_title")}
+                   if v.get("act_number") else {}),
                 **({"kind": v["kind"]} if v.get("kind") else {}),
             }
             for v in votes
