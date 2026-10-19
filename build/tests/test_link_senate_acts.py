@@ -236,3 +236,12 @@ def test_title_bills():
     assert title_bills("Discussione congiunta e approvazione dei disegni di legge: (1200) Rendiconto "
                        "e (1201) Assestamento") == ["1200", "1201"]
     assert title_bills("(3-02671) - Question time su ...") == []
+
+
+def test_title_control_acts():
+    from link_senate_acts import title_control_acts
+    assert title_control_acts("(3-02671) - Question time su tariffe autostradali") == ["3/02671"]
+    assert title_control_acts("(3-00011 e 3-00042, con carattere d'urgenza, ex articolo 151 del "
+                              "Regolamento) - Problematiche carceri italiane") == ["3/00011", "3/00042"]
+    assert title_control_acts("Svolgimento di interpellanze: (2-00012) - Su ...") == ["2/00012"]
+    assert title_control_acts("Discussione del disegno di legge: (1199) Proroga") == []

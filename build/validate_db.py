@@ -210,6 +210,20 @@ class Validator:
         self.check(r["with_url"] > 0, f"atti di controllo con il link a senato.it ({r['with_url']})",
                    "nessuno: build/download_senate_aic.py --source senato", warn_only=True)
 
+        # Question time and urgent questions: the debate title carries the
+        # act number, "(3-02671) - ..." (build/link_senate_acts.py).
+        rows = self.q("""
+            MATCH (:Session {chamber: 'senato'})-[:HAS_DEBATE]->(d:Debate)
+            WHERE d.title =~ '(?s).*\\\\b[1-4]-[0-9]{5}\\\\b.*'
+            RETURN count(d) AS tot,
+                   sum(CASE WHEN EXISTS { (d)-[:DISCUSSES]->(a:ParliamentaryAct)
+                                          WHERE a.uri STARTS WITH 'senato:' } THEN 1 ELSE 0 END) AS linked
+        """)
+        r = rows[0]
+        self.check(r["linked"] == r["tot"],
+                   f"dibattiti del Senato su interrogazioni collegati all'atto {r['linked']}/{r['tot']}",
+                   f"{r['tot'] - r['linked']} senza DISCUSSES (build/link_senate_acts.py)")
+
         # Decision D3 (15/10/2026): every Senate bill says who presented it.
         rows = self.q("""
             MATCH (a:ParliamentaryAct {chamber: 'senato', type: 'Disegno di legge'})

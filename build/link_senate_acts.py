@@ -14,7 +14,9 @@ transcripts in data/senate_xml (Akoma Ntoso); no network.
                                                         the authority score
   (:Debate)-[:DISCUSSES]->(act)                         from the section's <block name="Atto">,
                                                         or the title where there is no
-                                                        Akoma Ntoso (HTML-only sittings)
+                                                        Akoma Ntoso (HTML-only sittings);
+                                                        questions and interpellations
+                                                        from the title, "(3-02671)"
   (:Vote)-[:ON_ACT]->(act)                              bill, motion (1/...) or resolution (6/...)
 
 The official link is osr:Votazione -> osr:oggetto -> osr:relativoA
@@ -307,6 +309,8 @@ RESOLUTION_LABEL_RE = re.compile(r"\bprop(?:osta)?\.?\s*(?:di)?\s*ris", re.IGNOR
 SITTING_IN_DESCR_RE = re.compile(r"seduta n\.\s*(\d+)")
 AMENDMENT_TAIL_RE = re.compile(r"\b(?:Em{1,2}\.|ODG\b)")
 TITLE_BILL_RE = re.compile(r"\((\d+(?:-[A-Z]+)?)\)")
+# "(3-02671) - Question time su ...", "(3-00011 e 3-00042, con carattere d'urgenza ...)"
+CONTROL_ACT_IN_TITLE_RE = re.compile(r"\b([1-4])-(\d{5})\b")
 
 
 def motion_of(label: str) -> Optional[str]:
@@ -363,6 +367,12 @@ def title_bills(title: str) -> list[str]:
     if "disegn" not in title.lower():
         return []
     found = TITLE_BILL_RE.findall(title) + BILL_NUMBER_RE.findall(title)
+    return list(dict.fromkeys(found))
+
+
+def title_control_acts(title: str) -> list[str]:
+    """Numbers of the motions, interpellations and questions a debate title names ("3/02671")."""
+    found = [f"{kind}/{n}" for kind, n in CONTROL_ACT_IN_TITLE_RE.findall(title or "")]
     return list(dict.fromkeys(found))
 
 
@@ -562,9 +572,10 @@ def main() -> int:
             "MATCH (x:Session {chamber: 'senato', legislature: $leg}) RETURN x.number AS n, x.id AS id",
             leg=args.legislature)}
         prefix = f"senato:{args.legislature}:aic:"
-        motions = {r["number"] for r in s.run(
-            "MATCH (a:ParliamentaryAct) WHERE a.uri STARTS WITH $p + '1/' RETURN a.number AS number",
-            p=prefix)}
+        control_acts = {r["number"] for r in s.run(
+            "MATCH (a:ParliamentaryAct) WHERE a.uri STARTS WITH $p AND a.number =~ '[1-4]/.*' "
+            "RETURN a.number AS number", p=prefix)}
+        motions = {n for n in control_acts if n.startswith("1/")}
         resolutions = resolutions_by_sitting(r.data() for r in s.run("""
             MATCH (a:ParliamentaryAct) WHERE a.uri STARTS WITH $p + '6/'
             OPTIONAL MATCH (p:Person)-[:PRIMARY_SIGNATORY]->(a)
@@ -603,6 +614,13 @@ def main() -> int:
                         discusses.append({"debate": debate_id, "uri": index[b]})
                     else:
                         stats["debate_bill_unknown"] += 1
+                for n in title_control_acts(title):
+                    if n in control_acts:
+                        discusses.append({"debate": debate_id, "uri": prefix + n})
+                        stats["debates_linked_control_act"] += 1
+                    else:
+                        stats["debate_control_act_unknown"] += 1
+                        logger.debug("control act not in the graph: %s (%s)", n, debate_id)
 
             # The whole sitting goes through the alignment, so that a vote
             # with an official link still anchors the ones around it.
