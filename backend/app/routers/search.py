@@ -144,6 +144,11 @@ RETURN uri AS id, head(collect(DISTINCT m.name)) AS component
 def _attribute_misto(client: Neo4jClient, results: List[Dict[str, Any]]) -> None:
     """Replace "MISTO" in `group` with the component, keeping the group in
     `parliamentary_group` and the component in `misto_component`."""
+    for r in results:
+        # ACT_GROUP falls back to MISTO for an act without a known author
+        # (Senate bills listed for a law): no author, no group.
+        if r["type"] == "act" and not (r.get("last_name") or r.get("first_name")):
+            r["group"] = None
     misto = [r for r in results if "misto" in (r.get("group") or "").lower()]
     if not misto:
         return
@@ -400,7 +405,9 @@ def _search_acts_text(
     # Browse mode with a group-only filter leaves no act-level clause
     where_clause = " AND ".join(where_clauses) if where_clauses else "true"
 
-    author_filters = ["(d IS NOT NULL OR gov IS NOT NULL)"]
+    # Senate bills have no PRIMARY_SIGNATORY: the readings of a named law
+    # are listed whoever signed them.
+    author_filters = ["true" if uris is not None else "(d IS NOT NULL OR gov IS NOT NULL)"]
     if deputy_id:
         author_filters.append(ACT_BY_PERSON)
         params["deputy_id"] = deputy_id

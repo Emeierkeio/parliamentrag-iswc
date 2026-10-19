@@ -140,12 +140,14 @@ def test_search_attributes_misto_to_the_component():
         {"type": "speech", "id": "leg19_sed723_tit00040.int00010_chunk_0", "group": "MISTO", "chamber": "camera"},
         {"type": "speech", "id": "leg19_sed723_tit00040.int00020_chunk_0", "group": "MISTO", "chamber": "camera"},
         {"type": "speech", "id": "x", "group": "MOVIMENTO 5 STELLE", "chamber": "camera"},
+        {"type": "act", "id": "http://dati.senato.it/ddl/60317", "group": "MISTO", "last_name": ""},
     ]
     graph = _Graph([{"id": "leg19_sed723_tit00040.int00010_chunk_0", "component": "Minoranze Linguistiche"}])
     search_router._attribute_misto(graph, results)
     assert results[0]["group"] == "Minoranze Linguistiche" and results[0]["parliamentary_group"] == "MISTO"
     assert results[1]["group"] == ts.MISTO_WITHOUT_COMPONENT
     assert "parliamentary_group" not in results[2]
+    assert results[3]["group"] is None
     search_router._add_links(results)
     assert results[0]["url"].startswith("https://www.camera.it/leg19/410?idSeduta=0723")
 
