@@ -90,12 +90,27 @@ class VotePartyBreakdown(BaseModel):
     secret: int = 0
 
 
+class LawRef(BaseModel):
+    """Law an act became, as published in the Gazzetta Ufficiale."""
+
+    kind: str  # "legge" | "legge_costituzionale"
+    number: int
+    date: Optional[str] = None  # ISO date of the law
+    label: str  # "Legge n. 180 del 9 ottobre 2026"
+    eli: Optional[str] = None  # Normattiva ELI URL, original text
+    normattiva_url: Optional[str] = None  # Normattiva URN resolver, text in force
+    gu_number: Optional[int] = None
+    gu_date: Optional[str] = None
+    title: Optional[str] = None
+
+
 class VoteActRef(BaseModel):
     """Act a roll call voted on (bill, ODG, motion), with its public page."""
 
     title: Optional[str] = None
     url: Optional[str] = None  # camera.it / aic.camera.it page (iter, dossier)
     text_url: Optional[str] = None  # direct PDF of the full text (stampato)
+    law: Optional[LawRef] = None
 
 
 class VoteActTextResponse(BaseModel):
@@ -140,6 +155,7 @@ class ActInfo(BaseModel):
     id: str
     title: Optional[str] = None
     type: Optional[str] = None
+    law: Optional[LawRef] = None
 
 
 class SpeakerInfo(BaseModel):

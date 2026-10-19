@@ -214,6 +214,20 @@ _VERIFY_NEXT = (
 )
 
 
+_LAW_NOTE = (
+    "An act that became law carries `law`: `label` (e.g. \"Legge n. 180 del 9 "
+    "ottobre 2026\"), Gazzetta Ufficiale number and date, and `eli`, the "
+    "Normattiva page of the law. When you say an act became law, give the "
+    "label and cite the `eli` link. Without `law`, the data do not link the "
+    "act to a published law."
+)
+
+
+def _law_note(acts: Optional[list]) -> dict:
+    """Return {"law_note": ...} when one of the acts became law, else {}."""
+    return {"law_note": _LAW_NOTE} if any((a or {}).get("law") for a in acts or []) else {}
+
+
 @mcp.tool(annotations=_ro("Search parliamentary records"))
 async def search_parliament(
     query: str,
@@ -231,6 +245,8 @@ async def search_parliament(
 
     Uses hybrid search (full-text + semantic), so Italian queries work best
     ("salario minimo", "intelligenza artificiale", company names, people).
+
+    Acts that became law carry `law`, with the Normattiva link to cite.
 
     Args:
         query: Search query, ideally in Italian.
@@ -262,7 +278,7 @@ async def search_parliament(
             for k, v in r.items()
             if v not in (None, "") and k not in ("embedding",)
         })
-    return {"total": data.get("total"), "results": results, "next_step": _VERIFY_NEXT}
+    return {"total": data.get("total"), "results": results, **_law_note(results), "next_step": _VERIFY_NEXT}
 
 
 _MARK = {"pass": "✅", "fail": "❌", "na": "➖"}
@@ -508,7 +524,8 @@ async def get_vote_details(
     """Full detail of one roll-call vote: aggregates, per-group breakdown,
     linked act (with official page and full-text PDF), secret-ballot flag,
     and optionally the individual votes (~400 deputies or ~200 senators;
-    `chamber` says which house voted).
+    `chamber` says which house voted). A linked act that became law carries
+    `law`, with the Normattiva link to cite.
 
     After presenting these results, call get_vote_hemicycle with the same
     vote_id to show the seating chart as well (unless the ballot was secret).
@@ -537,6 +554,7 @@ async def get_vote_details(
         "present": d.get("present"),
         "majority": d.get("majority"),
         "acts": d.get("acts"),
+        **_law_note(d.get("acts")),
         "breakdown_by_group": d.get("breakdown"),
         "counts_consistency": _counts_consistency(d),
     }
@@ -590,8 +608,9 @@ async def get_voted_text(vote_id: str) -> dict:
 
 @mcp.tool(annotations=_ro("Get debate details"))
 async def get_debate(debate_id: str) -> dict:
-    """Detail of one debate: AI recap (Italian), discussed acts, phases and
-    the list of speakers with their groups and speech counts.
+    """Detail of one debate: AI recap (Italian), discussed acts (with `law`
+    when an act became law), phases and the list of speakers with their
+    groups and speech counts.
 
     Args:
         debate_id: Debate id from list_sessions.
@@ -603,6 +622,7 @@ async def get_debate(debate_id: str) -> dict:
         "title": d.get("title"),
         "recap": _trim(d.get("recap"), 1200),
         "acts": d.get("acts"),
+        **_law_note(d.get("acts")),
         "phases": [
             {"title": p["title"], "speech_count": p["speech_count"]}
             for p in d.get("phases", [])

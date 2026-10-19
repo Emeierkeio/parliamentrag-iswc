@@ -38,6 +38,7 @@ from ..models.timeline import (
     VotePartyBreakdown,
 )
 from .archive import fill_rows
+from .laws import laws_for_acts
 from .neo4j_client import Neo4jClient
 
 
@@ -384,21 +385,23 @@ async def get_debate_detail(
     act_rows = neo4j.query(
         """
         MATCH (d:Debate {id: $debate_id})-[:DISCUSSES]->(a:ParliamentaryAct)
-        RETURN a.id AS id,
+        RETURN coalesce(a.id, a.uri) AS id,
                a.title AS title,
                a.type AS type
         ORDER BY a.title
         """,
         {"debate_id": debate_id},
     )
+    laws = laws_for_acts(neo4j, (r["id"] for r in act_rows))
     acts = [
         ActInfo(
             id=r["id"],
             title=r["title"],
             type=r["type"],
+            law=laws.get(r["id"]),
         )
         for r in act_rows
-        if r["id"]  # skip null entries from OPTIONAL MATCH
+        if r["id"]
     ]
 
     return DebateDetailResponse(
@@ -570,6 +573,7 @@ async def get_vote_detail(
     # dc:title in the dataset also lack a page on aic.camera.it (the link
     # would give "FILE NON TROVATO"): no title, no link.
     act_refs = []
+    laws = laws_for_acts(neo4j, (a.get("uri") for a in meta["acts"]))
     for a in meta["acts"]:
         if not a.get("uri"):
             continue
@@ -577,7 +581,9 @@ async def get_vote_detail(
         url = _act_public_url(a["uri"])
         if url and "aic.camera.it" in url and not title:
             url = None
-        act_refs.append(VoteActRef(title=title, url=url, text_url=a.get("text_pdf")))
+        act_refs.append(VoteActRef(
+            title=title, url=url, text_url=a.get("text_pdf"), law=laws.get(a["uri"]),
+        ))
     acts = sorted(
         act_refs,
         key=lambda a: 0 if a.url and "aic.camera.it" in a.url else 1,
@@ -591,7 +597,7 @@ async def get_vote_detail(
         chamber=meta["chamber"],
         subject=meta["subject"],
         description=meta["description"],
-        acts=[a for a in acts if a.title or a.url or a.text_url],
+        acts=[a for a in acts if a.title or a.url or a.text_url or a.law],
         session_annex_url=annex_url,
         secret_vote=bool(meta["secret_vote"]),
         outcome=meta["outcome"],

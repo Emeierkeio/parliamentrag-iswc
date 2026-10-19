@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query, HTTPException
 
 from ..services.archive import fill_rows, get_archive
 from ..services.retrieval.scope import CURRENT_LEGISLATURE, loaded_chambers
+from ..services.laws import laws_for_acts
 from ..services.neo4j_client import Neo4jClient
 from ..config import get_settings
 from ..key_pool import make_client
@@ -716,6 +717,11 @@ async def search_results(
         start = (page - 1) * page_size
         end = start + page_size
         page_results = unique_results[start:end]
+        laws = laws_for_acts(client, (r["id"] for r in page_results if r["type"] == "act"))
+        for r in page_results:
+            if r["type"] == "act":
+                law = laws.get(r["id"])
+                r["law"] = law.model_dump() if law else None
 
         logger.info(f"Search '{q}' (type={search_type}, doc_type={doc_type}, page={page}): {total} total, returning {len(page_results)}")
         return {
@@ -929,6 +935,7 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
 
             if not record:
                 raise HTTPException(status_code=404, detail=f"Act {act_uri} not found")
+            law = laws_for_acts(client, [act_uri]).get(act_uri)
 
             # v1: 'YYYYMMDD' → reformat; v2: toString(date) is already ISO
             date_raw = record["date_raw"] or ""
@@ -951,6 +958,7 @@ async def get_act_detail(act_uri: str) -> Dict[str, Any]:
                 "first_name": record["first_name"] or "",
                 "last_name": record["last_name"] or "",
                 "group": record["group_name"] or "MISTO",
+                "law": law.model_dump() if law else None,
             }
 
     except HTTPException:
