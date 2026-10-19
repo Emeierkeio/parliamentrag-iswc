@@ -462,6 +462,32 @@ class Validator:
             else:
                 print(f"  [info] ddl «{r['st']}»: {r['tot']}, senza legge {r['no_law']} {r['sample']}")
 
+    def check_motion_subjects(self):
+        print("\n[21] Mozioni e risoluzioni votate: dibattito e oggetto "
+              "(build/link_camera_motions.py, link_senate_acts.py, act_subjects.py)")
+        rows = self.q("""
+            MATCH (a:ParliamentaryAct)
+            WHERE a.kind IN ['mozione', 'risoluzione_assemblea'] AND EXISTS { (:Vote)-[:ON_ACT]->(a) }
+            RETURN a.chamber AS chamber, count(a) AS tot,
+                   sum(CASE WHEN EXISTS { (:Debate)-[:DISCUSSES]->(a) } THEN 1 ELSE 0 END) AS discussed,
+                   sum(CASE WHEN a.subject IS NOT NULL THEN 1 ELSE 0 END) AS with_subject,
+                   sum(CASE WHEN a.subject_source IN ['debate', 'vote'] THEN 1 ELSE 0 END) AS official
+            ORDER BY chamber
+        """)
+        for r in rows:
+            self.check(r["with_subject"] == r["tot"],
+                       f"{r['chamber']}: mozioni e risoluzioni votate con subject {r['with_subject']}/{r['tot']}",
+                       f"{r['tot'] - r['with_subject']} senza (build/act_subjects.py)")
+            # 19/10/2026: 99% of the voted acts take the subject from a title or
+            # a label; the rest are motions whose debate title has no subject
+            # ("Discussione e approvazione delle mozioni nn. 39 e 44").
+            self.check(r["official"] >= 0.9 * r["tot"],
+                       f"{r['chamber']}: subject da titolo o etichetta {r['official']}/{r['tot']}",
+                       "sotto il 90%: titoli dei dibattiti non riconosciuti?", warn_only=True)
+            self.check(r["discussed"] >= 0.9 * r["tot"],
+                       f"{r['chamber']}: mozioni e risoluzioni votate con DISCUSSES {r['discussed']}/{r['tot']}",
+                       "sotto il 90%: resoconti mancanti o voti non collocati", warn_only=True)
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""
@@ -678,6 +704,7 @@ class Validator:
         self.check_agenda_orders()
         self.check_reporters()
         self.check_laws()
+        self.check_motion_subjects()
 
         rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
         if rows[0]["c"]:

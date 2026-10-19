@@ -364,6 +364,12 @@ run "Famiglia e kind degli atti" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 run "Mozioni e risoluzioni Camera → dibattito" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/link_camera_motions.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
 	|| warn "mozioni e risoluzioni Camera: collegamento fallito, riprende al prossimo giro"
+# Oggetto leggibile di mozioni e risoluzioni (a.subject) dal titolo del
+# dibattito o dall'etichetta del voto, mai da testo generato. Dopo i
+# collegamenti di entrambe le camere; scrive solo i valori cambiati.
+run "Oggetto di mozioni e risoluzioni" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/act_subjects.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
+	|| warn "oggetto di mozioni e risoluzioni: calcolo fallito, riprende al prossimo giro"
 # Letture dello stesso progetto di legge in un LegislativeProcess (decisione
 # D2), dalle fasi del Senato che update_senato.sh ha appena scaricato, e
 # versioni del testo della Camera (-A, -A/R, testi unificati): una query SPARQL.
