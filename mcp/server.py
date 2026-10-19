@@ -1493,6 +1493,13 @@ def _render_hemicycle_svg(
     return "\n".join(parts)
 
 
+def _client_ip(forwarded: str, peer: str) -> str:
+    """Last X-Forwarded-For entry, the one Railway's edge appended; the
+    entries on its left are written by the caller."""
+    entries = [e.strip() for e in forwarded.split(",") if e.strip()]
+    return entries[-1] if entries else peer
+
+
 def _install_rate_limit() -> None:
     """Rate limit per IP sull'endpoint remoto.
 
@@ -1516,8 +1523,8 @@ def _install_rate_limit() -> None:
         async def dispatch(self, request, call_next):
             if request.url.path in ("/", "/icon.png", "/favicon.ico"):
                 return await call_next(request)
-            fwd = request.headers.get("x-forwarded-for", "")
-            ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
+            ip = _client_ip(request.headers.get("x-forwarded-for", ""),
+                            request.client.host if request.client else "?")
             now = time.monotonic()
             q = hits.setdefault(ip, deque())
             while q and now - q[0] > WINDOW:

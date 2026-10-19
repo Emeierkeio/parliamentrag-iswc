@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
  */
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const PROXY_SECRET = process.env.PROXY_SHARED_SECRET || "";
 
 async function proxyRequest(request: NextRequest) {
   const path = request.nextUrl.pathname.replace(/^\/api/, "/api");
@@ -24,6 +25,8 @@ async function proxyRequest(request: NextRequest) {
   if (apiKey) headers["X-API-Key"] = apiKey;
   const clientIp = request.headers.get("X-Forwarded-For");
   if (clientIp) headers["X-Forwarded-For"] = clientIp;
+  // Lets the backend skip this proxy's own hop when it picks the client IP
+  if (PROXY_SECRET) headers["X-Proxy-Secret"] = PROXY_SECRET;
 
   const fetchOptions: RequestInit = {
     method: request.method,

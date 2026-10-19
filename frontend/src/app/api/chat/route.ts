@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
  */
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const PROXY_SECRET = process.env.PROXY_SHARED_SECRET || "";
 
 export async function POST(request: NextRequest) {
   const { query, task_id } = await request.json();
@@ -33,6 +34,8 @@ export async function POST(request: NextRequest) {
         "Accept": "text/event-stream",
         "Accept-Language": acceptLanguage,
         ...(clientIp ? { "X-Forwarded-For": clientIp } : {}),
+        // Lets the backend skip this proxy's own hop when it picks the client IP
+        ...(PROXY_SECRET ? { "X-Proxy-Secret": PROXY_SECRET } : {}),
       },
       body: JSON.stringify({ query, task_id }),
     });

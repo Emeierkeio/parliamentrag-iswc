@@ -22,6 +22,7 @@ this is abuse protection, not accounting.
 """
 from __future__ import annotations
 
+import hmac
 import os
 import threading
 import time
@@ -58,15 +59,39 @@ _hits: dict[str, list[float]] = {}
 _quota_exhausted_at: Optional[float] = None
 
 
+# Shared with the site's proxy (frontend/src/app/api/*/route.ts), which sends
+# it as X-Proxy-Secret. The proxy reaches this service through Railway's
+# public edge, so the edge appends the proxy's own egress address last.
+PROXY_SHARED_SECRET = os.environ.get("PROXY_SHARED_SECRET", "")
+
+
 def client_ip(request) -> str:
-    """Real client IP: first X-Forwarded-For entry (Railway / Next proxy),
-    falling back to the direct peer address."""
+    """Client IP for the per-IP limits.
+
+    Railway's edge appends the address it accepted the connection from to
+    X-Forwarded-For; every entry on its left was written by the caller and
+    can be anything. A direct caller is therefore the last entry. A request
+    relayed by the site's proxy carries the proxy's egress address last and
+    the visitor, as the proxy's own edge saw it, just before: one hop is
+    skipped when the request proves it comes from the proxy.
+
+    Without PROXY_SHARED_SECRET configured the proxy cannot prove itself and
+    the hop is always skipped, as before the secret existed: the site keeps
+    working, and a direct caller can still choose the second-last entry.
+    """
     if request is None:
         return "unknown"
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    entries = [e.strip() for e in (request.headers.get("x-forwarded-for") or "").split(",") if e.strip()]
+    if not entries:
+        return request.client.host if request.client else "unknown"
+    if PROXY_SHARED_SECRET:
+        presented = request.headers.get("x-proxy-secret") or ""
+        via_proxy = hmac.compare_digest(presented.encode(), PROXY_SHARED_SECRET.encode())
+    else:
+        via_proxy = True
+    if via_proxy and len(entries) >= 2:
+        return entries[-2]
+    return entries[-1]
 
 
 def check_and_register(ip: str) -> tuple[bool, str, int]:
