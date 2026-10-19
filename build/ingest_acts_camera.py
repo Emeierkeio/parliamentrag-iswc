@@ -53,6 +53,10 @@ logger = logging.getLogger("ingest_acts_camera")
 SPARQL_CAMERA = "https://dati.camera.it/sparql"
 SPARQL_EUROVOC = "https://publications.europa.eu/webapi/rdf/sparql"
 EUROVOC_CACHE = Path("data/eurovoc.csv")
+# Concepts the Camera's provisional automatic classification assigns with
+# another meaning: 7816 "regioni della Repubblica ceca" stands for
+# "Repubblica" there (build/repair_vote_readings.py).
+EUROVOC_MISMAPPED = {"http://eurovoc.europa.eu/7816"}
 VIRTUOSO_CAP = 10000
 META_KEY = "acts_camera_modified"
 
@@ -311,7 +315,8 @@ def to_row(uri: str, d: dict, labels: dict[str, str]) -> Optional[dict]:
         "source_page": d.get("page"),
         "recipient": next((r for r in d["recipients"] if r), None),
         "modified": d.get("mod"),
-        "concepts": [{"uri": u, "label": labels[u]} for u in sorted(set(d["eurovoc"])) if labels.get(u)],
+        "concepts": [{"uri": u, "label": labels[u]} for u in sorted(set(d["eurovoc"]))
+                     if labels.get(u) and u not in EUROVOC_MISMAPPED],
         "primary": sorted({s["persona"] for s in d["signers"] if s["role"] == "primo" and not s["government"]}),
         "co": sorted({s["persona"] for s in d["signers"] if s["role"] == "altro" and not s["government"]}),
         "presenters": sorted({(s["persona"], s.get("office") or "") for s in d["signers"] if s["government"]}),
