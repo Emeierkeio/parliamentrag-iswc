@@ -80,6 +80,7 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `download_emendamenti_senato.py` | Senate readings (SPARQL) and committee amendment pages |
 | `download_esiti_senato.py` | Senate amendment outcomes and the floor texts missing from Akoma Ntoso |
 | `parse_emendamenti.py` | both chambers' amendments in one JSONL (`downloads/emendamenti/`) |
+| `load_emendamenti.py` | amendments into the graph (`Amendment`, `AMENDS`, `SIGNED_AMENDMENT`, `ON_AMENDMENT`, `SUB_OF`, `RESUBMITS`) and their text and embeddings into the archive |
 | `link_agenda_orders.py` | agenda orders `REFERS_TO` their bill (from the number), outcome from votes (Camera) and from the G amendments (Senato) |
 | `link_camera_motions.py` | Chamber motions and resolutions voted in the House `DISCUSSES`-linked to the debate where the vote falls and to the one it resumes (Senate ones: `link_senate_acts.py`) |
 | `link_resumed_debates.py` | resumed debates ("Si riprende la discussione ... n. 1660-A", the bare "Si riprende la discussione.", Senate "Ripresa della discussione ... (274)") and debates on a split bill ("A.C. 1532-ter-A") `DISCUSSES`-linked to their bills, from the title or the agenda item they resume |
@@ -95,8 +96,13 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 - Amendments (XIX): `make update-data` downloads only bills that are new or
   whose status changed in the last 14 days, pulls the Senate Akoma Ntoso bulk
   data ([SenatoDellaRepubblica/AkomaNtosoBulkData](https://github.com/SenatoDellaRepubblica/AkomaNtosoBulkData))
-  and rebuilds the JSONL. The files stay in `downloads/` (not versioned) and
-  are not loaded into the graph yet. senato.it is behind an AWS WAF challenge,
+  and rebuilds the JSONL. The files stay in `downloads/` (not versioned).
+  With `EMENDAMENTI_GRAFO=1` in `.env` (on in production since 2026-10-19)
+  `load_emendamenti.py` loads them into the graph and, with `ARCHIVE_URL`,
+  their text into the archive. Outcomes: the Camera publishes only approved,
+  inadmissible or withdrawn ones, so a floor amendment voted by roll call takes
+  the vote's result (`outcome_source: floor_vote`); the others stay without
+  one. senato.it is behind an AWS WAF challenge,
   solved with Playwright (`playwright install chromium`), and blocks the IP
   for a few hours if requests come too fast: keep at least 2 s between them.
 - Tests: `pytest build/tests/` (integration tests need a running Neo4j and
