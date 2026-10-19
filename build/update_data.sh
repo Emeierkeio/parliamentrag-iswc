@@ -429,6 +429,17 @@ else
 		|| warn "citabilità: classificazione incompleta, riprende al prossimo giro"
 fi
 
+# ── Controllo del grafo ──────────────────────────────────────────────────────
+# Dopo tutti i passi che scrivono: un FAIL non ferma il giro, ma il passo esce
+# ✗ nel report del mattino con le righe FAIL qui sotto.
+validate() {
+	env NEO4J_PASSWORD="$NEO4J_PASS_VAL" "$PY" build/validate_db.py --neo4j-uri "$DEMO_NEO4J"
+}
+if ! run "Controllo del grafo (validate_db)" validate; then
+	sed 's/\x1b\[[0-9;]*m//g' "$LOG" | grep '^ *\[FAIL\]' | cut -c1-200 \
+		| while IFS= read -r line; do warn "validate_db:$line"; done
+fi
+
 # ── Fotografia del grafo per il sito del centro ──────────────────────────────
 # www.parliamentrag.it non ha backend: numeri e data del grafo stanno in
 # src/data/site-data.json del repo del centro, che Railway pubblica a ogni push
