@@ -45,7 +45,7 @@ class CoalitionLogic:
         coalitions = self.config.load_config().get("coalitions", {})
 
         # Government members are always in maggioranza
-        if group_name.upper() in ("GOVERNO",):
+        if group_name.strip().upper() == "GOVERNO":
             self._coalition_cache[group_name] = "maggioranza"
             return "maggioranza"
         # Normalize for comparison: uppercase + collapse whitespace around hyphens

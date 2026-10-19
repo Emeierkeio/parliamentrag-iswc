@@ -53,3 +53,21 @@ def test_government_is_majority_in_both_coalition_functions():
     for name in ("GOVERNO", "Governo"):
         assert get_config().get_coalition(name) == "maggioranza"
         assert CoalitionLogic().get_coalition(name) == "maggioranza"
+
+
+SENATE_GROUPS = [
+    "Fratelli d'Italia", "Partito Democratico - Italia Democratica e Progressista",
+    "Lega Salvini Premier - Partito Sardo d'Azione", "MoVimento 5 Stelle",
+    "Forza Italia - Berlusconi Presidente - PPE", "Italia Viva - Casa Riformista", AUTONOMIE,
+]
+
+
+def test_both_coalition_functions_agree_on_every_group():
+    from app.services.authority.coalition_logic import CoalitionLogic
+    config = get_config()
+    names = [g for groups in config.coalitions.values() for g in groups]
+    names += SENATE_GROUPS + ["GOVERNO", " Governo ", "Gruppo inesistente"]
+    logic = CoalitionLogic()
+    for name in names:
+        assert config.get_coalition(name) == logic.get_coalition(name), name
+    assert {config.get_coalition(n) for n in names} == {"maggioranza", "opposizione", "misto"}
