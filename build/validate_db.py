@@ -505,6 +505,34 @@ class Validator:
                        f"{r['chamber']}: mozioni e risoluzioni votate con DISCUSSES {r['discussed']}/{r['tot']}",
                        "sotto il 90%: resoconti mancanti o voti non collocati", warn_only=True)
 
+    def check_resumed_debates(self):
+        print("\n[22] Dibattiti ripresi collegati al progetto di legge (build/link_resumed_debates.py)")
+        # A title that names the bill ("Si riprende la discussione del disegno
+        # di legge n. 1660-A", "Ripresa della discussione del disegno di legge:
+        # (274)"): 0 without DISCUSSES on 19/10/2026. A warning only, since a
+        # bill presented the same night may reach the graph a run later.
+        rows = self.q("""
+            MATCH (s:Session)-[:HAS_DEBATE]->(d:Debate)
+            WITH coalesce(s.chamber, 'camera') AS ch, d
+            WHERE (ch = 'camera' AND d.title =~ '(?is)^\\\\s*(si riprende|sul(la richiesta di)? rinvio in commissione|rinvio in commissione).*(disegn[oi] di legge|propost[ae] di legge|testo unificato).*\\\\bnn?\\\\.\\\\s*[0-9].*')
+               OR (ch = 'senato' AND d.title =~ '(?is)^\\\\s*(ripresa della |seguito della )?discussione.*disegn[oi] di legge.*(\\\\bnn?\\\\.\\\\s*[0-9]|\\\\([0-9]+(-[0-9]+)*(-[A-Z])?\\\\)).*')
+            RETURN ch, count(d) AS tot,
+                   sum(CASE WHEN NOT (d)-[:DISCUSSES]->() THEN 1 ELSE 0 END) AS loose,
+                   [x IN collect(CASE WHEN NOT (d)-[:DISCUSSES]->() THEN d.id END) WHERE x IS NOT NULL][..5] AS sample
+            ORDER BY ch
+        """)
+        for r in rows:
+            self.check(r["loose"] == 0,
+                       f"{r['ch']}: dibattiti col numero del progetto nel titolo collegati {r['tot'] - r['loose']}/{r['tot']}",
+                       f"{r['loose']} senza DISCUSSES: {r['sample']}", warn_only=True)
+        rows = self.q("""
+            MATCH (s:Session {chamber: 'camera'})-[:HAS_DEBATE]->(d:Debate)
+            WHERE d.title =~ '(?i)^\\\\s*si riprende la discussione[\\\\s.]*(\\\\(.*)?$'
+            RETURN count(d) AS tot, sum(CASE WHEN (d)-[:DISCUSSES]->() THEN 1 ELSE 0 END) AS linked
+        """)
+        print(f"  [info] camera: «Si riprende la discussione.» con DISCUSSES {rows[0]['linked']}/{rows[0]['tot']} "
+              "(senza: ripresa di mozioni, comunicazioni, documenti)")
+
     def check_amendments(self, n_amendments: int):
         print(f"\n[14] Emendamenti ({n_amendments} nodi, build/load_emendamenti.py)")
         rows = self.q("""
@@ -722,6 +750,7 @@ class Validator:
         self.check_reporters()
         self.check_laws()
         self.check_motion_subjects()
+        self.check_resumed_debates()
 
         rows = self.q("MATCH (a:Amendment) RETURN count(a) AS c")
         if rows[0]["c"]:

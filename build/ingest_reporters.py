@@ -597,8 +597,9 @@ def resoconto_records(speeches: list[dict], other: dict[tuple[str, str], set[str
 
     other_numbers holds (bill number, person) of the same edges. The debates
     on a bill split off from another (C. 1532-ter, C. 643-bis) discuss the
-    parent bill in the graph (19/10/2026): a speaker who reports on a split
-    of the debated bill is no rapporteur of the parent, and gets nothing.
+    parent bill too (the split one from link_resumed_debates.py): a speaker
+    who reports on a split of the debated bill is no rapporteur of the
+    parent, and gets nothing.
     """
     other_numbers = other_numbers or set()
     out = []

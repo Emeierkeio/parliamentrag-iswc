@@ -364,6 +364,13 @@ run "Famiglia e kind degli atti" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 run "Mozioni e risoluzioni Camera → dibattito" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/link_camera_motions.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
 	|| warn "mozioni e risoluzioni Camera: collegamento fallito, riprende al prossimo giro"
+# Dibattiti ripresi («Si riprende la discussione del disegno di legge n. …»,
+# «Si riprende la discussione.») e stralci («A.C. 1532-ter-A») → il progetto di
+# legge, dal titolo o dal punto all'ordine del giorno che riprendono. Senza
+# rete, idempotente, prima dei relatori dai resoconti che leggono DISCUSSES.
+run "Dibattiti ripresi Camera → progetto di legge" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/link_resumed_debates.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera \
+	|| warn "dibattiti ripresi Camera: collegamento fallito, riprende al prossimo giro"
 # Oggetto leggibile di mozioni e risoluzioni (a.subject) dal titolo del
 # dibattito o dall'etichetta del voto, mai da testo generato. Dopo i
 # collegamenti di entrambe le camere; scrive solo i valori cambiati.

@@ -86,6 +86,10 @@ step "atti di controllo e indirizzo → grafo" env NEO4J_PASSWORD="$PASS_VAL" \
 senato_step "disegni di legge e firmatari" "$PY" build/download_senate_ddl.py --legislature 19
 step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/link_senate_acts.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --legislature 19
+# Le riprese e i dibattiti sui ddl che l'Akoma Ntoso non collega: il numero
+# dal titolo («n. 180-1041», «(274)»). Senza rete, prima dei relatori.
+step "dibattiti ripresi → ddl" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/link_resumed_debates.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato
 # Relatori dei ddl (una query a dati.senato.it, copia in data/).
 senato_step "relatori dei ddl (dati.senato.it)" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/ingest_reporters.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato
