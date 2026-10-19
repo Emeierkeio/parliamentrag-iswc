@@ -242,3 +242,96 @@ def test_debate_title_keeps_a_complete_heading():
     )
     assert debate_title(None, "Nome") == "Nome"
     assert debate_title(_heading("  <eol/> "), "Nome") == "Nome"
+
+
+# ---------------------------------------------------------------------------
+# Speaker named by the by attribute vs the surname printed in <from>
+# ---------------------------------------------------------------------------
+
+_PEOPLE = (
+    '<an:TLCPerson id="p25407" href="http://dati.senato.it/osr/Persona/25407" showAs="Salvini"/>'
+    '<an:TLCPerson id="p36443" href="http://dati.senato.it/osr/Persona/36443" showAs="Salvitti"/>'
+    '<an:TLCPerson id="p36399" href="http://dati.senato.it/osr/Persona/36399" showAs="FLORIDIA"/>'
+    '<an:TLCPerson id="p32634" href="http://dati.senato.it/osr/Persona/32634" showAs="FLORIDIA"/>'
+    '<an:TLCPerson id="p32" href="http://dati.senato.it/osr/Persona/32" showAs="Alberti"/>'
+)
+_TEXT = ("Signora Presidente, esprimo parere contrario su tutti gli emendamenti tranne "
+         "che sul 4.100, su cui il parere è favorevole.")
+
+
+def _with_speech(tmp_path, by, printed):
+    speech = (f'<an:speech by="#{by}" as="#d1e136a1074"><an:from refersTo="#{by}">{printed}'
+              f'</an:from><an:p>. {_TEXT}</an:p></an:speech>')
+
+    def edit(xml):
+        xml = xml.replace("</an:references>", _PEOPLE + "</an:references>", 1)
+        return xml.replace("</an:debateSection>\n    </an:debateBody>",
+                           speech + "</an:debateSection>\n    </an:debateBody>")
+    parsed = _variant(tmp_path, edit)
+    return next(s for s in parsed["speeches"] if s["text"] == _TEXT)
+
+
+def test_printed_surname_wins_over_a_by_naming_someone_else(tmp_path):
+    """Seduta 413 of the XIX: by="#p25407" (Salvini) on "SALVITTI, relatore"."""
+    sp = _with_speech(tmp_path, "p25407", "SALVITTI, <an:i>relatore</an:i>")
+    assert sp["deputatoId"] == "http://dati.senato.it/senatore/36443"
+    assert sp["cognome_nome"] == "Salvitti"
+    assert "_p25407_" in sp["id"]
+
+
+def test_printed_surname_without_a_person_in_the_document_drops_the_id(tmp_path):
+    """Seduta 56 of the XIX: by="#p29570" (Savino) on "ALBANO", absent from TLCPerson here."""
+    sp = _with_speech(tmp_path, "p25407", "ALBANO, <an:i>sottosegretario di Stato</an:i>")
+    assert sp["deputatoId"] is None
+    assert sp["cognome_nome"] == "ALBANO"
+
+
+def test_homonym_given_name_keeps_the_by_attribute(tmp_path):
+    sp = _with_speech(tmp_path, "p32634", "FLORIDIA Barbara")
+    assert sp["deputatoId"] == "http://dati.senato.it/senatore/32634"
+
+
+def test_double_surname_matches_its_first_word(tmp_path):
+    sp = _with_speech(tmp_path, "p32", "ALBERTI CASELLATI, <an:i>ministro per le riforme</an:i>")
+    assert sp["deputatoId"] == "http://dati.senato.it/senatore/32"
+
+
+def test_vice_president_in_the_chair_keeps_his_id(tmp_path):
+    """XVIII seduta 402: by="#p422" (Calderoli) printed "PRESIDENTE."."""
+    sp = _with_speech(tmp_path, "p32", "PRESIDENTE.")
+    assert sp["deputatoId"] == "http://dati.senato.it/senatore/32"
+
+
+def test_matching_speaker_is_unchanged(tmp_path):
+    sp = _with_speech(tmp_path, "p25407", "SALVINI, <an:i>ministro delle infrastrutture</an:i>")
+    assert sp["deputatoId"] == "http://dati.senato.it/senatore/25407"
+    assert sp["cognome_nome"] == "Salvini"
+
+
+@pytest.mark.parametrize("a,b,same", [
+    ("SALVITTI", "Salvini", False),
+    ("SALVI", "Salvini", False),
+    ("ALBANO", "SAVINO", False),
+    ("MARSILIO", "VERDUCCI", False),
+    ("ALBERTI CASELLATI", "Alberti", True),
+    ("GARNERO SANTANCHÈ", "Garnero Santanche'", True),
+    ("D'ERAMO", "D'Eramo", True),
+    ("DE PRIAMO", "De Priamo", True),
+    ("DE PRIAMO", "PRIAMO", False),
+])
+def test_same_surname(a, b, same):
+    from senate_parser import same_surname
+    assert same_surname(a, b) is same
+
+
+@pytest.mark.parametrize("printed,surname", [
+    ("SALVITTI, relatore", "SALVITTI"),
+    ("FLORIDIA Aurora", "FLORIDIA"),
+    ("BORGHI Claudio,", "BORGHI"),
+    ("ALBERTI CASELLATI,", "ALBERTI CASELLATI"),
+    ("D'ERAMO, sottosegretario", "D'ERAMO"),
+    ("", ""),
+])
+def test_printed_surname(printed, surname):
+    from senate_parser import printed_surname
+    assert printed_surname(printed) == surname

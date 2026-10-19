@@ -11,6 +11,7 @@ AKN namespace: http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD03
 """
 
 import re
+import unicodedata
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -79,6 +80,35 @@ def debate_title(heading_elem: Optional[ET.Element], section_name: str) -> str:
     ):
         return section_name
     return heading
+
+
+def _name_words(text: str) -> list[str]:
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(c for c in folded if not unicodedata.combining(c))
+    return re.findall(r"[A-Z]+", folded.upper().replace("'", ""))
+
+
+def printed_surname(from_text: str) -> str:
+    """Surname printed before the speech: the upper-case words of <from>
+    up to the role ("SALVITTI, relatore" -> "SALVITTI"), without the given
+    name that tells homonyms apart ("FLORIDIA Aurora" -> "FLORIDIA")."""
+    words = []
+    for word in from_text.split(",")[0].split():
+        if not word.isupper():
+            break
+        words.append(word)
+    return " ".join(words)
+
+
+def same_surname(a: str, b: str) -> bool:
+    """True when one name's words start the other's: TLCPerson showAs keeps
+    only the first word of some double surnames ("Alberti" for "ALBERTI
+    CASELLATI")."""
+    wa, wb = _name_words(a), _name_words(b)
+    if not wa or not wb:
+        return False
+    n = min(len(wa), len(wb))
+    return wa[:n] == wb[:n]
 
 
 class SenateStenograficoParser:
@@ -393,29 +423,22 @@ class SenateStenograficoParser:
         by_attr = speech_elem.get("by", "")
         person_id = by_attr.lstrip("#")  # "p32600"
 
+        from_elem = speech_elem.find(f"{{{AKN_NS}}}from")
+        from_text = from_elem.text.strip() if from_elem is not None and from_elem.text else ""
+        if from_text.upper() == "PRESIDENTE":
+            return None
+
+        speaker_id, cognome_nome = self._resolve_speaker(person_id, from_text, person_lookup)
+
         # Numeric senator ID: "p32600" -> "32600".
         # deputatoId must match the Deputy node id loaded from senatori_xix.csv,
         # which is the full dati.senato.it URI.
-        numeric_id = person_id.lstrip("p") if person_id.startswith("p") else person_id
+        numeric_id = speaker_id[1:] if speaker_id.startswith("p") else speaker_id
         deputato_id = (
             f"http://dati.senato.it/senatore/{numeric_id}"
             if numeric_id and numeric_id.isdigit()
             else None
         )
-
-        # Speaker display name from person_lookup or from <an:from> element
-        cognome_nome = person_lookup.get(person_id, "")
-        if not cognome_nome:
-            from_elem = speech_elem.find(f"{{{AKN_NS}}}from")
-            if from_elem is not None and from_elem.text:
-                cognome_nome = from_elem.text.strip()
-
-        # Also check the <an:from> text for PRESIDENTE filtering as fallback
-        from_elem = speech_elem.find(f"{{{AKN_NS}}}from")
-        if from_elem is not None and from_elem.text:
-            from_text = from_elem.text.strip().upper()
-            if from_text == "PRESIDENTE":
-                return None
 
         # Collect text from all <an:p> elements
         text_parts: list[str] = []
@@ -434,7 +457,9 @@ class SenateStenograficoParser:
         if len(clean_text) < self.config.min_speech_length:
             return None
 
-        # Completed with the position inside the debate by the caller.
+        # Completed with the position inside the debate by the caller. Built
+        # from the raw by attribute even when _resolve_speaker corrected it,
+        # so that the ids of speeches already in the graph do not change.
         speech_id = f"{session_id}_{person_id}_deb{debate_order}"
 
         # Office held while speaking (TLCRole showAs, e.g. "Ministro della
@@ -456,6 +481,28 @@ class SenateStenograficoParser:
             "parentId": None,   # will be assigned by caller
             "order": 0,         # will be assigned by caller
         }
+
+    @staticmethod
+    def _resolve_speaker(person_id: str, from_text: str, person_lookup: dict) -> tuple[str, str]:
+        """Return (TLCPerson id, display name) of the speaker the record prints.
+
+        The by attribute sometimes names someone else than the surname printed
+        before the speech: seduta 413 of the XIX gives by="#p25407" (Salvini)
+        to "SALVITTI, relatore", seduta 56 by="#p29570" (Savino) to "ALBANO".
+        The printed surname wins: the TLCPerson of the same document whose
+        showAs matches it, when exactly one does; otherwise no id, and the
+        speech is linked by surname downstream (relink_senate_speeches).
+        """
+        shown = person_lookup.get(person_id, "")
+        printed = printed_surname(from_text)
+        # "PRESIDENTE." (with the full stop) is a vice-president in the chair,
+        # by his own id: not a surname to check.
+        if not printed or printed.rstrip(".") == "PRESIDENTE" or not shown or same_surname(printed, shown):
+            return person_id, shown or from_text
+        matches = [pid for pid, name in person_lookup.items() if same_surname(printed, name)]
+        if len(matches) == 1:
+            return matches[0], person_lookup[matches[0]]
+        return "", printed
 
     def _extract_element_text(self, element) -> str:
         """Extract all text from an XML element (text + tail of all descendants)."""

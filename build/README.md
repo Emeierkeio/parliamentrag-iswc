@@ -68,6 +68,7 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `db_builder.py` | all Neo4j writes (nodes, relationships, indexes) |
 | `sparql_ingester.py`, `senate_sparql_ingester.py` | aggregate + individual votes, committee roles |
 | `ingest_atti_parlamentari.py` | parliamentary acts + EuroVoc subjects |
+| `repair_senate_speakers.py` | Senate speeches whose AKN `by` names someone else than the printed surname: re-parse, move `SPOKEN_BY`, drop the old speaker's summary (dry run by default) |
 | `repair_bills.py` | presentation dates and topic embeddings (from the title) for Chamber bills |
 | `ingest_misto_componenti.py` | political components of the Gruppo Misto |
 | `classify_chunk_citability.py` | LLM batch classification of chunk citability |
