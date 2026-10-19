@@ -90,6 +90,14 @@ step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="
 # dal titolo («n. 180-1041», «(274)»). Senza rete, prima dei relatori.
 step "dibattiti ripresi → ddl" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/link_resumed_debates.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato
+# Documenti (Doc.): quattro query a dati.senato.it (copia in data/), poi i
+# nodi, i dibattiti dal titolo e dall'Akoma Ntoso, i voti da osr:relativoA.
+# Dopo i collegamenti dei ddl: un voto su un ddl resta al ddl. Con senato.it
+# bloccato gira sulla copia; prima dei relatori dai resoconti.
+docs_download="--download"
+if [ "$blocked" -eq 1 ]; then docs_download=""; fi
+step "documenti (Doc.)" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/ingest_documents.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato $docs_download
 # Relatori dei ddl (una query a dati.senato.it, copia in data/).
 senato_step "relatori dei ddl (dati.senato.it)" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/ingest_reporters.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato

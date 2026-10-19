@@ -47,6 +47,7 @@ import sys
 from neo4j import GraphDatabase
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from doc_refs import parse_doc_refs  # noqa: E402
 from sparql_ingester import (  # noqa: E402
     _DEPUTATO_URI_RE,
     SparqlIngester,
@@ -391,6 +392,11 @@ def infer_amendment_acts(driver, dry_run: bool = False) -> int:
         while j < len(linked) and linked[j] < i:
             j += 1
         if r["n_acts"] or not _PART_OF_BILL_RE.match(r["text"]):
+            continue
+        # Amendments and articles of a document ("Articolo 1 (Doc. XXII,
+        # n. 31-A)", an inquiry proposal) are not on the bill voted before:
+        # ingest_documents.py links them to the document.
+        if parse_doc_refs(r["text"]):
             continue
         prev_i = linked[j - 1] if j > 0 else None
         next_i = linked[j] if j < len(linked) else None

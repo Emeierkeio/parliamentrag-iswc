@@ -10,11 +10,13 @@ different number format), leaving duplicates:
   - mozione:  placeholder number "1-00004"  vs real MOZIONE number "1/00004"
   - pdl:      placeholder number "5-A" (committee version) vs real
               "Progetto di Legge" number "5"; exact matches also occur
-  - doc:      chamber documents (Doc. LVII, ...) with no machine-readable
-              record on dati.camera.it — left untouched
+  - doc:      "Doc. IV-ter, n. 13-A" vs the document node camera:19:doc:IV-ter:13
+              (ingest_documents.py); "Doc. XXII, nn. 11-14-16-A" stands for
+              three documents and moves to each of them
 
 This pass re-points every DISCUSSES (Debate) and CITES (Chunk) edge from the
-placeholder to the matched real act, then deletes the placeholder. Idempotent:
+placeholder to the matched real acts, then deletes the placeholder; a
+document placeholder only when every document it names is a node. Idempotent:
 it is wired into `make update-data`, so placeholders created by a new sitting
 get resolved as soon as the real act arrives from SPARQL on a later run.
 
@@ -29,11 +31,14 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from doc_refs import doc_keys, doc_uri  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def build_resolution(session) -> list[dict]:
-    """Pair each placeholder with the real act it stands for (if ingested)."""
+def build_resolution(session, legislature: int = 19) -> list[dict]:
+    """Pair each placeholder with the real acts it stands for (if ingested)."""
     real_mozioni = {
         r["number"]: r["uri"]
         for r in session.run(
@@ -47,6 +52,8 @@ def build_resolution(session) -> list[dict]:
             "MATCH (a:Bill {chamber: 'camera'}) "
             "WHERE a.isPlaceholder IS NULL RETURN a.number AS number, a.uri AS uri")
     }
+    documents = {r["uri"] for r in session.run(
+        "MATCH (a:ParliamentaryDocument {chamber: 'camera'}) WHERE a.isPlaceholder IS NULL RETURN a.uri AS uri")}
 
     pairs = []
     for r in session.run(
@@ -62,8 +69,14 @@ def build_resolution(session) -> list[dict]:
             # Exact first, then the base bill for lettered/combined variants
             # (547-A and 547-548-A both belong to bill 547)
             target = real_bills.get(number) or real_bills.get(number.split("-")[0])
+        elif r["type"] == "doc":
+            # Only the Chamber's transcripts create document placeholders.
+            uris = [doc_uri("camera", legislature, *k) for k in doc_keys(number)]
+            if uris and all(u in documents for u in uris):
+                pairs.append({"placeholder": r["uri"], "reals": uris})
+            continue
         if target:
-            pairs.append({"placeholder": r["uri"], "real": target})
+            pairs.append({"placeholder": r["uri"], "reals": [target]})
     return pairs
 
 
@@ -72,16 +85,20 @@ def apply(session, pairs: list[dict]) -> None:
         """
         UNWIND $pairs AS pair
         MATCH (p:ParliamentaryAct {uri: pair.placeholder})
-        MATCH (real:ParliamentaryAct {uri: pair.real})
         CALL {
-            WITH p, real
-            MATCH (d:Debate)-[:DISCUSSES]->(p)
-            MERGE (d)-[:DISCUSSES]->(real)
-        }
-        CALL {
-            WITH p, real
-            MATCH (c:Chunk)-[:CITES]->(p)
-            MERGE (c)-[:CITES]->(real)
+            WITH p, pair
+            UNWIND pair.reals AS uri
+            MATCH (real:ParliamentaryAct {uri: uri})
+            CALL {
+                WITH p, real
+                MATCH (d:Debate)-[:DISCUSSES]->(p)
+                MERGE (d)-[:DISCUSSES]->(real)
+            }
+            CALL {
+                WITH p, real
+                MATCH (c:Chunk)-[:CITES]->(p)
+                MERGE (c)-[:CITES]->(real)
+            }
         }
         DETACH DELETE p
         """, pairs=pairs))

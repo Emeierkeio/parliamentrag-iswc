@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Rapporteurs (relatori) of the bills of both chambers.
+Rapporteurs (relatori) of the bills and documents of both chambers.
 
-  (:Bill)-[:REPORTED_BY {role, roles_raw, date, venues, committee, source,
-                         sources, attested, session}]->(:Person)
+  (:Bill|:ParliamentaryDocument)-[:REPORTED_BY {role, roles_raw, date, venues, committee,
+                                                source, sources, attested, session}]->(:Person)
 
 One relationship per bill and person, whatever the number of sources. role is
 the strongest standing any source gives the person on the bill: minoranza >
@@ -35,6 +35,11 @@ new or changed ones first. Exit 3 = camera.it stopped answering.
 "Relatore ..." in a debate that discusses a bill, with no edge from the other
 sources on it, gets one with the side of the label (sostituto when there is
 none) and the session; a listed rapporteur with no side gets the label's.
+Documents (Doc.) the same way, when the debate discusses no bill or the
+label names them ("Relatrice sui documenti LXXXVI, n. 1, e LXXXVII, n. 1"),
+except that a label without a side gives relatore when no other source
+lists a rapporteur of the document: the Senate publishes none, the Chamber
+only in the title of the report (ingest_documents.py).
 
 Idempotent: MERGE on (bill, person); each source replaces only its own
 entries, and scheda and resoconto withdraw the ones they no longer give.
@@ -64,6 +69,7 @@ import requests
 from neo4j import GraphDatabase
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from doc_refs import doc_keys  # noqa: E402
 from ingest_acts_camera import VIRTUOSO_CAP, Sparql  # noqa: E402
 
 logger = logging.getLogger("ingest_reporters")
@@ -492,7 +498,7 @@ SET r.role = head(r.roles_raw), r.source = head(r.sources)
 
 WRITE = """
 UNWIND $rows AS row
-MATCH (b:ParliamentaryAct {uri: row.bill}) WHERE b:Bill
+MATCH (b:ParliamentaryAct {uri: row.bill}) WHERE b:Bill OR b:ParliamentaryDocument
 MATCH (p:Person {id: row.person})
 MERGE (b)-[r:REPORTED_BY]->(p)
 WITH r, row, """ + _PREV + """ AS prev
@@ -510,8 +516,8 @@ FOREACH (_ IN CASE WHEN row.session IS NULL THEN [] ELSE [1] END | SET r.session
 
 # Edges of $source, in scope, that the source no longer gives.
 _STALE = """
-MATCH (b:Bill {chamber: $chamber})-[r:REPORTED_BY]->(p:Person)
-WHERE ($bills IS NULL OR b.uri IN $bills)
+MATCH (b:ParliamentaryAct {chamber: $chamber})-[r:REPORTED_BY]->(p:Person)
+WHERE (b:Bill OR b:ParliamentaryDocument) AND ($bills IS NULL OR b.uri IN $bills)
   AND any(a IN coalesce(r.attested, []) WHERE a STARTS WITH $source + ':')
   AND NOT b.uri + '|' + p.id IN $keep
 WITH b, p, r, [a IN r.attested WHERE NOT a STARTS WITH $source + ':'] AS att
@@ -558,15 +564,17 @@ WHERE coalesce(s.chamber, 'camera') = $chamber AND coalesce(s.legislature, 19) =
   AND sp.speakingRole =~ '(?i)relat(ore|rice)([^a-z].*)?'
   AND $mandate IN coalesce(p.mandates, [])
   AND NOT coalesce(sp.speaker_in_government, false)
-MATCH (d)-[:DISCUSSES]->(b:Bill)
-WITH sp, p, s, collect(DISTINCT {uri: b.uri, number: b.number}) AS bills
+MATCH (d)-[:DISCUSSES]->(b:ParliamentaryAct) WHERE b:Bill OR b:ParliamentaryDocument
+WITH sp, p, s, collect(DISTINCT {uri: b.uri, number: b.number, series: b.doc_series,
+                                 doc: b:ParliamentaryDocument}) AS acts
 RETURN sp.id AS speech, sp.speakingRole AS label, p.id AS person, s.id AS session,
-       toString(s.date) AS date, bills
+       toString(s.date) AS date, [a IN acts WHERE NOT a.doc] AS bills, [a IN acts WHERE a.doc] AS docs
 ORDER BY date, speech
 """
 
 OTHER_SOURCES = """
-MATCH (b:Bill {chamber: $chamber})-[r:REPORTED_BY]->(p:Person)
+MATCH (b:ParliamentaryAct {chamber: $chamber})-[r:REPORTED_BY]->(p:Person)
+WHERE b:Bill OR b:ParliamentaryDocument
 WITH b, p, """ + _PREV + """ AS att
 WITH b, p, [a IN att WHERE NOT a STARTS WITH 'resoconto:' | split(a, ':')[1]] AS roles
 WHERE size(roles) > 0
@@ -602,14 +610,26 @@ def resoconto_records(speeches: list[dict], other: dict[tuple[str, str], set[str
     parent, and gets nothing.
     """
     other_numbers = other_numbers or set()
+    listed = {bill for bill, _ in other}
     out = []
     for s in speeches:
         bills = s["bills"]
-        if "document" in s["label"].lower():
-            # "Relatrice sui documenti LXXXVI, n. 1, e LXXXVII, n. 1": a report on a Doc, not on a bill.
+        docs = s.get("docs") or []
+        named = doc_keys(s["label"])
+        if named or "document" in s["label"].lower() or (docs and not bills):
+            # "Relatrice sui documenti LXXXVI, n. 1, e LXXXVII, n. 1" in a
+            # joint debate with a bill, or a debate on documents alone.
             stats["resoconto_label_on_document"] += 1
-            continue
-        m = _BILL_NO.search(s["label"])
+            targets = [d for d in docs if (d["series"], d["number"]) in named] if named else docs
+            if not targets:
+                stats["resoconto_document_missing"] += 1
+                logger.warning("%s: %r, documento non tra quelli del dibattito", s["speech"], s["label"])
+                continue
+            bills, on_docs = targets, True
+            m = None
+        else:
+            on_docs = False
+            m = _BILL_NO.search(s["label"])
         if m:
             n = m.group(1).upper()
             targets = [b for b in bills if (b["number"] or "").upper() == n] \
@@ -624,8 +644,9 @@ def resoconto_records(speeches: list[dict], other: dict[tuple[str, str], set[str
         covered = [b for b in targets if (b["uri"], s["person"]) in other]
         rec = {"person": s["person"], "date": s["date"], "venue": "assemblea", "committee": None,
                "source": "resoconto", "session": s["session"]}
-        if not covered and any(num.startswith((b["number"] or "") + "-") and person == s["person"]
-                               for b in targets for num, person in other_numbers):
+        if not covered and not on_docs and any(
+                num.startswith((b["number"] or "") + "-") and person == s["person"]
+                for b in targets for num, person in other_numbers):
             stats["resoconto_split_bill_speeches"] += 1
             continue
         if not covered:
@@ -633,7 +654,12 @@ def resoconto_records(speeches: list[dict], other: dict[tuple[str, str], set[str
                 stats["resoconto_multi_bill_speeches"] += 1
                 logger.info("%s: %r su %d atti del dibattito", s["speech"], s["label"], len(targets))
             stats["resoconto_new_speeches"] += 1
-            out += [{**rec, "bill": b["uri"], "role": side or "sostituto"} for b in targets]
+            # No source lists the rapporteurs of a Senate document, and of a
+            # Chamber one only on the report: with nobody listed, the label
+            # names the rapporteur.
+            out += [{**rec, "bill": b["uri"],
+                     "role": side or ("relatore" if on_docs and b["uri"] not in listed else "sostituto")}
+                    for b in targets]
             continue
         if side is None:
             continue

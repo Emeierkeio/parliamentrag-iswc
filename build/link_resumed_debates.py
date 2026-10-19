@@ -2,7 +2,7 @@
 """
 Resumed debates and debates on a split bill, linked to the bills they discuss.
 
-  (:Debate)-[:DISCUSSES {via}]->(:Bill)
+  (:Debate)-[:DISCUSSES {via}]->(:Bill|:ParliamentaryDocument)
 
 The ingest links a debate to the acts its agenda item lists (Camera XML
 argomenti, Senate <block name="Atto">). A floor debate interrupted and
@@ -18,16 +18,17 @@ resumed in the same sitting opens a new section that lists none:
                  item: a title "(A.C. 1532-ter-A)" also links the split
                  bill, and the parent link stays.
   via 'ripresa'  the bare "Si riprende la discussione." resumes the latest
-                 earlier agenda item of the sitting and gets its bills;
+                 earlier agenda item of the sitting and gets its bills, or
+                 its documents (Doc.) when it is about documents;
                  "e abbinate" in a numbered title adds the bills of the
                  latest earlier debate on the same bill. The Senate's
                  "Ripresa della discussione sulle comunicazioni ..." resumes
                  the debate link_senate_acts.resumed_debate finds.
 
-Only bills: motions and resolutions are placed by their votes
-(link_camera_motions.py, link_senate_acts.py), documents (Doc.) are not
-nodes yet. Reads the graph only, no network. Idempotent: MERGE, never
-deletes.
+Bills, and documents through a bare resumption: motions and resolutions
+are placed by their votes (link_camera_motions.py, link_senate_acts.py),
+documents by ingest_documents.py. Reads the graph only, no network.
+Idempotent: MERGE, never deletes.
 
     python build/link_resumed_debates.py --neo4j-uri bolt://... --chamber camera|senato [--dry-run]
 """
@@ -197,8 +198,8 @@ def plan_camera(sittings: dict[str, list[dict]], leg: int, uris: set[str], stats
                 elif is_bare_resumption(title):
                     stats["camera_bare_resumptions"] += 1
                     anchor = resumed_anchor(debates, i)
-                    if anchor and anchor["bills"]:
-                        add += [(u, "ripresa") for u in anchor["bills"]]
+                    if anchor and (anchor["bills"] or anchor.get("docs")):
+                        add += [(u, "ripresa") for u in anchor["bills"] or anchor["docs"]]
                     else:
                         stats["camera_bare_without_bill"] += 1
             new = [(u, via) for u, via in dict(add).items() if u not in d["bills"]]
@@ -249,12 +250,13 @@ DEBATES = """
 MATCH (s:Session)-[:HAS_DEBATE]->(d:Debate)
 WHERE coalesce(s.chamber, 'camera') = $chamber AND coalesce(s.legislature, 19) = $leg
 RETURN s.id AS session, s.number AS sitting, d.id AS id, d.title AS title, d.order AS order,
-       [(d)-[:DISCUSSES]->(b:Bill) | b.uri] AS bills, EXISTS { (d)-[:DISCUSSES]->() } AS linked
+       [(d)-[:DISCUSSES]->(b:Bill) | b.uri] AS bills, EXISTS { (d)-[:DISCUSSES]->() } AS linked,
+       [(d)-[:DISCUSSES]->(x:ParliamentaryDocument) | x.uri] AS docs
 """
 
 WRITE = """
 UNWIND $rows AS row
-MATCH (d:Debate {id: row.debate}) MATCH (b:Bill {uri: row.uri})
+MATCH (d:Debate {id: row.debate}) MATCH (b:ParliamentaryAct {uri: row.uri}) WHERE b:Bill OR b:ParliamentaryDocument
 MERGE (d)-[r:DISCUSSES]->(b)
 ON CREATE SET r.via = row.via
 RETURN count(r) AS n

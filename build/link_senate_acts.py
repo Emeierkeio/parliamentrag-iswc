@@ -28,8 +28,8 @@ transcripts in data/senate_xml (Akoma Ntoso); no network.
 The official link is osr:Votazione -> osr:oggetto -> osr:relativoA
 (senato_{roman}_voti_atti.csv). The acts found for a vote replace its
 earlier ON_ACT; a vote left unresolved keeps them.
-When it names only a Documento the vote gets no bill: those documents are
-not nodes yet.
+When it names only a Documento the vote gets no bill here: the documents
+and their votes come from ingest_documents.py, and their ON_ACT stays.
 Motions and resolutions have no osr:oggetto: they are read from the label
 (motion_of, resolution_of). The other votes are matched through the
 transcript: the label alone
@@ -801,10 +801,11 @@ def main() -> int:
                 MATCH (d:Debate {id: row.debate}) MATCH (a:ParliamentaryAct {uri: row.uri})
                 MERGE (d)-[:DISCUSSES]->(a)
             """, rows=discusses)
+            # Documents are linked to their votes by ingest_documents.py.
             stats["stale_on_act_removed"] = s.run("""
                 UNWIND $rows AS row
                 MATCH (v:Vote {id: row.vote})-[r:ON_ACT]->(a)
-                WHERE NOT a.uri IN row.uris
+                WHERE NOT a.uri IN row.uris AND NOT a:ParliamentaryDocument
                 DELETE r
                 RETURN count(r) AS n
             """, rows=[{"vote": v, "uris": u} for v, u in settled.items()]).single()["n"]

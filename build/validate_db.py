@@ -23,10 +23,11 @@ WARN = "\033[93mWARN\033[0m"
 
 # Pattern URI dei dataset LOD sorgente (C10)
 URI_PATTERNS = {
-    # Senate bills by their dati.senato.it URI; Senate control acts by
-    # <assembly>:<term>:<type>:<key>, PLAN_data_platform 9.3 and decision D9.
+    # Senate bills by their dati.senato.it URI; Senate control acts and the
+    # documents of both chambers by <assembly>:<term>:<type>:<key>,
+    # PLAN_data_platform 9.3 and decision D9.
     "ParliamentaryAct": ("uri", ("http://dati.camera.it/", "placeholder:",
-                                 "http://dati.senato.it/ddl/", "senato:")),
+                                 "http://dati.senato.it/ddl/", "senato:", "camera:19:doc:")),
     "EurovocConcept": ("uri", ("http://eurovoc.europa.eu/",)),
     "TeseoConcept": ("uri", ("http://dati.senato.it/teseo/",)),
 }
@@ -446,6 +447,56 @@ class Validator:
             self.check(all(by_source.get((ch, s), 0) > 0 for s in sources[:expected]),
                        f"{ch}: relatori per fonte ({counts})", "una fonte senza relatori", warn_only=True)
 
+    def check_documents(self):
+        print("\n[24] Documenti (Doc.) di Camera e Senato (build/ingest_documents.py)")
+        from doc_refs import parse_doc_refs
+        rows = self.q("""
+            MATCH (p:ParliamentaryAct {isPlaceholder: true}) WHERE p.type = 'doc' OR p:ParliamentaryDocument
+            RETURN count(p) AS n, collect(p.number)[..5] AS ex
+        """)
+        self.check(rows[0]["n"] == 0, "nessun segnaposto di documento",
+                   f"{rows[0]['n']} ({rows[0]['ex']}): ingest_documents.py + repair_placeholder_acts.py")
+        rows = self.q("""
+            MATCH (a:ParliamentaryDocument) WHERE a.isPlaceholder IS NULL
+            RETURN a.chamber AS ch, count(a) AS tot,
+                   sum(CASE WHEN a.title IS NULL THEN 1 ELSE 0 END) AS no_title,
+                   sum(CASE WHEN a.doc_series IS NULL OR a.number IS NULL THEN 1 ELSE 0 END) AS no_number,
+                   sum(CASE WHEN EXISTS { (:Debate)-[:DISCUSSES]->(a) } OR EXISTS { (:Vote)-[:ON_ACT]->(a) }
+                       THEN 1 ELSE 0 END) AS linked
+            ORDER BY ch
+        """)
+        for r in rows:
+            self.check(r["no_number"] == 0, f"{r['ch']}: documenti con serie e numero ({r['tot']})",
+                       f"{r['no_number']} senza")
+            self.check(r["no_title"] == 0, f"{r['ch']}: documenti con titolo", f"{r['no_title']} senza",
+                       warn_only=True)
+            self.check(r["linked"] == r["tot"], f"{r['ch']}: documenti discussi o votati {r['linked']}/{r['tot']}",
+                       f"{r['tot'] - r['linked']} senza dibattito né voto", warn_only=True)
+        # The vote description names the documents ("Votazione finale (Doc.
+        # II, n. 11)"); the Senate's carry no description.
+        votes = self.q("""
+            MATCH (:Session {chamber: 'camera', legislature: 19})-[:HAS_VOTE]->(v:Vote)
+            WHERE v.description =~ '(?is).*\\\\bdoc\\\\b.*'
+            RETURN v.id AS id, v.description AS d, coalesce(v.finalVote, false) AS final,
+                   EXISTS { (v)-[:ON_ACT]->() } AS linked,
+                   EXISTS { (v)-[:ON_ACT]->(:Bill) } AS on_bill
+        """)
+        votes = [v for v in votes if parse_doc_refs(v["d"])]
+        loose = [v["id"] for v in votes if v["final"] and not v["linked"]]
+        self.check(not loose, f"Camera: voti finali su documenti con l'atto ({sum(v['final'] for v in votes)})",
+                   f"{len(loose)} senza ON_ACT: {loose[:5]}")
+        on_bill = [v["id"] for v in votes if v["on_bill"]]
+        self.check(not on_bill, f"Camera: voti su documenti non agganciati a un progetto di legge ({len(votes)})",
+                   f"{len(on_bill)} su un Bill: {on_bill[:5]}")
+        rows = self.q("""
+            MATCH (a:ParliamentaryDocument)-[:PART_OF]->(lp:LegislativeProcess)
+            WITH lp, collect(DISTINCT a.chamber) AS chs
+            RETURN count(lp) AS tot, sum(CASE WHEN size(chs) = 2 THEN 1 ELSE 0 END) AS both
+        """)
+        self.check(rows[0]["tot"] == rows[0]["both"],
+                   f"documenti del governo uniti tra le camere ({rows[0]['both']} processi)",
+                   f"{rows[0]['tot'] - rows[0]['both']} processi con una sola camera")
+
     def check_laws(self):
         print("\n[20] Leggi (decisione D5, build/ingest_laws.py)")
         rows = self.q("""
@@ -750,6 +801,7 @@ class Validator:
         self.check_agenda_orders()
         self.check_reporters()
         self.check_laws()
+        self.check_documents()
         self.check_motion_subjects()
         self.check_resumed_debates()
 

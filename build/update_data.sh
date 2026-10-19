@@ -253,10 +253,20 @@ if [ -n "$LOCAL_UP" ]; then
 		|| warn "vote titles refresh failed on local snapshot"
 fi
 
+# ── Documenti (Doc.) della Camera ────────────────────────────────────────────
+# Un nodo per documento discusso o votato (DEF, relazioni della Giunta,
+# inchieste...): titolo e testi da ocd:DOC (una query SPARQL, copia in data/),
+# ON_ACT dei voti che nominano il documento, relatori dalla relazione «-A».
+# Dopo i voti e prima dei segnaposto, che il passo sotto sposta sul documento.
+run "Documenti Camera" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/ingest_documents.py --neo4j-uri "$DEMO_NEO4J" --chamber camera --download \
+	|| warn "documenti Camera: passo fallito, riprende al prossimo giro"
+
 # ── Atti placeholder ─────────────────────────────────────────────────────────
 # L'ingest XML crea placeholder per gli argomenti dei dibattiti (1-00004 vs
-# 1/00004, pdl "-A"); l'atto vero arriva dalla SPARQL in un giro successivo.
-# Pass idempotente: ripunta DISCUSSES/CITES e cancella il placeholder.
+# 1/00004, pdl "-A", "Doc. IV-ter, n. 13-A"); l'atto vero arriva dalla SPARQL
+# in un giro successivo. Pass idempotente: ripunta DISCUSSES/CITES e cancella
+# il placeholder.
 run "Resolve placeholder acts" "$PY" build/repair_placeholder_acts.py --neo4j-uri "$DEMO_NEO4J" \
 	|| warn "placeholder resolution failed — retry at next update-data"
 if [ -n "$LOCAL_UP" ]; then

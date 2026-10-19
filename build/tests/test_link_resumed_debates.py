@@ -92,6 +92,20 @@ def test_plan_camera():
     assert stats["camera_bare_without_bill"] == 1
 
 
+def test_bare_resumption_of_a_document_debate():
+    # Sitting 545, 08/09/2025: the Giunta's report on Doc. IV-bis, n. 1.
+    debates = [
+        _deb(1, "Sull'ordine dei lavori."),
+        {**_deb(2, "Discussione della Relazione della Giunta per le autorizzazioni sulla domanda di "
+                   "autorizzazione a procedere in giudizio (Doc. IV-bis, n. 1-A)."),
+         "docs": ["camera:19:doc:IV-bis:1"], "linked": True},
+        _deb(3, "Preavviso di votazioni elettroniche (ore 10,57)."),
+        _deb(4, "Si riprende la discussione."),
+    ]
+    rows = plan_camera({"a": debates}, 19, set(), Counter())
+    assert rows == [{"debate": "s1_tit004", "uri": "camera:19:doc:IV-bis:1", "via": "ripresa"}]
+
+
 def test_plan_senate():
     debates = [
         {"id": "d1", "title": "Discussione del disegno di legge: (274) - Benefici", "order": 1,
