@@ -66,6 +66,10 @@ senato_step() {
 # senato.it. Senza, i senatori del Misto finirebbero sotto il «Misto» intero.
 senato_step "componenti del Gruppo Misto (senato.it)" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/ingest_misto_senato.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL"
+# Presidenti, vice, segretari e tesorieri dei gruppi: una richiesta a
+# dati.senato.it, role sulla MEMBER_OF_GROUP aperta come per la Camera.
+senato_step "cariche nei gruppi (dati.senato.it)" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/ingest_group_offices.py --chamber senato --neo4j-uri "$URI" --neo4j-user "$USER_VAL"
 senato_step "voti aggregati (sedute nuove e ultimi 30 giorni)" votes --aggregate-only
 senato_step "voti individuali (votazioni che non li hanno ancora)" votes --individual-only
 senato_step "motivo dell'assenza (votazioni caricate prima: missione, presente non votante)" votes --reasons-only

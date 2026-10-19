@@ -162,6 +162,20 @@ class Validator:
                        f"mai visti da build/ingest_misto_senato.py: {r['unseen']}" if r["unseen"]
                        else "nessuna componente: lanciare build/ingest_misto_senato.py")
 
+        # Group offices from osr:carica (build/ingest_group_offices.py
+        # --chamber senato): each group with members has its president.
+        rows = self.q("""
+            MATCH (:Person)-[m:MEMBER_OF_GROUP {chamber: 'senato'}]->(g:ParliamentaryGroup)
+            WHERE m.end_date IS NULL
+            WITH g, sum(CASE WHEN m.role = 'president' THEN 1 ELSE 0 END) AS presidents
+            RETURN count(g) AS tot, sum(CASE WHEN presidents = 1 THEN 1 ELSE 0 END) AS ok,
+                   [x IN collect(CASE WHEN presidents <> 1 THEN g.name END) WHERE x IS NOT NULL][..5] AS bad
+        """)
+        r = rows[0]
+        self.check(r["ok"] == r["tot"], f"gruppi del Senato con un presidente {r['ok']}/{r['tot']}",
+                   f"senza o con più di uno: {r['bad']} (build/ingest_group_offices.py --chamber senato)",
+                   warn_only=True)
+
         # dati.senato.it publishes both the totals and the per-senator votes;
         # a gap means a half-loaded sitting (the per-sitting resume skips it).
         rows = self.q("""
