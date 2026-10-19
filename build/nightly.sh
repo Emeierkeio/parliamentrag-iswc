@@ -20,5 +20,17 @@ DEMO_NEO4J="${DEMO_NEO4J:-bolt://localhost:7687}" CENTRO_DIR="${CENTRO_DIR:-/opt
 	bash build/update_data.sh
 status=$?
 
+# Demo di ISWC (Bari): nei giorni della demo la cache delle risposte di Fascicoli,
+# invalidata dalla nuova versione dei dati, si riscalda con le domande della demo.
+DEMO_CACHE_GIORNI="${DEMO_CACHE_GIORNI:-2026-10-26 2026-10-27 2026-10-28 2026-10-29}"
+oggi="$(date -u +%F)"
+if [[ " $DEMO_CACHE_GIORNI " == *" $oggi "* ]]; then
+	# Se l'aggiornamento è fallito la versione dei dati non cambia: si scalda subito.
+	attendi=(); [ "$status" -eq 0 ] && attendi=(--attendi-dati "$oggi")
+	python3 build/scalda_cache_fascicoli.py "${attendi[@]}" \
+		>>"build/logs/scalda-cache-$oggi.log" 2>&1 \
+		|| echo "$(date -Is) cache della demo non completa: vedi build/logs/scalda-cache-$oggi.log"
+fi
+
 find build/logs -name 'update-data-*.log' -mtime +30 -delete 2>/dev/null
 exit $status
