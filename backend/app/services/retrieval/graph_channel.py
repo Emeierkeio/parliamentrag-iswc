@@ -150,41 +150,45 @@ class GraphChannel:
         top_k: int = 100
     ) -> List[Dict[str, Any]]:
         """
-        Find relevant ParliamentaryAct via lexical matching.
-
-        Matches against eurovoc, title, and description fields.
+        Find relevant ParliamentaryAct via lexical matching on the title,
+        the description and the labels of its EuroVoc subjects.
         """
-        # Build OR conditions for keywords using word-boundary regex.
-        # Using =~ instead of CONTAINS prevents false positives where the keyword
-        # appears as a substring of a larger token (e.g. "SSN" inside a word
-        # containing "ssn", or "ssn" matching acts that only mention "ASN").
-        # (?i) makes the match case-insensitive; \b marks word boundaries.
-        conditions = []
-        params = {}
+        # Word-boundary regex instead of CONTAINS: a keyword must not match
+        # inside a longer token (e.g. "ssn" inside "assn"). (?i) ignores case.
+        params: Dict[str, Any] = {"top_k": top_k}
+        act_conditions, subject_conditions = [], []
         for i, kw in enumerate(keywords):
             param_name = f"kw{i}"
             params[param_name] = f"(?i).*\\b{re.escape(kw.lower())}\\b.*"
-            conditions.append(f"""
-                a.eurovoc =~ ${param_name} OR
-                a.title =~ ${param_name} OR
-                a.description =~ ${param_name}
-            """)
+            act_conditions.append(f"a.title =~ ${param_name} OR a.description =~ ${param_name}")
+            subject_conditions.append(f"e.label_it =~ ${param_name}")
 
-        where_clause = " OR ".join(conditions)
-
+        # Title and description matches come first; acts found only through
+        # a subject fill the remaining places.
         cypher = f"""
-        MATCH (a:ParliamentaryAct)
-        WHERE {where_clause}
+        CALL {{
+            MATCH (a:ParliamentaryAct)
+            WHERE {" OR ".join(act_conditions)}
+            RETURN a, 0 AS via_subject
+            UNION
+            MATCH (e:EurovocConcept)<-[:HAS_SUBJECT]-(a:ParliamentaryAct)
+            WHERE {" OR ".join(subject_conditions)}
+            RETURN a, 1 AS via_subject
+        }}
+        WITH a, min(via_subject) AS via_subject
+        ORDER BY via_subject
+        LIMIT $top_k
+        OPTIONAL MATCH (a)-[:HAS_SUBJECT]->(e:EurovocConcept)
+        WITH a, collect(e.label_it) AS labels, collect(e.embedding) AS subject_embeddings
         RETURN a.uri AS uri,
                a.title AS title,
                a.description AS description,
-               a.eurovoc AS eurovoc,
+               labels AS eurovoc,
                a.presentation_date AS date,
                a.type AS type,
                a.title_embedding AS title_embedding,
-               a.eurovoc_embedding AS eurovoc_embedding,
+               subject_embeddings,
                a.description_embedding AS description_embedding
-        LIMIT {top_k}
         """
 
         return self.client.query(cypher, params)
@@ -197,7 +201,8 @@ class GraphChannel:
         """
         Rerank acts using semantic similarity with embeddings.
 
-        Uses title_embedding if available, else default score.
+        Best similarity among title, description and EuroVoc subjects;
+        default score when the act has no embedding.
         """
         threshold = self.config.retrieval.get("graph_channel", {}).get(
             "semantic_similarity_threshold", 0.4
@@ -205,17 +210,10 @@ class GraphChannel:
 
         scored_acts = []
         for act in acts:
-            emb_title = act.get("title_embedding")
-            emb_eurovoc = act.get("eurovoc_embedding")
-            emb_description = act.get("description_embedding")
-
-            similarities = []
-            if emb_title and len(emb_title) == len(query_embedding):
-                similarities.append(cosine_similarity(query_embedding, emb_title))
-            if emb_eurovoc and len(emb_eurovoc) == len(query_embedding):
-                similarities.append(cosine_similarity(query_embedding, emb_eurovoc))
-            if emb_description and len(emb_description) == len(query_embedding):
-                similarities.append(cosine_similarity(query_embedding, emb_description))
+            candidates = [act.get("title_embedding"), act.get("description_embedding")]
+            candidates += act.get("subject_embeddings") or []
+            similarities = [cosine_similarity(query_embedding, emb) for emb in candidates
+                            if emb and len(emb) == len(query_embedding)]
 
             if similarities:
                 act["similarity"] = max(similarities)
