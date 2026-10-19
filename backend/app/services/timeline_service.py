@@ -990,11 +990,16 @@ def _extract_article(paras: list[tuple[str | None, str]], num: str, act: str | N
         return None
     seg: list[str] = []
     for k, (pid, text) in enumerate(paras[start:start + 80]):
-        if k > 0 and pid:  # next anchored block starts
+        if k > 0 and (pid or _ARTICLE_END.match(text)):  # next block starts
             break
         if text:
             seg.append(text)
     return seg or None
+
+
+# Unanchored headings that open the block after an article: its amendments,
+# the next article ("ART. 1."), the agenda orders.
+_ARTICLE_END = re.compile(r"^(?:(?:SUB)?EMENDAMENTI\b|ORDINI DEL GIORNO\b|ART\.\s*\d+[\w-]*\.$)")
 
 
 # A bill's articles are printed in Allegato A of the sitting where their

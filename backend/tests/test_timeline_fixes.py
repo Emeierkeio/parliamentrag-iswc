@@ -129,7 +129,8 @@ def test_vote_on_second_reading_shows_that_reading():
 
 def test_article_of_a_named_bill_in_an_earlier_annex():
     paras = [("ac.1000.art_8", "Art. 8 di un altro progetto"), (None, "testo altro"),
-             ("ac.2822-B.art_8", "Art. 8. (Fuori sede)"), (None, "1. È istituito"), ("ac.2822-B.art_9", "Art. 9")]
+             ("ac.2822-B.art_8", "Art. 8. (Fuori sede)"), (None, "1. È istituito"),
+             (None, "EMENDAMENTI NON SEGNALATI PER LA VOTAZIONE"), (None, "ART. 1."), ("ac.2822-B.art_9", "Art. 9")]
     assert ts._extract_article(paras, "8", "2822-B") == ["Art. 8. (Fuori sede)", "1. È istituito"]
     assert ts._extract_article(paras, "8")[0] == "Art. 8 di un altro progetto"
 
