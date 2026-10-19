@@ -428,6 +428,23 @@ class Validator:
                        f"sotto {floor}")
             self.check(r["bad_role"] == 0 and r["not_person"] == 0, f"{ch}: REPORTED_BY con ruolo nel vocabolario",
                        f"{r['bad_role']} ruoli fuori vocabolario, {r['not_person']} verso nodi non Person")
+        # One source down for a night (a 503) leaves its edges of the previous
+        # run in place, so an empty source is a warning, never a failure.
+        by_source = {(r["ch"], r["src"]): r["n"] for r in self.q("""
+            MATCH (b:Bill)-[r:REPORTED_BY]->()
+            UNWIND coalesce(r.sources, [r.source]) AS src
+            RETURN b.chamber AS ch, src, count(*) AS n
+        """)}
+        # The transcripts name no rapporteur the other sources leave out
+        # (19/10/2026, both chambers): their count is shown, an empty one is
+        # expected; they cover the sittings newer than the bill pages read.
+        for ch, sources, expected in (("camera", ("dati.camera.it", "scheda_camera", "resoconto"), 2),
+                                      ("senato", ("dati.senato.it", "resoconto"), 1)):
+            if ch not in present:
+                continue
+            counts = ", ".join(f"{s} {by_source.get((ch, s), 0)}" for s in sources)
+            self.check(all(by_source.get((ch, s), 0) > 0 for s in sources[:expected]),
+                       f"{ch}: relatori per fonte ({counts})", "una fonte senza relatori", warn_only=True)
 
     def check_laws(self):
         print("\n[20] Leggi (decisione D5, build/ingest_laws.py)")

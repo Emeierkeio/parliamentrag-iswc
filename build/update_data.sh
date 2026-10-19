@@ -388,6 +388,17 @@ run "ODG Camera → progetto di legge ed esito" env NEO4J_PASSWORD="$NEO4J_PASS_
 run "Relatori Camera" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/ingest_reporters.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera \
 	|| warn "relatori Camera: SPARQL non raggiungibile, restano quelli del giro precedente"
+# Relatori di minoranza e sostituti in Aula che dati.camera.it non elenca, dalla
+# scheda dell'atto su camera.it: solo atti nuovi o cambiati (al più 150 pagine,
+# 2,5 s l'una), il resto dalla copia in data/camera_xix_relatori_schede.json.
+run "Relatori Camera dalle schede di camera.it" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/ingest_reporters.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera --source scheda \
+	|| warn "relatori Camera dalle schede: camera.it non risponde, restano quelli del giro precedente"
+# Chi il resoconto chiama relatore su un atto del dibattito e nessuna fonte
+# elenca. Senza rete, dopo le schede.
+run "Relatori Camera dai resoconti" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/ingest_reporters.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera --source resoconto \
+	|| warn "relatori Camera dai resoconti: passo fallito, riprende al prossimo giro"
 # Leggi pubblicate collegate al processo (decisione D5): numero e data dalle
 # fasi del Senato appena scaricate, Gazzetta dallo SPARQL della Camera (una
 # query), ELI e codice redazionale da Normattiva solo per le leggi nuove.

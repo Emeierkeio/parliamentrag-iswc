@@ -89,6 +89,9 @@ step "collegamenti DDL ↔ firmatari, dibattiti, votazioni" env NEO4J_PASSWORD="
 # Relatori dei ddl (una query a dati.senato.it, copia in data/).
 senato_step "relatori dei ddl (dati.senato.it)" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/ingest_reporters.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato
+# Chi il resoconto chiama relatore e dati.senato.it non elenca. Senza rete.
+step "relatori dai resoconti" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/ingest_reporters.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato --source resoconto
 # Offline: il ddl dal numero dell'ODG, l'esito dagli emendamenti di tipo G
 # (JSONL di parse_emendamenti.py, rigenerato da update_data.sh prima di qui).
 step "ordini del giorno → ddl ed esito" env NEO4J_PASSWORD="$PASS_VAL" \

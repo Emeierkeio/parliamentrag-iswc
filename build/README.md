@@ -82,7 +82,7 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `link_agenda_orders.py` | agenda orders `REFERS_TO` their bill (from the number), outcome from votes (Camera) and from the G amendments (Senato) |
 | `link_camera_motions.py` | Chamber motions and resolutions voted in the House `DISCUSSES`-linked to the debate where the vote falls and to the one it resumes (Senate ones: `link_senate_acts.py`) |
 | `act_subjects.py` | readable `subject` of motions and resolutions (voted or discussed), from the debate title or the Senate vote label, never generated text |
-| `ingest_reporters.py` | bill rapporteurs, `(:Bill)-[:REPORTED_BY]->(:Person)`, from dati.camera.it and dati.senato.it |
+| `ingest_reporters.py` | bill rapporteurs, `(:Bill)-[:REPORTED_BY]->(:Person)`, from dati.camera.it and dati.senato.it, the bill pages on camera.it (minority rapporteurs, stand-ins) and the speaker labels of the transcripts |
 
 ## Notes
 
