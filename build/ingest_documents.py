@@ -55,6 +55,7 @@ import logging
 import os
 import re
 import sys
+import time
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from datetime import date
@@ -270,6 +271,76 @@ def camera_index(rows: list[dict]) -> dict[tuple[str, str], dict]:
             else:
                 doc["sheets"].append(rec)
     return out
+
+
+_ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+CAMERA_PDF = "https://documenti.camera.it/_dati/leg{leg}/lavori/documentiparlamentari/IndiceETesti/{cat}/{num}/INTERO.pdf"
+
+
+def roman_to_int(roman: str) -> int:
+    values = [_ROMAN_VALUES[c] for c in roman]
+    return sum(-v if i + 1 < len(values) and v < values[i + 1] else v for i, v in enumerate(values))
+
+
+def camera_pdf_url(leg: int, series: str, number: str) -> Optional[str]:
+    """Text of a Chamber document by its place in the Chamber's archive.
+
+    IndiceETesti/<series>/<number>/INTERO.pdf: "IV-ter" is 004ter, "13" 013,
+    "1-bis" 001bis (the pattern behind the dc:relation links of ocd:DOC,
+    which redirect there; checked on Doc. II n. 11 and XXII n. 31, 19/10/2026).
+    """
+    head, _, latin = series.partition("-")
+    m = re.fullmatch(r"(\d+)(?:-([a-z]+))?", number)
+    if not m or not head:
+        return None
+    cat = f"{roman_to_int(head):03d}{latin}"
+    return CAMERA_PDF.format(leg=leg, cat=cat, num=f"{int(m.group(1)):03d}{m.group(2) or ''}")
+
+
+def check_camera_pdfs(leg: int, nodes: list[dict], download: bool, stats: Counter) -> None:
+    """Text link of the Chamber documents ocd:DOC does not describe, if camera.it has the file.
+
+    The answers are kept in data/camera_{roman}_documenti_pdf.json: a file
+    found is not asked again, a missing one at the next --download.
+    """
+    import requests
+    path = os.path.join(DATA_DIR, f"camera_{ROMAN[leg]}_documenti_pdf.json")
+    cache: dict[str, Optional[str]] = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            cache = json.load(f)
+    http = requests.Session()
+    http.headers.update({"User-Agent": "ParliamentRAG-documents/1.0 (+https://www.parliamentrag.it)"})
+    asked = 0
+    for n in nodes:
+        if n["official_uris"]:
+            continue
+        url = camera_pdf_url(leg, n["series"], n["number"])
+        if not url:
+            continue
+        if url not in cache or (cache[url] is None and download):
+            if not download:
+                continue
+            if asked:
+                time.sleep(2)
+            asked += 1
+            try:
+                r = http.get(url, timeout=60, stream=True)
+                ok = r.status_code == 200 and "pdf" in r.headers.get("content-type", "")
+                r.close()
+                cache[url] = url if ok else None
+            except requests.RequestException as exc:
+                logger.warning("camera.it non risponde per %s: %s", n["name"], exc)
+                continue
+        if cache.get(url):
+            n["text_urls"] = [url]
+            n["url"] = url
+            stats["camera_pdf_from_archive"] += 1
+    if asked:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=0, sort_keys=True)
+        os.replace(tmp, path)
 
 
 def senate_download(leg: int) -> None:
@@ -661,6 +732,8 @@ def main() -> int:
     ap.add_argument("--legislature", type=int, default=19)
     ap.add_argument("--chamber", choices=["camera", "senato"], required=True)
     ap.add_argument("--download", action="store_true", help="read the sources again (else the copies in data/)")
+    ap.add_argument("--check-pdfs", action="store_true",
+                    help="Camera: look for the missing text links on camera.it (implied by --download)")
     ap.add_argument("--dry-run", action="store_true", help="read the graph, write nothing")
     ap.add_argument("--dump", help="write the planned rows to this JSON file")
     args = ap.parse_args()
@@ -695,6 +768,7 @@ def main() -> int:
             debates = [{"title": t} for p in ph for t in p["titles"]] + [dict(r) for r in s.run("""
                 MATCH (d:Debate)-[:DISCUSSES]->(:ParliamentaryDocument {chamber: 'camera'}) RETURN d.title AS title""")]
             plan = plan_camera(leg, records, senate, ph, votes, debates, existing, stats)
+            check_camera_pdfs(leg, plan["nodes"], args.download or args.check_pdfs, stats)
             plan["discusses"] = []
         else:
             vote_docs = senate_vote_docs(leg, {u: k for k, v in senate.items() for u in v["uris"]})

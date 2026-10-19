@@ -9,8 +9,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from doc_refs import DocRef, doc_keys, doc_uri, parse_doc_refs  # noqa: E402
-from ingest_documents import (camera_index, camera_record_title, plan_camera, plan_processes,  # noqa: E402
-                              reporter_names, title_before)
+from ingest_documents import (camera_index, camera_pdf_url, camera_record_title, plan_camera,  # noqa: E402
+                              plan_processes, reporter_names, title_before)
 from ingest_reporters import resoconto_records  # noqa: E402
 
 
@@ -59,6 +59,14 @@ def test_titles():
     assert title_before(title, ("VIII", "1")) == "Conto consuntivo della Camera dei deputati per l'anno finanziario 2022"
     assert title_before(title, ("VIII", "2")) == "Progetto di bilancio della Camera dei deputati per l'anno finanziario 2023"
     assert title_before("Emendamento 2.6 MORFINO DANIELA (M5S) (Doc. XXII, n. 31-A)", ("XXII", "31")) is None
+
+
+def test_camera_pdf_url():
+    base = "https://documenti.camera.it/_dati/leg19/lavori/documentiparlamentari/IndiceETesti/"
+    assert camera_pdf_url(19, "II", "11") == base + "002/011/INTERO.pdf"
+    assert camera_pdf_url(19, "IV-ter", "20") == base + "004ter/020/INTERO.pdf"
+    assert camera_pdf_url(19, "CCXLVII", "1") == base + "247/001/INTERO.pdf"
+    assert camera_pdf_url(19, "LVII", "1-bis") == base + "057/001bis/INTERO.pdf"
 
 
 def test_reporter_names():
