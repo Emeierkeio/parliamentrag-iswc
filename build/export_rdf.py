@@ -20,10 +20,13 @@ Node → RDF mapping:
   ParliamentaryAct                    ocd:atto (+ pr:Bill, pr:Motion, pr:Resolution,
                                         pr:AgendaOrder, pr:OversightAct,
                                         pr:ParliamentaryDocument from the sublabel)
+  Amendment                           pr:Amendment (⊑ osr:Emendamento), with its
+                                        text from the archive
   Law                                 eli:LegalResource (Normattiva ELI work URI)
                                         eli:is_realized_by the original
                                         eli:LegalExpression; owl:sameAs URN:NIR
-  LegislativeProcess                  pr:LegislativeProcess (⊑ prov:Activity)
+  LegislativeProcess                  pr:LegislativeProcess (⊑ prov:Activity);
+                                        pr:DocumentProcess for kind 'doc'
   TextVersion                         pr:TextVersion (dati.camera.it URI)
   EurovocConcept                      skos:Concept (canonical EuroVoc URIs),
                                         skos:inScheme EuroVoc
@@ -54,6 +57,10 @@ Relationship → RDF mapping:
   REPORTED_BY {role, source, ...}     pr:reportedBy + reified pr:Rapporteurship
                                         (one per relationship, any source)
   PRESENTED / PRESENTED_BY            pr:presenterOf / pr:presentedBy
+  AMENDS {joint}                      pr:amends (pr:amendsJointAct when joint)
+  SIGNED_AMENDMENT {first}            pr:primarySignatoryOf / pr:coSignatoryOf
+  ON_AMENDMENT                        pr:onAmendment
+  SUB_OF / RESUBMITS                  pr:subAmendmentOf / pr:resubmits
   MEMBER_OF_GROUP / _COMMITTEE /      reified org:Membership
     _COMPONENT {start,end}              (org:member / org:organization
                                          + pr:startDate / pr:endDate)
@@ -69,7 +76,13 @@ URIs published on Zenodo), because acronyms such as FdI, M5S and Misto exist
 in both chambers. Senate speech text is not in Neo4j since 2026-10-13: it is
 read from the Postgres text archive (--archive-url or ARCHIVE_URL, see
 build/archive_text.py), and the export stops if a chamber is left mostly
-without text.
+without text. Amendment texts are only in that archive too and get the same
+check.
+
+Amendment text goes in the dump in full (pr:text): on 2026-10-19 it is 197 MB
+over 224k amendments, and a link would not replace it, since the Camera
+publishes one XML per bill (388 files) rather than a page per amendment.
+--skip-text leaves out both speech and amendment texts.
 
 Deliberately excluded: embeddings (all `*embedding*` properties), Chunk nodes
 (retrieval artifacts — Speech keeps the full transcript text), ChatHistory
@@ -103,7 +116,8 @@ from neo4j import GraphDatabase
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import DCTERMS, FOAF, ORG, OWL, PROV, RDF, RDFS, SDO, SKOS, XSD
 
-from archive_text import TextCoverage, archive_url_from_env, load_speech_texts
+from archive_text import (TextCoverage, archive_url_from_env, load_amendment_texts,
+                          load_speech_texts)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -131,17 +145,37 @@ ONTOLOGY = {
     "Resolution": ("class", "A resolution (risoluzione), on the floor or in committee.", OCD.atto),
     "AgendaOrder": ("class", "An order of the day (ordine del giorno) tabled on a bill.", OCD.atto),
     "OversightAct": ("class", "A question or interpellation (sindacato ispettivo).", OCD.atto),
-    "ParliamentaryDocument": ("class", "A parliamentary document (doc.) cited in the record.", OCD.atto),
+    "ParliamentaryDocument": ("class", "A parliamentary document (Doc., e.g. the DEF or an "
+                              "inquiry proposal) debated or voted in a chamber, one per "
+                              "chamber.", OCD.atto),
+    "Amendment": ("class", "An amendment (emendamento, articolo aggiuntivo, subemendamento, "
+                  "or a Senate order of the day filed as amendment G) to the text of an act, "
+                  "in committee or on the floor.", OSR.Emendamento),
     "LegislativeProcess": ("class", "The path of a bill through its readings in both houses, "
                            "up to the law when one is published.", PROV.Activity),
+    "DocumentProcess": ("class", "The examination of one Government document (DEF, budget "
+                        "plan, ...) that both houses receive under the same number; not a "
+                        "legislative process, since it ends with resolutions, not a law.",
+                        PROV.Activity),
     "TextVersion": ("class", "A version of the text of a bill (as presented, as reported "
                     "by the committee, ...).", None),
-    "Rapporteurship": ("class", "A member acting as rapporteur (relatore) on a bill, "
-                       "as recorded by one source.", None),
+    "Rapporteurship": ("class", "A member acting as rapporteur (relatore) on a bill or a "
+                       "document, as recorded by one source.", None),
     "spokenBy": ("object", "The member who delivered the speech.", None),
     "discusses": ("object", "An act discussed in the debate.", None),
-    "primarySignatoryOf": ("object", "The member is the first signatory of the act.", None),
-    "coSignatoryOf": ("object", "The member co-signed the act.", None),
+    "primarySignatoryOf": ("object", "The member is the first signatory of the act or "
+                           "amendment.", None),
+    "coSignatoryOf": ("object", "The member co-signed the act or amendment.", None),
+    "amends": ("object", "The act whose text the amendment changes.", None),
+    "amendsJointAct": ("object", "A bill examined jointly with the one the amendment is "
+                       "filed on (abbinato).", None),
+    "onAmendment": ("object", "The amendment a floor roll-call vote is on, matched from the "
+                    "vote description and the sitting.", None),
+    "subAmendmentOf": ("object", "The amendment this sub-amendment changes.", None),
+    "resubmits": ("object", "The first amendment with the same text and signatories on the "
+                  "same act: this one files it again in another venue or sitting.", None),
+    "textFile": ("object", "Official file (PDF) with the text of the document or of one of "
+                 "its parts.", None),
     "presenterOf": ("object", "The person presented the bill on behalf of the government.", None),
     "presentedBy": ("object", "The government that presented the bill.", None),
     "heldVote": ("object", "A roll-call vote held in the sitting.", None),
@@ -152,14 +186,29 @@ ONTOLOGY = {
     "nextReading": ("object", "The bill of the next reading of the same legislative process "
                     "(e.g. C.2822 -> S.1971 -> C.2822-B).", None),
     "refersTo": ("object", "The bill an order of the day was tabled on.", DCTERMS.relation),
-    "reportedBy": ("object", "A rapporteur of the bill (see pr:Rapporteurship for the details).", None),
-    "reportedAct": ("object", "The bill of the rapporteurship.", None),
+    "reportedBy": ("object", "A rapporteur of the bill or document (see pr:Rapporteurship "
+                   "for the details).", None),
+    "reportedAct": ("object", "The bill or document of the rapporteurship.", None),
     "rapporteur": ("object", "The member acting as rapporteur.", None),
     "voter": ("object", "The member who cast the individual vote.", None),
     "onVote": ("object", "The roll-call vote the individual vote belongs to.", None),
     "outcomeEvidence": ("object", "Official page the outcome of the act was read from.", None),
-    "text": ("data", "Full text of the speech.", None),
+    "text": ("data", "Full text of the speech or of the amendment.", None),
     "number": ("data", "Number of the sitting or of the vote.", None),
+    "article": ("data", "Article of the act the amendment refers to, as numbered by the "
+                "source.", None),
+    "amendmentVersion": ("data", "Revision of the amendment's own text as labelled by the "
+                         "source (testo 2, testo corretto, ...).", None),
+    "sittingDate": ("data", "Date of the sitting whose amendment file lists the amendment "
+                    "(Camera).", None),
+    "docSeries": ("data", "Series of a parliamentary document in Roman numerals (e.g. XXII, "
+                  "inquiry proposals).", None),
+    "documentType": ("data", "Description of the document series as written by the source.",
+                     None),
+    "initiative": ("data", "Who presented the act (governo, parlamentare, commissione, "
+                   "ente, ...).", None),
+    "titleSource": ("data", "Where the title of the document was read from: camera, senato "
+                    "(the other chamber's record) or dibattito (the debate title).", None),
     "chamber": ("data", "House: camera or senato.", None),
     "legislature": ("data", "Legislature number.", None),
     "order": ("data", "Position within the parent resource.", None),
@@ -168,10 +217,15 @@ ONTOLOGY = {
                 "record (debate title or vote label), never generated text.", None),
     "subjectSource": ("data", "Where pr:subject was read from (debate, vote, fallback).", None),
     "voteType": ("data", "Kind of roll-call vote.", None),
-    "outcome": ("data", "Outcome of a vote or of an act (approvato, respinto, accolto, ...).", None),
-    "outcomeSource": ("data", "Where the outcome of an act comes from: voto (roll-call votes "
-                      "on it) or esito_senato (the Senate outcome of the amendment).", None),
-    "outcomeRaw": ("data", "Outcome of the act as written by the source.", None),
+    "outcome": ("data", "Outcome of a vote or of an act (approvato, respinto, accolto, ...); "
+                "for amendments a normalized English value (approved, rejected, withdrawn, "
+                "precluded, inadmissible, ...).", None),
+    "outcomeSource": ("data", "Where the outcome comes from. Acts: voto (roll-call votes on "
+                      "it) or esito_senato (the Senate outcome of the amendment G). "
+                      "Amendments: source (published by the chamber) or floor_vote (result "
+                      "of the floor roll-call vote on it, when the chamber publishes no "
+                      "outcome).", None),
+    "outcomeRaw": ("data", "Outcome of the act or amendment as written by the source.", None),
     "voters": ("data", "Members voting.", None),
     "present": ("data", "Members present.", None),
     "inFavor": ("data", "Votes in favour.", None),
@@ -203,7 +257,8 @@ ONTOLOGY = {
     "gazetteNumber": ("data", "Number of the Gazzetta Ufficiale issue that published the law.", None),
     "gazetteSupplement": ("data", "Supplement of the Gazzetta Ufficiale issue.", None),
     "committeeName": ("data", "Committee named by the source, as written.", None),
-    "venue": ("data", "Where the rapporteur reports: commissione or assemblea.", None),
+    "venue": ("data", "Where the rapporteur reports or the amendment is filed: commissione "
+              "or assemblea.", None),
     "source": ("data", "Source the statement was taken from (dati.camera.it, dati.senato.it, "
                "scheda_camera, resoconto, ...).", None),
     "buildToolCommit": ("data", "Commit of the code that built the graph.", None),
@@ -244,11 +299,12 @@ def act_local_id(props: dict) -> str:
     """Local id of an act with no http URI.
 
     Camera placeholders keep the number-based id already on Zenodo; Senate
-    acts use their full `senato:19:...` id, since bare numbers repeat across
-    chambers.
+    acts and the documents of both chambers use their full id
+    (`senato:19:...`, `camera:19:doc:XXII:31`), since bare numbers repeat
+    across chambers and document series.
     """
     source_uri = props.get("uri", "")
-    if props.get("chamber") == "senato":
+    if props.get("chamber") == "senato" or props.get("kind") == "doc":
         return source_uri
     return str(props.get("number") or source_uri)
 
@@ -264,11 +320,14 @@ def law_uris(props: dict) -> tuple[URIRef, URIRef | None]:
 
 class RdfExporter:
     def __init__(self, driver, base: str, include_text: bool,
-                 archive_texts: dict | None = None):
+                 archive_texts: dict | None = None,
+                 amendment_texts: dict | None = None):
         self.driver = driver
         self.include_text = include_text
         self.archive_texts = archive_texts or {}
+        self.amendment_texts = amendment_texts or {}
         self.text_coverage = TextCoverage()
+        self.amendment_text_coverage = TextCoverage(unit="amendments")
         self.chambers = set()
         self.PRO = Namespace(base + "ontology#")   # classes and properties
         self.PRR = Namespace(base + "resource/")   # minted entity URIs
@@ -420,10 +479,17 @@ class RdfExporter:
                 "outcome": PRO.outcome,
                 "outcome_source": PRO.outcomeSource,
                 "outcome_raw": PRO.outcomeRaw,
+                "initiative": PRO.initiative,
+                "name": RDFS.label,
+                "doc_series": PRO.docSeries,
+                "doc_type_raw": PRO.documentType,
+                "title_source": PRO.titleSource,
             })
-            for key in ("source_page", "senato_url", "outcome_url"):
+            for key in ("source_page", "senato_url", "url", "outcome_url"):
                 self.add_link(uri, PRO.outcomeEvidence if key == "outcome_url" else FOAF.page,
                               props.get(key))
+            for url in props.get("text_urls") or []:
+                self.add_link(uri, PRO.textFile, url)
             for official in props.get("official_uris") or []:
                 if isinstance(official, str) and official.startswith("http") and official != str(uri):
                     self.g.add((uri, OWL.sameAs, URIRef(official)))
@@ -456,6 +522,39 @@ class RdfExporter:
     def add_link(self, subject: URIRef, predicate: URIRef, url):
         if isinstance(url, str) and url.startswith("http"):
             self.g.add((subject, predicate, URIRef(url)))
+
+    def export_amendments(self):
+        """Amendments with their number, outcome and, from the archive, their text."""
+        PRO = self.PRO
+        for rec in self.node_rows("Amendment"):
+            props = dict(rec["n"])
+            uri = self.mint("amendment", props["id"])
+            self.uri_by_eid[rec["eid"]] = uri
+            self.g.add((uri, RDF.type, PRO.Amendment))
+            self.add_props(uri, props, {
+                "number": DCTERMS.identifier,
+                "kind": DCTERMS.type,
+                "chamber": PRO.chamber,
+                "legislature": PRO.legislature,
+                "venue": PRO.venue,
+                "committee": PRO.committeeName,
+                "article": PRO.article,
+                "version": PRO.amendmentVersion,
+                "presented_on": DCTERMS.dateSubmitted,
+                "sitting_date": PRO.sittingDate,
+                "outcome": PRO.outcome,
+                "outcome_source": PRO.outcomeSource,
+                "outcome_raw": PRO.outcomeRaw,
+            })
+            self.add_link(uri, FOAF.page, props.get("source_url"))
+            if not self.include_text:
+                continue
+            # pop: each id is read once and the 197 MB of texts (2026-10-19)
+            # are released as the rdflib literals take their place
+            text = self.amendment_texts.pop(props["id"], None)
+            self.amendment_text_coverage.add(props.get("chamber"), bool(text))
+            if text:
+                self.g.add((uri, PRO.text, Literal(text, lang="it")))
 
     def export_legislation(self):
         """Laws (ELI), legislative processes and the text versions of bills.
@@ -496,7 +595,10 @@ class RdfExporter:
             props = dict(rec["n"])
             uri = self.mint("process", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
-            self.g.add((uri, RDF.type, PRO.LegislativeProcess))
+            # ingest_documents.py stores the Government documents both chambers
+            # receive as LegislativeProcess nodes with kind 'doc'
+            kind = PRO.DocumentProcess if props.get("kind") == "doc" else PRO.LegislativeProcess
+            self.g.add((uri, RDF.type, kind))
             self.add_props(uri, props, {"title": DCTERMS.title, "legislature": PRO.legislature})
 
         for rec in self.node_rows("TextVersion"):
@@ -826,6 +928,28 @@ class RdfExporter:
             count += 1
         print(f"  REPORTED_BY: {count}")
 
+    def export_amendment_links(self):
+        """Amended act, signatories, floor votes, sub-amendments and re-submissions."""
+        PRO = self.PRO
+        counts = {}
+
+        def add(s, p, o, label):
+            self.g.add((s, p, o))
+            counts[label] = counts.get(label, 0) + 1
+
+        for amendment, act, props in self.rel_rows("AMENDS"):
+            add(amendment, PRO.amendsJointAct if props.get("joint") else PRO.amends, act, "AMENDS")
+        for person, amendment, props in self.rel_rows("SIGNED_AMENDMENT"):
+            add(person, PRO.primarySignatoryOf if props.get("first") else PRO.coSignatoryOf,
+                amendment, "SIGNED_AMENDMENT")
+        for rel_type, predicate in (("ON_AMENDMENT", PRO.onAmendment),
+                                    ("SUB_OF", PRO.subAmendmentOf),
+                                    ("RESUBMITS", PRO.resubmits)):
+            for a, b, _ in self.rel_rows(rel_type):
+                add(a, predicate, b, rel_type)
+        for label, count in counts.items():
+            print(f"  {label}: {count}")
+
     # ---- individual votes (streamed, N-Triples) ----------------------------
 
     def export_votes_stream(self, path: Path) -> int:
@@ -885,19 +1009,22 @@ def main():
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    archive_texts = {}
+    archive_texts, amendment_texts = {}, {}
     if not args.skip_text:
-        archive_texts = load_speech_texts(archive_url_from_env(args.archive_url))
+        archive_url = archive_url_from_env(args.archive_url)
+        archive_texts = load_speech_texts(archive_url)
+        amendment_texts = load_amendment_texts(archive_url)
 
     driver = GraphDatabase.driver(uri, auth=(user, password))
     exporter = RdfExporter(driver, args.base, include_text=not args.skip_text,
-                           archive_texts=archive_texts)
+                           archive_texts=archive_texts, amendment_texts=amendment_texts)
     started = time.time()
     try:
         print("Exporting nodes...")
         exporter.export_people()
         exporter.export_organizations()
         exporter.export_acts_and_subjects()
+        exporter.export_amendments()
         exporter.export_legislation()
         exporter.export_proceedings()
         exporter.export_provenance()
@@ -906,9 +1033,13 @@ def main():
         coverage = exporter.text_coverage.as_dict()
         if coverage:
             print(f"  speech text coverage: {coverage}")
-        broken = exporter.text_coverage.broken_chambers()
+        amendment_coverage = exporter.amendment_text_coverage.as_dict()
+        if amendment_coverage:
+            print(f"  amendment text coverage: {amendment_coverage}")
+        broken = ([f"speech/{c}" for c in exporter.text_coverage.broken_chambers()]
+                  + [f"amendment/{c}" for c in exporter.amendment_text_coverage.broken_chambers()])
         if broken and not args.allow_missing_text:
-            sys.exit(f"speech text missing for {broken}: pass --archive-url (or set "
+            sys.exit(f"text missing for {broken}: pass --archive-url (or set "
                      "ARCHIVE_URL) to read it from the Postgres archive")
 
         print("Exporting relationships...")
@@ -918,6 +1049,7 @@ def main():
         exporter.export_offices()
         exporter.export_act_links()
         exporter.export_rapporteurs()
+        exporter.export_amendment_links()
 
         kg_path = out_dir / f"parliamentrag_kg.{args.format}"
         print(f"Serializing {len(exporter.g):,} triples -> {kg_path} ...")
@@ -929,6 +1061,7 @@ def main():
             "triples": len(exporter.g),
             "chambers": sorted(exporter.chambers),
             "speech_text": exporter.text_coverage.as_dict(),
+            "amendment_text": exporter.amendment_text_coverage.as_dict(),
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         meta_path = out_dir / "export_meta.json"
