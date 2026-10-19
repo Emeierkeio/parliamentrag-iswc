@@ -17,6 +17,7 @@ Node → RDF mapping:
     Government, MistoComponent          (+ ocd:gruppoParlamentare / ocd:organo)
   ParliamentaryAct                    ocd:atto
   EurovocConcept                      skos:Concept (canonical EuroVoc URIs)
+  TeseoConcept                        skos:Concept (TESEO, dati.senato.it/teseo/...)
   Session / Debate / Phase / Speech   pr:Session / pr:Debate / pr:Phase /
                                         pr:Speech (≈ akn:debate,
                                         akn:debateSection, akn:speech)
@@ -277,13 +278,14 @@ class RdfExporter:
                 "type": DCTERMS.type,
             })
 
-        for rec in self.node_rows("EurovocConcept"):
-            props = dict(rec["n"])
-            uri = URIRef(props["uri"])
-            self.uri_by_eid[rec["eid"]] = uri
-            self.g.add((uri, RDF.type, SKOS.Concept))
-            if props.get("label_it"):
-                self.g.add((uri, SKOS.prefLabel, Literal(props["label_it"], lang="it")))
+        for label in ("EurovocConcept", "TeseoConcept"):
+            for rec in self.node_rows(label):
+                props = dict(rec["n"])
+                uri = URIRef(props["uri"])
+                self.uri_by_eid[rec["eid"]] = uri
+                self.g.add((uri, RDF.type, SKOS.Concept))
+                if props.get("label_it"):
+                    self.g.add((uri, SKOS.prefLabel, Literal(props["label_it"], lang="it")))
 
     def export_proceedings(self):
         PRO = self.PRO

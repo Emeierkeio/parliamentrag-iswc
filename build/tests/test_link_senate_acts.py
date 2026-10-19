@@ -238,6 +238,20 @@ def test_title_bills():
     assert title_bills("(3-02671) - Question time su ...") == []
 
 
+def test_subject_rows_keep_senate_bills_and_drop_duplicates():
+    from link_senate_acts import subject_rows
+    subjects = pd.DataFrame({
+        "ddl": ["s/1", "s/1", "s/1", "c/9", "s/2"],
+        "teseo": ["t/2", "t/1", "t/2", "t/1", "t/3"],
+        "label": ["POLIZIA MUNICIPALE", "ENTI LOCALI", "POLIZIA MUNICIPALE", "ENTI LOCALI", None],
+    })
+    assert subject_rows(subjects, {"s/1", "s/2"}) == [
+        {"uri": "s/1", "subjects": [{"uri": "t/1", "label": "ENTI LOCALI"},
+                                    {"uri": "t/2", "label": "POLIZIA MUNICIPALE"}]},
+        {"uri": "s/2", "subjects": [{"uri": "t/3", "label": None}]},
+    ]
+
+
 def test_title_control_acts():
     from link_senate_acts import title_control_acts
     assert title_control_acts("(3-02671) - Question time su tariffe autostradali") == ["3/02671"]

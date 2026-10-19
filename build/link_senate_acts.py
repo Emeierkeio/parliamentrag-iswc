@@ -8,6 +8,8 @@ transcripts in data/senate_xml (Akoma Ntoso); no network.
   (:ParliamentaryAct {uri: Ddl URI, chamber: 'senato', initiative})
   (:Person)-[:PRIMARY_SIGNATORY|CO_SIGNATORY]->(act)   senators, from osr:iniziativa
   (act)-[:PRESENTED_BY]->(:Government)                  government bills (decision D3)
+  (act)-[:HAS_SUBJECT]->(:TeseoConcept {uri, label_it})  TESEO subjects, bill level
+                                                        (senato_{roman}_ddl_teseo.csv)
   (:Person)-[:PRESENTED {role}]->(act)                  ministers and deputies who
                                                         presented it: kept apart from
                                                         the signatures, which feed
@@ -501,6 +503,35 @@ def write_presenters(session, ddl: pd.DataFrame, signers: pd.DataFrame,
     return stats
 
 
+def subject_rows(subjects: pd.DataFrame, senate_uris: set[str]) -> list[dict]:
+    """[{uri, subjects: [{uri, label}]}] per Senate bill, from the TESEO CSV."""
+    by_act: dict[str, dict[str, Optional[str]]] = defaultdict(dict)
+    for ddl, teseo, label in zip(subjects["ddl"], subjects["teseo"], subjects["label"]):
+        if ddl in senate_uris and isinstance(teseo, str):
+            by_act[ddl][teseo] = label if isinstance(label, str) and label.strip() else None
+    return [{"uri": uri, "subjects": [{"uri": t, "label": lab} for t, lab in sorted(subs.items())]}
+            for uri, subs in sorted(by_act.items())]
+
+
+def write_subjects(session, rows: list[dict]) -> int:
+    """(act)-[:HAS_SUBJECT]->(:TeseoConcept), the Senate's counterpart of the
+    Chamber's EuroVoc subjects; a subject the source no longer lists goes."""
+    session.run("CREATE CONSTRAINT IF NOT EXISTS FOR (c:TeseoConcept) REQUIRE c.uri IS UNIQUE")
+    return session.run("""
+        UNWIND $rows AS row
+        MATCH (a:ParliamentaryAct {uri: row.uri})
+        OPTIONAL MATCH (a)-[old:HAS_SUBJECT]->(gone:TeseoConcept)
+        WHERE NOT gone.uri IN [x IN row.subjects | x.uri]
+        DELETE old
+        WITH DISTINCT a, row
+        UNWIND row.subjects AS sub
+        MERGE (c:TeseoConcept {uri: sub.uri})
+        SET c.label_it = coalesce(sub.label, c.label_it)
+        MERGE (a)-[r:HAS_SUBJECT]->(c)
+        RETURN count(r) AS n
+    """, rows=rows).single()["n"]
+
+
 def write_signatories(session, signers: pd.DataFrame, senate_uris: set[str]) -> int:
     rows = [
         {"uri": r.ddl, "sen": r.senatore, "primary": r.primoFirmatario == "1"}
@@ -555,6 +586,8 @@ def main() -> int:
     initiatives = {uri: kind for uri, t in types.items() if (kind := initiative_of(t))}
     index = bill_index(ddl)
     senate_uris = set(ddl.loc[ddl["ramo"] == "S", "ddl"])
+    subjects_path = os.path.join(data, f"senato_{roman}_ddl_teseo.csv")
+    subjects = pd.read_csv(subjects_path, dtype=str) if os.path.exists(subjects_path) else None
     official_path = os.path.join(data, f"senato_{roman}_voti_atti.csv")
     official = (official_vote_acts(pd.read_csv(official_path, dtype=str), senate_uris)
                 if os.path.exists(official_path) else {})
@@ -567,6 +600,8 @@ def main() -> int:
             stats["acts"] = write_acts(s, ddl, args.legislature, initiatives)
             stats["signatures"] = write_signatories(s, signers, senate_uris)
             stats.update(write_presenters(s, ddl, signers, presenters, initiatives))
+            if subjects is not None:
+                stats["teseo_subjects"] = write_subjects(s, subject_rows(subjects, senate_uris))
 
         sittings = {r["n"]: r["id"] for r in s.run(
             "MATCH (x:Session {chamber: 'senato', legislature: $leg}) RETURN x.number AS n, x.id AS id",

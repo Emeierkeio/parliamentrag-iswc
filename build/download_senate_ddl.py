@@ -12,6 +12,8 @@ Produces:
     popular initiative
   - data/senato_{roman}_voti_atti.csv         one row per (votazione, act) from
     osr:oggetto -> osr:OggettoTrattazione -> osr:relativoA
+  - data/senato_{roman}_ddl_teseo.csv         one row per (Ddl, TESEO subject), Senate
+    branch, from osr:classificazione at the "Generale" level
 
 Each Ddl URI is one "fase": a bill read twice in the Senate has two
 (S.1468, S.1468-B), sharing idDdl. Signatories come from osr:iniziativa,
@@ -27,6 +29,7 @@ import csv
 import logging
 import os
 import sys
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -147,6 +150,47 @@ SELECT ?ddl ?pres ?tipo ?dep ?primo WHERE {{
     } for b in rows]
 
 
+def _subjects_query(legislature: int, lo: Optional[int], hi: Optional[int]) -> str:
+    # Later readings and split bills ("17-B", "926-bis") are no integer:
+    # lo=None selects them.
+    numbers = (f"FILTER(xsd:integer(?numero) >= {lo} && xsd:integer(?numero) < {hi})"
+               if lo is not None else 'FILTER(!regex(str(?numero), "^[0-9]+$"))')
+    return PREFIX + f"""
+SELECT ?ddl ?teseo ?label WHERE {{
+  ?ddl a osr:Ddl ; osr:legislatura {legislature} ; osr:numeroFase ?numero ; osr:ramo ?r ;
+       osr:classificazione ?c .
+  FILTER(str(?r) = "S")
+  {numbers}
+  ?c osr:livello "Generale"^^xsd:string ; <http://purl.org/dc/terms/subject> ?teseo .
+  OPTIONAL {{ ?teseo <http://www.w3.org/2004/02/skos/core#prefLabel> ?label }}
+}}
+"""
+
+
+def download_subjects(legislature: int, max_number: int) -> list[dict]:
+    """TESEO subjects of the Senate-branch bills, bill level only.
+
+    osr:classificazione also has an "Articoli" level, one subject per group
+    of articles (63,521 rows in the XIX against 15,902 "Generale", 19/10/2026):
+    the bill-level ones are the counterpart of the Chamber's EuroVoc.
+    """
+    out: list[dict] = []
+    ranges = [(lo, lo + NUMBER_STEP) for lo in range(0, max_number + 1, NUMBER_STEP)]
+    ranges.append((None, None))
+    while ranges:
+        lo, hi = ranges.pop(0)
+        rows = _senato_sparql_get(_subjects_query(legislature, lo, hi), strict=True)
+        if lo is not None and len(rows) >= ROW_CAP and hi - lo > 1:
+            mid = (lo + hi) // 2
+            ranges[:0] = [(lo, mid), (mid, hi)]
+            continue
+        logger.info("  bills %s: %d TESEO subjects", f"{lo}-{hi - 1}" if lo is not None else "-B, -bis",
+                    len(rows))
+        out += [{"ddl": _value(b, "ddl"), "teseo": _value(b, "teseo"),
+                 "label": " ".join(_value(b, "label").split())} for b in rows]
+    return out
+
+
 # Sittings per vote-object request: ~18 votazioni per sitting, some objects
 # relate to several acts; a range that hits the cap is split.
 SITTING_STEP = 120
@@ -215,6 +259,9 @@ def main() -> int:
               ["ddl", "presentatore", "tipo", "deputato", "primoFirmatario"])
     write_csv(os.path.join(DATA_DIR, f"senato_{roman}_voti_atti.csv"),
               download_vote_objects(args.legislature), ["votazione", "atto"])
+    max_senate = max((_number_prefix(d["numero"]) for d in ddl if d["ramo"] == "S"), default=0)
+    write_csv(os.path.join(DATA_DIR, f"senato_{roman}_ddl_teseo.csv"),
+              download_subjects(args.legislature, max_senate), ["ddl", "teseo", "label"])
     return 0
 
 

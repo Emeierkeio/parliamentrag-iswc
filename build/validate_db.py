@@ -28,6 +28,7 @@ URI_PATTERNS = {
     "ParliamentaryAct": ("uri", ("http://dati.camera.it/", "placeholder:",
                                  "http://dati.senato.it/ddl/", "senato:")),
     "EurovocConcept": ("uri", ("http://eurovoc.europa.eu/",)),
+    "TeseoConcept": ("uri", ("http://dati.senato.it/teseo/",)),
 }
 
 EMBEDDING_PROPS = [
@@ -242,6 +243,17 @@ class Validator:
                    f"{r['gov_no_pres']} senza")
         self.check(r["nobody"] == 0, "ddl del Senato con firmatari o presentatori",
                    f"{r['nobody']} senza nessuno")
+
+        # TESEO (osr:classificazione, level "Generale"): 2,097 of 2,098 bills
+        # on 19/10/2026, 1689/I has none at the source.
+        rows = self.q("""
+            MATCH (a:ParliamentaryAct {chamber: 'senato', type: 'Disegno di legge'})
+            RETURN count(a) AS tot,
+                   sum(CASE WHEN (a)-[:HAS_SUBJECT]->(:TeseoConcept) THEN 1 ELSE 0 END) AS with_s
+        """)
+        r = rows[0]
+        self.check(r["with_s"] >= 0.98 * r["tot"], f"ddl del Senato con i temi TESEO {r['with_s']}/{r['tot']}",
+                   "sotto il 98% (download_senate_ddl.py + link_senate_acts.py)", warn_only=True)
 
         # build/link_senate_acts.py. Quorum checks, cancelled votes and
         # re-counts aside, 89 of 8,181 votes had no act on 19/10/2026 (1.1%):

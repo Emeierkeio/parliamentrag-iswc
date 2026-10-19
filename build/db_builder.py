@@ -440,6 +440,7 @@ class DatabaseBuilder:
             "CREATE CONSTRAINT IF NOT EXISTS FOR (v:Vote) REQUIRE v.id IS UNIQUE",
             "CREATE CONSTRAINT IF NOT EXISTS FOR (a:ParliamentaryAct) REQUIRE a.uri IS UNIQUE",
             "CREATE CONSTRAINT IF NOT EXISTS FOR (ev:EurovocConcept) REQUIRE ev.uri IS UNIQUE",
+            "CREATE CONSTRAINT IF NOT EXISTS FOR (c:TeseoConcept) REQUIRE c.uri IS UNIQUE",
         ]
         with self._driver.session() as neo_session:
             for cypher in constraints:
