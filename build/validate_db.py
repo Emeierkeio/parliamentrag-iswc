@@ -541,9 +541,10 @@ class Validator:
         """)
         self.check(rows[0]["c"] == 0, "0 id di emendamento duplicati", f"{rows[0]['c']}: {rows[0]['ids']}")
 
-        # Thresholds from the first load on staging (2026-10-14): Chamber 92%
-        # of amendments with their bill (49 bills missing from the graph),
-        # signatures ~100%, floor votes 87% Chamber and 97% Senate.
+        # Thresholds from the first load on staging (2026-10-14). First load in
+        # production (2026-10-19): bills 100% in both chambers, signatures ~100%,
+        # floor votes 86.5% Chamber (the Camera publishes no floor file for 20
+        # bills, e.g. C.2316) and 99.2% Senate.
         rows = self.q("""
             MATCH (a:Amendment)
             RETURN a.chamber AS ch, count(a) AS n,

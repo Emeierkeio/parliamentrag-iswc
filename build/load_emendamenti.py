@@ -345,14 +345,27 @@ def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) 
 
 # -------------------------------------------------------------------- input
 
-def read_rows(path: Path, limit: int | None) -> list[dict]:
+# The texts are two thirds of the JSONL: all 224k rows with them take 1.4 GB
+# in Python (2026-10), too much next to Neo4j on the 8 GB VPS. The graph never
+# reads them, the archive reads them only for the rows it writes.
+TEXT_FIELDS = ("testo", "testo_presentato")
+
+
+def read_rows(path: Path, limit: int | None, keep_text: bool = True,
+              only_ids: set[str] | None = None) -> list[dict]:
+    """Rows of the JSONL with their hash and derived keys; texts dropped unless keep_text."""
     rows = []
     with open(path, encoding="utf-8") as f:
         for line in f:
             if limit is not None and len(rows) >= limit:
                 break
             row = json.loads(line)
+            if only_ids is not None and row["id"] not in only_ids:
+                continue
             row["_hash"] = row_hash(row)
+            if not keep_text:
+                for k in TEXT_FIELDS:
+                    row.pop(k, None)
             row["_chamber"] = "camera" if row["ramo"] == "C" else "senato"
             row["_number_key"] = number_key(row["numero"])
             row["_version"] = normalize_version(row.get("versione"))
@@ -860,7 +873,11 @@ class Embedder:
             return list(pool.map(self._call, batches))
 
 
-def load_archive(rows: list[dict], args, stats: Counter) -> None:
+def load_archive(rows: list[dict], args, stats: Counter, path: Path) -> None:
+    """Write changed rows with their text, then chunks, embeddings and the HNSW index.
+
+    `rows` may lack the texts: the rows to write are read again from `path` with them.
+    """
     import psycopg
 
     leg = args.leg
@@ -885,13 +902,14 @@ def load_archive(rows: list[dict], args, stats: Counter) -> None:
         stats["archive.rows_deleted"] = len(stale)
         logger.info("archive: %d rows to write, %d stale", len(changed), len(stale))
         if args.dry_run:
-            texts = {r["testo_hash"]: r["testo"] for r in rows if r.get("testo")}
+            texts = {r["testo_hash"]: r["testo"] for r in read_rows(path, args.limit) if r.get("testo")}
             n_chunks = sum(len(chunk_text(t)) for t in texts.values())
             chars = sum(len(c) for t in texts.values() for c in chunk_text(t))
             logger.info("archive (dry run): %d distinct texts, %d chunks, ~%.1fM characters to embed",
                         len(texts), n_chunks, chars / 1e6)
             return
 
+        changed = read_rows(path, args.limit, only_ids={r["id"] for r in changed}) if changed else []
         with conn.cursor() as cur:
             for i in range(0, len(changed), args.batch):
                 cur.execute("CREATE TEMP TABLE IF NOT EXISTS amendment_in (LIKE amendment) ON COMMIT DELETE ROWS")
@@ -1034,7 +1052,7 @@ def main() -> int:
         ap.error("--index-mem like 256MB")
 
     t = time.time()
-    rows = read_rows(path, args.limit)
+    rows = read_rows(path, args.limit, keep_text=False)
     logger.info("%s: %d rows", path.name, len(rows))
     stats: Counter = Counter()
     unlinked: dict = {}
@@ -1042,7 +1060,7 @@ def main() -> int:
         load_graph(rows, args, stats, unlinked)
         report(stats, unlinked, args.examples)
     if args.archive_url:
-        load_archive(rows, args, stats)
+        load_archive(rows, args, stats, path)
     logger.info("done in %.0fs%s: %s", time.time() - t, " (dry run)" if args.dry_run else "",
                 json.dumps({k: v for k, v in sorted(stats.items()) if not k.startswith(("camera.", "senato."))}))
     return 0
