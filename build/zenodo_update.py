@@ -26,10 +26,11 @@ What this script does
    first, otherwise you would re-upload stale dumps.
 4. Sets the publication_date of the draft to today and applies
    build/zenodo_metadata.json (title, description, license, keywords,
-   related identifiers), filling {{TRIPLES}} and {{INDIVIDUAL_VOTES}} from
-   dumps/rdf/export_meta.json. A new-version draft otherwise inherits the
-   previous version's metadata, which described the Chamber only and carried
-   CC BY 4.0 (wrong since the Chamber data are CC BY-SA).
+   related identifiers), filling {{TRIPLES}}, {{INDIVIDUAL_VOTES}} and
+   {{AMENDMENTS}} from dumps/rdf/export_meta.json. A new-version draft
+   otherwise inherits the previous version's metadata, which described the
+   Chamber only and carried CC BY 4.0 (wrong since the Chamber data are
+   CC BY-SA).
 5. Leaves the draft UNPUBLISHED and prints its URL: you review it in the
    browser and press Publish yourself — a published DOI is permanent.
    With --publish it publishes the draft right away instead (used by the
@@ -70,6 +71,7 @@ def render_metadata(template_path: Path, export_meta: dict) -> dict:
     values = {
         "TRIPLES": export_meta.get("triples"),
         "INDIVIDUAL_VOTES": export_meta.get("individual_votes"),
+        "AMENDMENTS": export_meta.get("amendments"),
     }
     text = template_path.read_text(encoding="utf-8")
     for token, value in values.items():

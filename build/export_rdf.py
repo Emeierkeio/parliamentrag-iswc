@@ -328,6 +328,7 @@ class RdfExporter:
         self.amendment_texts = amendment_texts or {}
         self.text_coverage = TextCoverage()
         self.amendment_text_coverage = TextCoverage(unit="amendments")
+        self.amendment_count = 0
         self.chambers = set()
         self.PRO = Namespace(base + "ontology#")   # classes and properties
         self.PRR = Namespace(base + "resource/")   # minted entity URIs
@@ -531,6 +532,7 @@ class RdfExporter:
             uri = self.mint("amendment", props["id"])
             self.uri_by_eid[rec["eid"]] = uri
             self.g.add((uri, RDF.type, PRO.Amendment))
+            self.amendment_count += 1
             self.add_props(uri, props, {
                 "number": DCTERMS.identifier,
                 "kind": DCTERMS.type,
@@ -1061,6 +1063,7 @@ def main():
             "triples": len(exporter.g),
             "chambers": sorted(exporter.chambers),
             "speech_text": exporter.text_coverage.as_dict(),
+            "amendments": exporter.amendment_count,
             "amendment_text": exporter.amendment_text_coverage.as_dict(),
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }

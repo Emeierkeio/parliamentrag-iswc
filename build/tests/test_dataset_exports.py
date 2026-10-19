@@ -133,10 +133,12 @@ def test_hf_card_tokens_all_filled():
 
 def test_zenodo_metadata_filled_from_export_meta():
     meta = zenodo_update.render_metadata(
-        BUILD / "zenodo_metadata.json", {"triples": 1234567, "individual_votes": 8200000})
+        BUILD / "zenodo_metadata.json",
+        {"triples": 1234567, "individual_votes": 8200000, "amendments": 224173})
     assert meta["license"] == "cc-by-sa-4.0"
     assert "1,234,567 triples" in meta["description"]
     assert "8,200,000 individual votes" in meta["description"]
+    assert "224,173 amendments" in meta["description"]
     assert "Senate" in meta["title"]
     assert json.dumps(meta).count("{{") == 0
 
