@@ -87,6 +87,7 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `link_resumed_debates.py` | resumed debates ("Si riprende la discussione ... n. 1660-A", the bare "Si riprende la discussione.", Senate "Ripresa della discussione ... (274)") and debates on a split bill ("A.C. 1532-ter-A") `DISCUSSES`-linked to their bills, from the title or the agenda item they resume |
 | `act_subjects.py` | readable `subject` of motions and resolutions (voted or discussed), from the debate title or the Senate vote label, never generated text |
 | `ingest_reporters.py` | rapporteurs of bills and documents, `(:Bill\|:ParliamentaryDocument)-[:REPORTED_BY]->(:Person)`, from dati.camera.it and dati.senato.it, the bill pages on camera.it (minority rapporteurs, stand-ins) and the speaker labels of the transcripts |
+| `ingest_bill_committees.py` | committees the bills are assigned to, `(:Bill)-[:ASSIGNED_TO {sede, mode, date, joint}]->(:Committee)`: sede referente from dati.camera.it, referente and consultiva from dati.senato.it |
 | `ingest_documents.py` | parliamentary documents (Doc.: DEF, Giunta reports, inquiry proposals...) of both chambers, one node per document keyed `camera:19:doc:IV-ter:13`, with their debates, votes (`ON_ACT`), rapporteurs from the report title, and a `LegislativeProcess` joining the Government documents both chambers receive; `doc_refs.py` reads the "Doc." references |
 
 ## Notes

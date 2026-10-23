@@ -414,6 +414,12 @@ run "ODG Camera → progetto di legge ed esito" env NEO4J_PASSWORD="$NEO4J_PASS_
 run "Relatori Camera" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/ingest_reporters.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera \
 	|| warn "relatori Camera: SPARQL non raggiungibile, restano quelli del giro precedente"
+# Commissione a cui è assegnato ogni progetto di legge della Camera (ocd:rif_assegnazione,
+# sede referente, una query SPARQL per anno): scrive solo gli archi nuovi o
+# cambiati. Quelle del Senato passano da update_senato.sh.
+run "Commissioni dei progetti di legge Camera" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
+	"$PY" build/ingest_bill_committees.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --chamber camera \
+	|| warn "commissioni Camera: SPARQL non raggiungibile, restano quelle del giro precedente"
 # Relatori di minoranza e sostituti in Aula che dati.camera.it non elenca, dalla
 # scheda dell'atto su camera.it: solo atti nuovi o cambiati (al più 150 pagine,
 # 2,5 s l'una), il resto dalla copia in data/camera_xix_relatori_schede.json.

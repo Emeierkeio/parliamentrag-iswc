@@ -101,6 +101,10 @@ step "documenti (Doc.)" env NEO4J_PASSWORD="$PASS_VAL" \
 # Relatori dei ddl (una query a dati.senato.it, copia in data/).
 senato_step "relatori dei ddl (dati.senato.it)" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/ingest_reporters.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato
+# Commissioni dei ddl, di merito e consultive (una query per anno a
+# dati.senato.it, copia in data/): solo gli archi nuovi o cambiati.
+senato_step "commissioni dei ddl (dati.senato.it)" env NEO4J_PASSWORD="$PASS_VAL" \
+	"$PY" build/ingest_bill_committees.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato
 # Chi il resoconto chiama relatore e dati.senato.it non elenca. Senza rete.
 step "relatori dai resoconti" env NEO4J_PASSWORD="$PASS_VAL" \
 	"$PY" build/ingest_reporters.py --neo4j-uri "$URI" --neo4j-user "$USER_VAL" --chamber senato --source resoconto
