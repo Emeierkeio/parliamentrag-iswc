@@ -81,6 +81,7 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `download_esiti_senato.py` | Senate amendment outcomes and the floor texts missing from Akoma Ntoso |
 | `parse_emendamenti.py` | both chambers' amendments in one JSONL (`downloads/emendamenti/`) |
 | `load_emendamenti.py` | amendments into the graph (`Amendment`, `AMENDS`, `SIGNED_AMENDMENT`, `ON_AMENDMENT`, `SUB_OF`, `RESUBMITS`) and their text and embeddings into the archive |
+| `load_act_texts.py` | text of the Chamber bills (articles and report of every version, from documenti.camera.it) into the archive (`act_text`, `act_text_chunk`) with embeddings; `TextVersion.text_sections` in the graph |
 | `link_agenda_orders.py` | agenda orders `REFERS_TO` their bill (from the number), outcome from votes (Camera) and from the G amendments (Senato) |
 | `link_camera_motions.py` | Chamber motions and resolutions voted in the House `DISCUSSES`-linked to the debate where the vote falls and to the one it resumes (Senate ones: `link_senate_acts.py`) |
 | `link_resumed_debates.py` | resumed debates ("Si riprende la discussione ... n. 1660-A", the bare "Si riprende la discussione.", Senate "Ripresa della discussione ... (274)") and debates on a split bill ("A.C. 1532-ter-A") `DISCUSSES`-linked to their bills, from the title or the agenda item they resume |
@@ -106,5 +107,10 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
   one. senato.it is behind an AWS WAF challenge,
   solved with Playwright (`playwright install chromium`), and blocks the IP
   for a few hours if requests come too fast: keep at least 2 s between them.
+- Bill texts (Camera, XIX): with `TESTI_ATTI=1` and `ARCHIVE_URL` in `.env`
+  `make update-data` runs `load_act_texts.py` on the versions in the graph;
+  only versions missing from `downloads/testi_atti/camera/` are downloaded and
+  only chunks without an embedding go to OpenAI. The first load, about 3,800
+  versions at one request per second, is run by hand before turning it on.
 - Tests: `pytest build/tests/` (integration tests need a running Neo4j and
   `NEO4J_PASSWORD` set).

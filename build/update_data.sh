@@ -432,6 +432,30 @@ run "Leggi" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/ingest_laws.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
 	|| warn "leggi: ingest fallito, riprende al prossimo giro"
 
+# ── Testo dei progetti di legge della Camera → archivio ──────────────────────
+# Articolato e relazione di ogni versione (TextVersion, appena aggiornate dal
+# passo «Letture e processo legislativo») da documenti.camera.it, in act_text e
+# act_text_chunk dell'archivio. Scarica solo le versioni che non sono in
+# downloads/testi_atti/camera/, riscrive le righe con l'hash cambiato e manda a
+# OpenAI solo i passaggi senza embedding. Spento di default: si accende con
+# TESTI_ATTI=1 (ambiente o .env) dopo il primo caricamento a mano, che scarica
+# tutte le versioni (circa 3.800 a ottobre 2026, un secondo l'una).
+: "${TESTI_ATTI:=$(grep '^TESTI_ATTI=' .env | cut -d= -f2-)}"
+ACT_TEXT_ARCHIVE="${ARCHIVE_URL:-$(grep '^ARCHIVE_URL=' .env | cut -d= -f2-)}"
+if [ "${TESTI_ATTI:-0}" != "1" ]; then
+	note "Testo dei progetti di legge: TESTI_ATTI non attivo — saltato."
+elif [ -z "$ACT_TEXT_ARCHIVE" ]; then
+	warn "Testo dei progetti di legge: ARCHIVE_URL mancante — saltato."
+else
+	act_texts() {
+		env NEO4J_PASSWORD="$NEO4J_PASS_VAL" OPENAI_API_KEY="$OPENAI_KEY_VAL" \
+			"$PY" build/load_act_texts.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
+			--neo4j-user "${NEO4J_USER_VAL:-neo4j}" --archive-url "$ACT_TEXT_ARCHIVE"
+	}
+	run "Testo dei progetti di legge Camera → archivio" act_texts \
+		|| warn "testo dei progetti di legge: caricamento incompleto, riprende al prossimo giro"
+fi
+
 # ── Emendamenti XIX → grafo e archivio ───────────────────────────────────────
 # Spento di default: si accende con EMENDAMENTI_GRAFO=1 (ambiente o .env).
 # Dopo il Senato, così le sue votazioni nuove si collegano nello stesso giro.
