@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from ..models.timeline import (
     ActInfo,
@@ -25,6 +26,7 @@ from ..models.timeline import (
     DebateSummary,
     InterventionInfo,
     PhaseInfo,
+    SearchMatch,
     SessionCard,
     SpeakerInfo,
     SpeakerSummaryResponse,
@@ -162,6 +164,197 @@ def _vote_kind_fields(subject: str | None, outcome: str | None, description: str
     return {"kind": None, "outcome": outcome, "description": description}
 
 
+# ---------------------------------------------------------------------------
+# Sittings search
+# ---------------------------------------------------------------------------
+
+# Full-text indexes behind the sittings search, all with the italian analyzer
+# (plurals and elisions fold: "giochi" finds "gioco"). db_builder creates
+# them (create_search_indexes: timeline_vote/act/debate/session_fulltext);
+# chunk_fulltext is the speech index the retrieval already uses.
+_LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}\[\]^"~*?:\\/])')
+_LUCENE_WORDS = {"and", "or", "not", "to"}
+
+SESSION_FILTER = """
+  s.legislature = $legislature
+  AND ($chambers IS NULL OR coalesce(s.chamber, 'camera') IN $chambers)"""
+
+SEARCH_HITS = {
+    "vote": f"""
+CALL db.index.fulltext.queryNodes('timeline_vote_fulltext', $q) YIELD node AS v, score
+WITH v, score ORDER BY score DESC LIMIT 2000
+MATCH (s:Session)-[:HAS_VOTE]->(v)
+WHERE {SESSION_FILTER}
+RETURN s.id AS sid, v.id AS vote_id, v.number AS vote_number,
+       v.subject AS subject, v.description AS description, score""",
+    "act": f"""
+CALL db.index.fulltext.queryNodes('timeline_act_fulltext', $q) YIELD node AS a, score
+WITH a, score ORDER BY score DESC LIMIT 300
+CALL {{
+  WITH a
+  MATCH (s:Session)-[:HAS_VOTE]->(v)-[:ON_ACT]->(a)
+  RETURN s, min(v.number) AS vote_number
+  UNION
+  WITH a
+  MATCH (s:Session)-[:HAS_DEBATE]->()-[:DISCUSSES]->(a)
+  RETURN s, null AS vote_number
+}}
+WITH s, a, score, min(vote_number) AS vote_number
+WHERE {SESSION_FILTER}
+OPTIONAL MATCH (s)-[:HAS_VOTE]->(v {{number: vote_number}})-[:ON_ACT]->(a)
+RETURN s.id AS sid, a.title AS title, a.description AS description,
+       head(collect(v.id)) AS vote_id, vote_number, score""",
+    "speaker": f"""
+MATCH (spk)
+WHERE (spk:Deputy OR spk:Senator OR spk:GovernmentMember) AND size($search) >= 3
+  AND toLower(coalesce(spk.first_name, '') + ' ' + coalesce(spk.last_name, '')) CONTAINS toLower($search)
+MATCH (s:Session)-[:HAS_DEBATE]->()-[:HAS_PHASE]->()-[:CONTAINS_SPEECH]->(sp)-[:SPOKEN_BY]->(spk)
+WHERE {SESSION_FILTER}
+WITH s, spk, count(DISTINCT sp) AS n
+RETURN s.id AS sid, trim(coalesce(spk.first_name, '') + ' ' + coalesce(spk.last_name, '')) AS speaker,
+       n AS score""",
+    "debate": f"""
+CALL db.index.fulltext.queryNodes('timeline_debate_fulltext', $q) YIELD node AS d, score
+WITH d, score ORDER BY score DESC LIMIT 2000
+MATCH (s:Session)-[:HAS_DEBATE]->(d)
+WHERE {SESSION_FILTER}
+RETURN s.id AS sid, d.id AS debate_id, d.title AS text, score""",
+    "recap": f"""
+CALL db.index.fulltext.queryNodes('timeline_session_fulltext', $q) YIELD node AS s, score
+WITH s, score ORDER BY score DESC LIMIT 1000
+WHERE {SESSION_FILTER}
+RETURN s.id AS sid, CASE WHEN $locale = 'en' THEN s.recapEn ELSE s.recapIt END AS text, score""",
+    "speech": f"""
+CALL db.index.fulltext.queryNodes('chunk_fulltext', $q) YIELD node AS c, score
+WITH c, score ORDER BY score DESC LIMIT 3000
+MATCH (sp)-[:HAS_CHUNK]->(c)
+MATCH (s:Session)-[:HAS_DEBATE]->()-[:HAS_PHASE]->()-[:CONTAINS_SPEECH]->(sp)
+WHERE {SESSION_FILTER}
+WITH s, head(collect({{c: c, sp: sp, score: score}})) AS top
+WITH s, top.sp AS sp, top.c AS c, top.score AS score
+OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(spk)
+RETURN s.id AS sid, c.text AS text, score,
+       trim(coalesce(spk.first_name, '') + ' ' + coalesce(spk.last_name, '')) AS speaker""",
+}
+
+# What a sitting shows for a search, in this order: the votes first.
+_MATCH_ORDER = ("vote", "act", "debate", "speaker", "speech", "recap")
+_MATCH_CAP = {"vote": 3, "act": 1, "debate": 1, "speaker": 1, "speech": 1, "recap": 1}
+_MATCHES_PER_SESSION = 4
+
+
+def lucene_query(text: str | None) -> str | None:
+    """Every word of the query, escaped, all required; with more words the
+    exact phrase scores higher ("legge di bilancio")."""
+    words = [w for w in re.split(r"\s+", (text or "").strip().strip('"')) if w]
+    terms = []
+    for w in words:
+        w = _LUCENE_SPECIAL.sub(r"\\\1", w)
+        if w.lower() in _LUCENE_WORDS:
+            w = f'"{w}"'
+        terms.append(w)
+    if len(terms) > 1:
+        phrase = " ".join(_LUCENE_SPECIAL.sub(r"\\\1", w) for w in words)
+        return f'"{phrase}"^4 OR ({" AND ".join(terms)})'
+    return terms[0] if terms else None
+
+
+def _excerpt(text: str, query: str, width: int = 180) -> str:
+    """The stretch of a speech around the first searched word."""
+    text = re.sub(r"\s+", " ", text or "").strip()
+    low = text.lower()
+    pos = low.find(" ".join(query.lower().split()))
+    for w in [] if pos >= 0 else re.findall(r"\w+", query.lower()):
+        stem = w if len(w) <= 4 else w[: max(4, len(w) - 2)]
+        pos = low.find(stem)
+        if pos >= 0:
+            break
+    if pos < 0 or len(text) <= width:
+        return text[:width].rstrip() + ("…" if len(text) > width else "")
+    start = max(0, pos - width // 3)
+    if start:
+        space = text.find(" ", start)
+        start = space + 1 if 0 <= space < pos else start
+    end = min(len(text), start + width)
+    if end < len(text):
+        space = text.rfind(" ", pos, end)
+        end = space if space > pos else end
+    return ("…" if start else "") + text[start:end].strip() + ("…" if end < len(text) else "")
+
+
+def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
+                legislature: int, locale: str) -> dict[str, list[SearchMatch]] | None:
+    """Sittings whose votes, acts, debates, speeches or recap contain the
+    words, each with what matched. None when the indexes are missing, so the
+    caller falls back to the plain substring search."""
+    q = lucene_query(search)
+    if not q:
+        return {}
+    params = {"q": q, "search": search.strip(), "chambers": chambers, "legislature": legislature,
+              "locale": locale}
+    def run(cypher: str) -> list[dict] | None:
+        try:
+            return neo4j.query(cypher, params)
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=len(SEARCH_HITS)) as pool:
+        results = dict(zip(SEARCH_HITS, pool.map(run, SEARCH_HITS.values())))
+    if results["vote"] is None:
+        return None
+
+    found: dict[str, dict[str, list[tuple[float, SearchMatch]]]] = {}
+    for kind, rows in results.items():
+        for r in rows or []:
+            if kind == "vote":
+                text = " · ".join(t for t in (r.get("subject"), r.get("description")) if t)
+                m = SearchMatch(kind=kind, text=text, vote_id=r.get("vote_id"), vote_number=r.get("vote_number"))
+            elif kind == "act":
+                # Questions and motions have a bare title ("INTERROGAZIONE A
+                # RISPOSTA ORALE 3/02563"): their subject is the description.
+                title, desc = r.get("title") or "", r.get("description") or ""
+                if desc and (not title or title.isupper()):
+                    text = (title.capitalize() + ": " if title else "") + _excerpt(desc, search, 160)
+                else:
+                    text = title
+                m = SearchMatch(kind=kind, text=re.sub(r"\s+", " ", text).strip(), vote_id=r.get("vote_id"),
+                                vote_number=r.get("vote_number"))
+            elif kind == "speaker":
+                name = _display_case(r.get("speaker"))
+                m = SearchMatch(kind=kind, text=name, speaker=name)
+            elif kind == "speech":
+                m = SearchMatch(kind=kind, text=_excerpt(r.get("text") or "", search),
+                                speaker=_display_case(r.get("speaker")) or None)
+            elif kind == "debate":
+                if is_outcome_fragment(r.get("text")):
+                    continue
+                m = SearchMatch(kind=kind, text=re.sub(r"\s+", " ", r.get("text") or "").strip())
+            else:
+                m = SearchMatch(kind=kind, text=_excerpt(r.get("text") or "", search, 220))
+            if not m.text:
+                continue
+            found.setdefault(r["sid"], {}).setdefault(kind, []).append((r.get("score") or 0.0, m))
+
+    hits: dict[str, list[SearchMatch]] = {}
+    for sid, by_kind in found.items():
+        out: list[SearchMatch] = []
+        for kind in _MATCH_ORDER:
+            seen: set[str] = set()
+            ranked = sorted(by_kind.get(kind, []), key=lambda x: -x[0])
+            if kind == "vote":
+                ranked.sort(key=lambda x: (-x[0], x[1].vote_number or 0))
+            for _, m in ranked:
+                key = m.vote_id or m.text
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(m)
+                if len(seen) >= _MATCH_CAP[kind]:
+                    break
+        hits[sid] = out[:_MATCHES_PER_SESSION]
+    return hits
+
+
 async def get_sessions(
     neo4j: Neo4jClient,
     locale: str,
@@ -172,6 +365,7 @@ async def get_sessions(
     search: str | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
+    with_votes: bool = False,
 ) -> TimelineResponse:
     """
     Return a paginated list of sessions ordered most-recent-first.
@@ -185,7 +379,11 @@ async def get_sessions(
       "camera" → ["camera"]
       "senato" → ["senato"]
 
-    Search matches debate titles, recap text, and speaker names.
+    Search matches, through the full-text indexes (italian analyzer), vote
+    subjects, act titles, debate titles, speeches and recaps, plus speaker
+    names; each sitting carries what matched in `matches`. Without the
+    indexes it falls back to substring matching on titles and recaps.
+    with_votes keeps only the sittings with at least one vote.
     """
     recap_field = "recapEn" if locale == "en" else "recapIt"
 
@@ -199,8 +397,15 @@ async def get_sessions(
     # sittings that debated or voted any reading of it.
     law_acts = acts_of_law(neo4j, search) if search else []
 
+    hits = search_hits(neo4j, search, chambers, legislature, locale) if search else None
+
     search_clause = ""
-    if search:
+    if search and hits is not None:
+        search_clause = """
+  AND (s.id IN $hit_ids
+    OR EXISTS { MATCH (s)-[:HAS_DEBATE]->()-[:DISCUSSES]->(la) WHERE la.uri IN $law_acts }
+    OR EXISTS { MATCH (s)-[:HAS_VOTE]->()-[:ON_ACT]->(la) WHERE la.uri IN $law_acts })"""
+    elif search:
         search_clause = """
   AND (EXISTS {
     MATCH (s)-[:HAS_DEBATE]->(sd)
@@ -230,7 +435,8 @@ WHERE ($chambers IS NULL OR coalesce(s.chamber, 'camera') IN $chambers)
   AND s.legislature = $legislature
   AND ($before IS NULL OR s.date < date($before))
   AND ($from_date IS NULL OR s.date >= date($from_date))
-  AND ($to_date IS NULL OR s.date <= date($to_date)){search_clause}
+  AND ($to_date IS NULL OR s.date <= date($to_date))
+  AND (NOT $with_votes OR EXISTS {{ (s)-[:HAS_VOTE]->() }}){search_clause}
 WITH s ORDER BY s.date DESC LIMIT $fetch_limit
 OPTIONAL MATCH (s)-[:HAS_DEBATE]->(d)
 OPTIONAL MATCH (d)-[:HAS_PHASE]->(p)-[:CONTAINS_SPEECH]->(sp)
@@ -259,10 +465,12 @@ ORDER BY date DESC
         "from_date": from_date,
         "to_date": to_date,
         "fetch_limit": limit + 1,
+        "with_votes": with_votes,
     }
     if search:
         params["search"] = search
         params["law_acts"] = law_acts
+        params["hit_ids"] = list(hits or {})
 
     rows = neo4j.query(cypher, params)
 
@@ -283,7 +491,12 @@ ORDER BY date DESC
              "title": d.get("title") or "", "act": d.get("act")}
             for d in raw
         ])
+        session_hits = (hits or {}).get(row["id"], [])
         if search:
+            matched = {m.text for m in session_hits if m.kind == "debate"}
+            for d in folded:
+                if " ".join(d["title"].split()) in matched:
+                    d["relevance"] = 1
             folded.sort(key=lambda d: -d["relevance"])
         debates = [
             DebateSummary(
@@ -305,6 +518,7 @@ ORDER BY date DESC
                 vote_count=row["voteCount"] or 0,
                 speech_count=sum(d.speech_count for d in debates),
                 debates=debates,
+                matches=session_hits,
             )
         )
 

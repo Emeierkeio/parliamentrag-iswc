@@ -22,6 +22,17 @@ class DebateSummary(BaseModel):
     continuation_ids: list[str] = []
 
 
+class SearchMatch(BaseModel):
+    """Why a sitting matched a search: the vote, act, debate or speech that
+    contains the words, so the list can show it next to the sitting."""
+
+    kind: str                        # "vote" | "act" | "debate" | "speech" | "recap"
+    text: str                        # vote subject, act title, debate title or speech excerpt
+    vote_id: Optional[str] = None    # kind "vote" (and "act" when the act was voted)
+    vote_number: Optional[int] = None
+    speaker: Optional[str] = None    # kind "speech"
+
+
 class SessionCard(BaseModel):
     """One parliamentary session shown in the timeline list."""
 
@@ -34,6 +45,7 @@ class SessionCard(BaseModel):
     vote_count: int
     speech_count: int
     debates: list[DebateSummary]
+    matches: list[SearchMatch] = []  # only when searching
 
 
 class TimelineResponse(BaseModel):

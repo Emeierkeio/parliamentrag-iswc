@@ -364,6 +364,7 @@ def do_build(
         # 8b. Full-text index for BM25 sparse retrieval
         logger.info("Step 8b: Creating full-text index")
         builder.create_fulltext_index()
+        builder.create_search_indexes()
 
         # 9. Embeddings
         if skip_embeddings:
@@ -508,6 +509,7 @@ def do_update(
         # 5b. Full-text index for BM25 sparse retrieval (idempotent: IF NOT EXISTS)
         logger.info("Step 5b: Ensuring full-text index exists")
         builder.create_fulltext_index()
+        builder.create_search_indexes()
 
         # 6. Embeddings
         if skip_embeddings:

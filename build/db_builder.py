@@ -2173,6 +2173,26 @@ class DatabaseBuilder:
                 """))
                 print("Full-text index created (standard analyzer).")
 
+    def create_search_indexes(self) -> None:
+        """Full-text indexes behind the sittings search (/api/timeline?search=):
+        vote subjects, act titles, debate titles, recaps. Same analyzer as
+        chunk_fulltext, so the search folds plurals and elisions. Keep in
+        step with SEARCH_HITS in backend/app/services/timeline_service.py."""
+        indexes = (
+            ("timeline_vote_fulltext", "Vote", ("subject", "description")),
+            ("timeline_act_fulltext", "ParliamentaryAct", ("title", "description")),
+            ("timeline_debate_fulltext", "Debate", ("title",)),
+            ("timeline_session_fulltext", "Session", ("recapIt", "recapEn")),
+        )
+        with self._driver.session() as neo_session:
+            for name, label, props in indexes:
+                fields = ", ".join(f"n.{p}" for p in props)
+                neo_session.run(
+                    f"CREATE FULLTEXT INDEX {name} IF NOT EXISTS FOR (n:{label}) ON EACH [{fields}] "
+                    "OPTIONS {indexConfig: {`fulltext.analyzer`: 'italian'}}"
+                ).consume()
+        print("Search indexes created (italian analyzer).")
+
     def get_existing_session_numbers(self, chamber: str | None = None, legislature: int = 19) -> set[int]:
         """Return set of session numbers already persisted in Neo4j for a chamber+legislature.
 

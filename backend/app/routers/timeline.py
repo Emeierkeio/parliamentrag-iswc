@@ -36,6 +36,7 @@ async def get_timeline(
     search: Optional[str] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
+    with_votes: bool = False,
     neo4j: Neo4jClient = Depends(get_neo4j_client),
 ) -> TimelineResponse:
     """Get paginated timeline of parliamentary sessions, most recent first."""
@@ -50,6 +51,7 @@ async def get_timeline(
         search=search,
         from_date=from_date,
         to_date=to_date,
+        with_votes=with_votes,
     )
 
 
