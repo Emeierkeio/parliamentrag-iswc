@@ -92,3 +92,22 @@ def test_renamed_sigla_keeps_the_component():
     assert ims.component_for("Nuova", legend) == ims.component_for("NC", legend)
     assert ims.component_for("NC", legend) == {"key": "Nuova", "name": "Nuova componente", "short_name": "NC"}
     assert ims.component_for("XYZ", legend) is None
+
+
+def test_legend_with_renamed_names_and_new_sigle():
+    """senato.it, 23/10/2026: short sigle and «la denominazione muta in Nome (SIGLA)»."""
+    legend = ims.parse_legend("""<h3>Componenti partitiche del Gruppo Misto</h3> <ul class="schede">
+ <li> <strong>Avanti PSI (A-PSI)</strong> <span>costituita il 9 ottobre 2026</span>
+ <ul style="margin: 0;"> <li> <span class="annotazione"> dal 20 ottobre 2026 la denominazione muta in
+ <strong>Avanti PSI - Progetto Civico Italia</strong> (<strong>A-PSI-PrCivIt</strong>) </span> </li> </ul> </li>
+ <li> <strong>Civici Marche (CM)</strong> <span>costituita il 22 ottobre 2026</span>
+ <ul style="margin: 0;"> <li> <span class="annotazione"> dal 23 ottobre 2026 la denominazione muta in
+ <strong>Italia Domani - Marco Rizzo</strong> (<strong>ID-MR</strong>) </span> </li> </ul> </li>
+ </ul></div>""")
+    assert legend["ID-MR"] == {"name": "Italia Domani - Marco Rizzo", "constituted": None, "base": "CM"}
+    # A known component keeps its URI under a new sigla (matched by name)
+    assert ims.component_for("A-PSI", legend)["key"] == "Avanti-PSI"
+    assert ims.component_for("A-PSI-PrCivIt", legend)["key"] == "Avanti-PSI"
+    # A new one takes the latest name and sigla, keyed by the first sigla
+    assert ims.component_for("CM", legend) == {
+        "key": "CM", "name": "Italia Domani - Marco Rizzo", "short_name": "ID-MR"}

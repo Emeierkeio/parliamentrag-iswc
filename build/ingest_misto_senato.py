@@ -141,17 +141,24 @@ def parse_legend(page: str) -> Dict[str, Dict[str, Optional[str]]]:
         sigla = sm.group(2).strip()
         out[sigla] = {"name": sm.group(1).strip() or sigla, "constituted": parse_it_date(when), "base": sigla}
         tail = legend[m.end():titles[n + 1].start() if n + 1 < len(titles) else len(legend)]
-        for r in re.finditer(r"muta la sigla in\s*<strong>(.*?)</strong>", tail, re.S):
-            out.setdefault(_text(r.group(1)), {"name": None, "constituted": None, "base": sigla})
+        # «muta la sigla in <strong>Az-RE</strong>» (until 10/2026) or «la
+        # denominazione muta in <strong>Nome</strong> (<strong>SIGLA</strong>)»
+        for r in re.finditer(r"muta (?:la sigla )?in\s*<strong>([^<]*)</strong>"
+                             r"(?:\s*\(\s*<strong>([^<]*)</strong>\s*\))?", tail, re.S):
+            name, renamed = (_text(r.group(1)), _text(r.group(2))) if r.group(2) else (None, _text(r.group(1)))
+            out.setdefault(renamed, {"name": name, "constituted": None, "base": sigla})
     return out
 
 
 def component_for(sigla: str, legend: Dict[str, Dict[str, Optional[str]]]) -> Optional[Dict[str, str]]:
     """The component of a row's sigla: COMPONENTS first, then the page legend.
 
-    A component the table does not know is built from the legend (name as
-    printed, URI key from the first sigla), so a new one on senato.it needs no
-    code change. None when the sigla is not in the legend either.
+    The legend chain of a component (first sigla and its renames) is looked up
+    in COMPONENTS by sigla, then by name: senato.it changes sigle («Avanti PSI»
+    became «A-PSI» on 23/10/2026) and the URI must not. A component the table
+    does not know is built from the legend (latest name and sigla, URI key from
+    the first sigla), so a new one needs no code change. None when the sigla
+    is not in the legend either.
     """
     if sigla in COMPONENTS:
         return COMPONENTS[sigla]
@@ -159,13 +166,18 @@ def component_for(sigla: str, legend: Dict[str, Dict[str, Optional[str]]]) -> Op
     if entry is None:
         return None
     base = entry["base"] or sigla
-    if base in COMPONENTS:
-        return COMPONENTS[base]
-    name = legend[base]["name"] or base
+    chain = [s for s, e in legend.items() if e["base"] == base]
+    for s in chain:
+        if s in COMPONENTS:
+            return COMPONENTS[s]
+    names = {legend[s]["name"].casefold() for s in chain if legend[s]["name"]}
+    for comp in COMPONENTS.values():
+        if comp["name"].casefold() in names:
+            return comp
+    name = next((legend[s]["name"] for s in reversed(chain) if legend[s]["name"]), base)
     if name.isupper():
         name = display_case(name)
-    latest = [s for s, e in legend.items() if e["base"] == base][-1]
-    return {"key": re.sub(r"\s+", "-", base), "name": name, "short_name": latest}
+    return {"key": re.sub(r"\s+", "-", base), "name": name, "short_name": chain[-1]}
 
 
 def parse_rows(page: str) -> List[Dict[str, Optional[str]]]:
