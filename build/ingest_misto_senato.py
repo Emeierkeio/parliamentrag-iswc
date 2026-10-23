@@ -44,6 +44,8 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ingest_misto_componenti import display_case
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -54,9 +56,11 @@ PAGE_URL = ("https://www.senato.it/composizione/gruppi-parlamentari/riepilogo-de
             "composizione?did=9&tipo=storica")
 LEGISLATURE = 19
 
-# Sigla della pagina → componente. Il nome è quello che il backend e il
-# verificatore riconducono al partito (AVS e Azione hanno un gruppo alla
-# Camera); la sigla più vecchia fa da chiave stabile dell'URI.
+# Sigla della pagina → componente, solo dove il nome della legenda non basta:
+# il nome è quello che il backend e il verificatore riconducono al partito (AVS
+# e Azione hanno un gruppo alla Camera); la sigla più vecchia fa da chiave
+# stabile dell'URI. Le componenti nuove della legenda entrano da sole (vedi
+# component_for), senza toccare questa tabella.
 COMPONENTS: Dict[str, Dict[str, str]] = {
     "AVS": {"key": "AVS", "name": "Alleanza Verdi e Sinistra", "short_name": "AVS"},
     "Az": {"key": "Az", "name": "Azione-Renew Europe", "short_name": "Az-RE"},
@@ -116,21 +120,52 @@ def download_page() -> Optional[str]:
 # Parse
 # ---------------------------------------------------------------------------
 
-def parse_legend(page: str) -> Dict[str, Optional[str]]:
-    """Sigla → constitution date, from «Componenti partitiche del Gruppo Misto»."""
+def parse_legend(page: str) -> Dict[str, Dict[str, Optional[str]]]:
+    """Sigla → {name, constituted, base}, from «Componenti partitiche del Gruppo Misto».
+
+    Each component is «<strong>Nome (Sigla)</strong> <span>costituita il …</span>»,
+    followed by its renames («dal … muta la sigla in <strong>Az-RE</strong>»).
+    A renamed sigla points to the first one (``base``), which keys the URI.
+    """
     i = page.find("Componenti partitiche")
     if i < 0:
         raise ValueError("pagina senza «Componenti partitiche del Gruppo Misto»")
     legend = page[i:page.find("</div>", i)]
-    out: Dict[str, Optional[str]] = {}
-    for m in re.finditer(r"<strong>(.*?)</strong>\s*<span>(.*?)</span>", legend, re.S):
+    titles = list(re.finditer(r"<strong>([^<]*)</strong>\s*<span>(.*?)</span>", legend, re.S))
+    out: Dict[str, Dict[str, Optional[str]]] = {}
+    for n, m in enumerate(titles):
         title, when = _text(m.group(1)), _text(m.group(2))
-        sm = re.search(r"\(([^()]+)\)\s*$", title)
-        if sm:
-            out[sm.group(1).strip()] = parse_it_date(when)
-    for m in re.finditer(r"muta la sigla in\s*<strong>(.*?)</strong>", legend, re.S):
-        out.setdefault(_text(m.group(1)), None)
+        sm = re.search(r"^(.*?)\s*\(([^()]+)\)\s*$", title)
+        if not sm:
+            continue
+        sigla = sm.group(2).strip()
+        out[sigla] = {"name": sm.group(1).strip() or sigla, "constituted": parse_it_date(when), "base": sigla}
+        tail = legend[m.end():titles[n + 1].start() if n + 1 < len(titles) else len(legend)]
+        for r in re.finditer(r"muta la sigla in\s*<strong>(.*?)</strong>", tail, re.S):
+            out.setdefault(_text(r.group(1)), {"name": None, "constituted": None, "base": sigla})
     return out
+
+
+def component_for(sigla: str, legend: Dict[str, Dict[str, Optional[str]]]) -> Optional[Dict[str, str]]:
+    """The component of a row's sigla: COMPONENTS first, then the page legend.
+
+    A component the table does not know is built from the legend (name as
+    printed, URI key from the first sigla), so a new one on senato.it needs no
+    code change. None when the sigla is not in the legend either.
+    """
+    if sigla in COMPONENTS:
+        return COMPONENTS[sigla]
+    entry = legend.get(sigla)
+    if entry is None:
+        return None
+    base = entry["base"] or sigla
+    if base in COMPONENTS:
+        return COMPONENTS[base]
+    name = legend[base]["name"] or base
+    if name.isupper():
+        name = display_case(name)
+    latest = [s for s, e in legend.items() if e["base"] == base][-1]
+    return {"key": re.sub(r"\s+", "-", base), "name": name, "short_name": latest}
 
 
 def parse_rows(page: str) -> List[Dict[str, Optional[str]]]:
@@ -171,14 +206,17 @@ def parse_rows(page: str) -> List[Dict[str, Optional[str]]]:
 def memberships(page: str) -> List[Dict[str, Optional[str]]]:
     legend = parse_legend(page)
     out: Dict[tuple, Dict[str, Optional[str]]] = {}
+    new: set = set()
     for r in parse_rows(page):
-        comp = COMPONENTS.get(r["sigla"])
+        comp = component_for(r["sigla"], legend)
         if comp is None:
-            if r["sigla"] in legend:
-                raise ValueError(f"componente nuova sul sito: {r['sigla']!r}, aggiungerla a COMPONENTS")
-            logger.warning("Sigla sconosciuta per %s: %r (ignorata)", r["name"], r["sigla"])
+            logger.warning("Sigla fuori dalla legenda per %s: %r (ignorata)", r["name"], r["sigla"])
             continue
-        constituted = legend.get(r["sigla"]) or legend.get(comp["key"])
+        if r["sigla"] not in COMPONENTS and r["sigla"] not in new:
+            new.add(r["sigla"])
+            logger.info("Componente dalla legenda: %r → %s", r["sigla"], comp["name"])
+        base = (legend.get(r["sigla"]) or {}).get("base") or r["sigla"]
+        constituted = (legend.get(r["sigla"]) or {}).get("constituted") or (legend.get(base) or {}).get("constituted")
         start = max(d for d in (r["since"], r["entered"], constituted) if d) if any(
             (r["since"], r["entered"], constituted)) else None
         if start is None:
@@ -192,7 +230,7 @@ def memberships(page: str) -> List[Dict[str, Optional[str]]]:
             out[key] = {"senato_id": f"http://dati.senato.it/senatore/{r['did']}", "name": r["name"],
                         "comp_key": comp["key"], "comp_uri": component_uri(comp["key"]),
                         "comp_name": comp["name"], "comp_short": comp["short_name"],
-                        "comp_start": legend.get(comp["key"]) or constituted,
+                        "comp_start": (legend.get(base) or {}).get("constituted") or constituted,
                         "start_date": start, "end_date": end}
     return list(out.values())
 

@@ -42,7 +42,7 @@ class CoalitionLogic:
         if group_name in self._coalition_cache:
             return self._coalition_cache[group_name]
 
-        coalitions = self.config.load_config().get("coalitions", {})
+        coalitions = self.config.coalitions
 
         # Government members are always in maggioranza
         if group_name.strip().upper() == "GOVERNO":
@@ -75,9 +75,9 @@ class CoalitionLogic:
                 self._coalition_cache[group_name] = "misto"
                 return "misto"
 
-        # Default unknown groups to opposition
+        # Default unknown groups to opposition, without caching: a Misto
+        # component born today joins «misto» when the graph list refreshes.
         logger.warning(f"Unknown group '{group_name}', defaulting to opposizione")
-        self._coalition_cache[group_name] = "opposizione"
         return "opposizione"
 
     def authority_carries_over(

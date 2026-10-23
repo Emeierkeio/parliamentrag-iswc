@@ -240,7 +240,8 @@ coalitions:
     # MISTO_COMPONENT_PARTY): each one is a party of its own in coverage,
     # sections and experts; the Misto above keeps those without a component
     # (senators for life, technical ministers). The Senate AVS and Azione
-    # components count for those groups.
+    # components count for those groups. A component missing here is added
+    # from the graph (app/services/misto_live.py), in its own chamber.
     - "+Europa - Stati Uniti d'Europa"
     - "Futuro Nazionale Vannacci - Free"
     - "Minoranze Linguistiche"

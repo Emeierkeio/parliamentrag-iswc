@@ -373,9 +373,7 @@ async def get_parties():
 @router.get("/coalitions")
 async def get_coalitions():
     """Get coalition definitions."""
-    config = get_config()
-    config_data = config.load_config()
-    return config_data.get("coalitions", {})
+    return get_config().coalitions
 
 
 class TranslateRequest(BaseModel):

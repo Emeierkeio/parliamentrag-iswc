@@ -277,7 +277,27 @@ class ConfigLoader:
 
     @property
     def coalitions(self) -> Dict[str, List[str]]:
-        return self.load_config().get("coalitions", {})
+        """Coalitions of default.yaml, with the Misto components of the graph
+        that the file does not list added to «misto» (services/misto_live.py)."""
+        from .services.misto_live import extra_components
+
+        coalitions = {k: list(v) for k, v in self.load_config().get("coalitions", {}).items()}
+        extra = extra_components(coalitions)
+        if extra:
+            coalitions.setdefault("misto", []).extend(extra)
+        return coalitions
+
+    @property
+    def chamber_only_groups(self) -> Dict[str, str]:
+        """Groups of one chamber only: default.yaml, plus every Misto
+        component of the graph in the chamber it belongs to."""
+        from .services.misto_live import extra_components
+
+        cfg = self.load_config()
+        only_in = dict(cfg.get("chamber_only_groups", {}) or {})
+        for name, chamber in extra_components(cfg.get("coalitions", {})).items():
+            only_in.setdefault(name, chamber)
+        return only_in
 
     @property
     def citation(self) -> Dict[str, Any]:
@@ -324,9 +344,8 @@ class ConfigLoader:
         default.yaml)."""
         from .services.retrieval.scope import answer_chambers
 
-        cfg = self.load_config()
         chambers = set(chambers) if chambers else set(answer_chambers())
-        only_in = cfg.get("chamber_only_groups", {}) or {}
+        only_in = self.chamber_only_groups
         all_parties = []
         for groups in self.coalitions.values():
             all_parties.extend(g for g in groups if g not in only_in or only_in[g] in chambers)
