@@ -81,7 +81,7 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
 | `download_esiti_senato.py` | Senate amendment outcomes and the floor texts missing from Akoma Ntoso |
 | `parse_emendamenti.py` | both chambers' amendments in one JSONL (`downloads/emendamenti/`) |
 | `load_emendamenti.py` | amendments into the graph (`Amendment`, `AMENDS`, `SIGNED_AMENDMENT`, `ON_AMENDMENT`, `SUB_OF`, `RESUBMITS`) and their text and embeddings into the archive |
-| `load_act_texts.py` | text of the Chamber bills (articles and report of every version, from documenti.camera.it) into the archive (`act_text`, `act_text_chunk`) with embeddings; `TextVersion.text_sections` in the graph |
+| `load_act_texts.py` | text of the bills into the archive (`act_text`, `act_text_chunk`) with embeddings: Chamber, articles and report of every version from documenti.camera.it (`TextVersion.text_sections` in the graph); Senate (`--chamber senato`, parser in `act_texts_senato.py`), presented, committee and approved text from the Akoma Ntoso bulk data |
 | `link_agenda_orders.py` | agenda orders `REFERS_TO` their bill (from the number), outcome from votes (Camera) and from the G amendments (Senato) |
 | `link_camera_motions.py` | Chamber motions and resolutions voted in the House `DISCUSSES`-linked to the debate where the vote falls and to the one it resumes (Senate ones: `link_senate_acts.py`) |
 | `link_resumed_debates.py` | resumed debates ("Si riprende la discussione ... n. 1660-A", the bare "Si riprende la discussione.", Senate "Ripresa della discussione ... (274)") and debates on a split bill ("A.C. 1532-ter-A") `DISCUSSES`-linked to their bills, from the title or the agenda item they resume |
@@ -113,5 +113,9 @@ dataset patterns (dati.camera.it/ocd/…, eurovoc.europa.eu/…).
   only versions missing from `downloads/testi_atti/camera/` are downloaded and
   only chunks without an embedding go to OpenAI. The first load, about 3,800
   versions at one request per second, is run by hand before turning it on.
+  The same switch loads the Senate bills (`--chamber senato`) from the
+  `ddlpres`, `ddlcomm` and `ddlmess` folders of the Akoma Ntoso checkout in
+  `downloads/akn_senato`, without network; the source link of each text is its
+  show-doc page on senato.it.
 - Tests: `pytest build/tests/` (integration tests need a running Neo4j and
   `NEO4J_PASSWORD` set).

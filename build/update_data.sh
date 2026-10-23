@@ -338,17 +338,24 @@ EMEND_DAYS=14
 # richieste: di notte le richieste sono poche, quindi si va piano.
 SENATO_DELAY=2
 AKN_DIR="downloads/akn_senato"
+# Emendamenti (emend, emendc) e testo dei disegni di legge: presentato,
+# della commissione, approvato (ddlpres, ddlcomm, ddlmess). Il file delle
+# cartelle si riscrive a ogni giro, così un clone fatto con un elenco più
+# corto prende le cartelle nuove (reapply scarica solo i loro file).
+AKN_SPARSE='/Leg19/*/emend/\n/Leg19/*/emendc/\n/Leg19/*/ddlpres/\n/Leg19/*/ddlcomm/\n/Leg19/*/ddlmess/\n/Leg19/*/README.MD\n'
 akn_pull() {
 	if [ -d "$AKN_DIR/.git" ]; then
 		# Clone superficiale in sola lettura: un pull non trova storia comune con
 		# il commit giornaliero del Senato, quindi si allinea all'ultimo commit.
-		git -C "$AKN_DIR" fetch --quiet --depth 1 origin master \
-			&& git -C "$AKN_DIR" reset --quiet --hard FETCH_HEAD
+		printf "$AKN_SPARSE" >"$AKN_DIR/.git/info/sparse-checkout" \
+			&& git -C "$AKN_DIR" fetch --quiet --depth 1 origin master \
+			&& git -C "$AKN_DIR" reset --quiet --hard FETCH_HEAD \
+			&& git -C "$AKN_DIR" sparse-checkout reapply
 	else
 		git clone --quiet --filter=blob:none --no-checkout --depth 1 \
 			https://github.com/SenatoDellaRepubblica/AkomaNtosoBulkData.git "$AKN_DIR" \
 			&& git -C "$AKN_DIR" sparse-checkout init --no-cone \
-			&& printf '/Leg19/*/emend/\n/Leg19/*/emendc/\n/Leg19/*/README.MD\n' >"$AKN_DIR/.git/info/sparse-checkout" \
+			&& printf "$AKN_SPARSE" >"$AKN_DIR/.git/info/sparse-checkout" \
 			&& git -C "$AKN_DIR" checkout --quiet master
 	fi
 }
@@ -443,7 +450,7 @@ run "Leggi" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 	"$PY" build/ingest_laws.py --neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" \
 	|| warn "leggi: ingest fallito, riprende al prossimo giro"
 
-# ── Testo dei progetti di legge della Camera → archivio ──────────────────────
+# ── Testo dei progetti di legge (Camera e Senato) → archivio ─────────────────
 # Articolato e relazione di ogni versione (TextVersion, appena aggiornate dal
 # passo «Letture e processo legislativo») da documenti.camera.it, in act_text e
 # act_text_chunk dell'archivio. Scarica solo le versioni che non sono in
@@ -451,6 +458,8 @@ run "Leggi" env NEO4J_PASSWORD="$NEO4J_PASS_VAL" \
 # OpenAI solo i passaggi senza embedding. Spento di default: si accende con
 # TESTI_ATTI=1 (ambiente o .env) dopo il primo caricamento a mano, che scarica
 # tutte le versioni (circa 3.800 a ottobre 2026, un secondo l'una).
+# Il Senato viene dal checkout Akoma Ntoso aggiornato sopra (akn_pull): niente
+# rete, circa 2.800 file a ottobre 2026, pochi secondi senza embedding nuovi.
 : "${TESTI_ATTI:=$(grep '^TESTI_ATTI=' .env | cut -d= -f2-)}"
 ACT_TEXT_ARCHIVE="${ARCHIVE_URL:-$(grep '^ARCHIVE_URL=' .env | cut -d= -f2-)}"
 if [ "${TESTI_ATTI:-0}" != "1" ]; then
@@ -465,6 +474,14 @@ else
 	}
 	run "Testo dei progetti di legge Camera → archivio" act_texts \
 		|| warn "testo dei progetti di legge: caricamento incompleto, riprende al prossimo giro"
+	act_texts_senato() {
+		env NEO4J_PASSWORD="$NEO4J_PASS_VAL" OPENAI_API_KEY="$OPENAI_KEY_VAL" \
+			"$PY" build/load_act_texts.py --chamber senato --akn-dir "$AKN_DIR" \
+			--neo4j-uri "${SENATO_NEO4J:-$DEMO_NEO4J}" --neo4j-user "${NEO4J_USER_VAL:-neo4j}" \
+			--archive-url "$ACT_TEXT_ARCHIVE"
+	}
+	run "Testo dei disegni di legge Senato → archivio" act_texts_senato \
+		|| warn "testo dei disegni di legge del Senato: caricamento incompleto, riprende al prossimo giro"
 fi
 
 # ── Emendamenti XIX → grafo e archivio ───────────────────────────────────────

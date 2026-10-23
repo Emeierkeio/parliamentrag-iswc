@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Text of the Chamber's bills (every version) into the text archive.
+Text of the bills of both chambers (every version) into the text archive.
 
 The graph knows each version of a Chamber bill as a TextVersion node, whose id
 carries the document code (vta19_leg.19.pdl.camera.2715_A.19PDL0217670), but
@@ -13,7 +13,9 @@ downloads it, keeps two sections and writes them to the archive:
   relazione    the report that introduces the bill (RL)
 
 Committee opinions, technical reports and supplements (impact analyses) are
-left out. Archive (Postgres, same database as build/pg_archive.py):
+left out. With --chamber senato the texts come from the Senate's Akoma Ntoso
+bulk data instead (act_texts_senato.py): presented, committee (-A) and approved
+text of every bill, same two sections, no network. Archive (Postgres, same database as build/pg_archive.py):
 
   act_text        one row per version and section, with the text
   act_text_chunk  chunks keyed by text_hash, with the embedding
@@ -21,6 +23,8 @@ left out. Archive (Postgres, same database as build/pg_archive.py):
   python build/load_act_texts.py --neo4j-uri bolt://localhost:7690 \\
       --archive-url postgresql://...@localhost:5433/archivio --dry-run
   python build/load_act_texts.py --acts 2715,3131 --dry-run    # no graph needed
+  python build/load_act_texts.py --chamber senato --akn-dir downloads/akn_senato \\
+      --archive-url postgresql://... --dry-run
 
 Versions come from the graph (--neo4j-uri) or, with --acts, from the act pages
 on camera.it. Downloads are cached in downloads/testi_atti/camera/, so a run
@@ -45,6 +49,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import act_texts_senato as senato  # noqa: E402
 from load_emendamenti import EMBEDDING_DIM, EMBEDDING_PRICE_PER_M, Embedder, _vector_text, chunk_text  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -226,19 +231,25 @@ def document(code: str, leg: int, stats: Counter, offline: bool = False) -> str 
     return raw
 
 
-def rows_for(version: dict, parsed: dict, leg: int) -> list[dict]:
-    meta = version_of(version["code"]) or {}
+def rows_for(version: dict, parsed: dict, leg: int, chamber: str = "camera") -> list[dict]:
+    if chamber == "senato":
+        meta = {"number": version["number"], "label": senato.version_label(version, parsed)}
+        source = version["url"]
+        title, date = parsed.get("title"), parsed.get("date")
+    else:
+        meta = version_of(version["code"]) or {}
+        source = DOC_URL.format(leg=leg, code=version["code"])
+        title, date = version.get("title"), version.get("date")
     out = []
     for section in ("articolato", "relazione"):
         text = parsed[section]
         if not text:
             continue
         text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        row = {"id": f"{version['id']}#{section}", "version_id": version["id"], "chamber": "camera", "term": leg,
+        row = {"id": f"{version['id']}#{section}", "version_id": version["id"], "chamber": chamber, "term": leg,
                "act": version["act"], "act_number": meta.get("number"), "version_label": meta.get("label"),
                "version_code": version["code"], "section": section, "kind": parsed["kind"],
-               "title": version.get("title"), "date": version.get("date"), "text": text, "text_hash": text_hash,
-               "source_url": DOC_URL.format(leg=leg, code=version["code"])}
+               "title": title, "date": date, "text": text, "text_hash": text_hash, "source_url": source}
         row["row_hash"] = hashlib.sha256(json.dumps(
             [PARSER_VERSION] + [row[k] for k in ROW_COLUMNS if k != "row_hash"], default=str).encode()).hexdigest()
         out.append(row)
@@ -254,13 +265,14 @@ ARCHIVE_SCHEMA = f"""
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS act_text (
-    id             text PRIMARY KEY,       -- TextVersion id + '#articolato' | '#relazione'
-    version_id     text NOT NULL,
+    id             text PRIMARY KEY,       -- version id + '#articolato' | '#relazione'
+    version_id     text NOT NULL,          -- TextVersion id; Senate: senato:19:ddl:<idFase>:<folder>:<file>
     chamber        text NOT NULL,
     term           integer NOT NULL,
     act            text,                   -- act URI in the graph
-    act_number     text,                   -- '2715'
-    version_label  text,                   -- 'A', 'A-bis', NULL for the text as presented
+    act_number     text,                   -- '2715', '1779' (Senate)
+    version_label  text,                   -- 'A', 'A-bis', NULL for the text as presented,
+                                           -- 'approvato' for the text the Senate approved
     version_code   text NOT NULL,
     section        text NOT NULL,          -- 'articolato' | 'relazione'
     kind           text,
@@ -303,8 +315,8 @@ def load_archive(rows: list[dict], args, stats: Counter) -> None:
     with psycopg.connect(args.archive_url) as conn:
         conn.execute(ARCHIVE_SCHEMA)
         conn.commit()
-        existing = dict(conn.execute("SELECT id, row_hash FROM act_text WHERE chamber = 'camera' AND term = %s",
-                                     [args.leg]).fetchall())
+        existing = dict(conn.execute("SELECT id, row_hash FROM act_text WHERE chamber = %s AND term = %s",
+                                     [args.chamber, args.leg]).fetchall())
         changed = [r for r in unique_rows(rows) if existing.get(r["id"]) != r["row_hash"]]
         stats["archive.rows_written"] = len(changed)
         with conn.cursor() as cur:
@@ -382,10 +394,13 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--leg", type=int, default=19)
+    ap.add_argument("--chamber", choices=("camera", "senato"), default="camera")
+    ap.add_argument("--akn-dir", type=Path, default=REPO_ROOT / "downloads" / "akn_senato",
+                    help="Senate: sparse checkout of AkomaNtosoBulkData (build/update_data.sh, akn_pull)")
     ap.add_argument("--neo4j-uri", help="read the versions from the graph")
     ap.add_argument("--neo4j-user", default=os.environ.get("NEO4J_USER", "neo4j"))
     ap.add_argument("--neo4j-password", default=os.environ.get("NEO4J_PASSWORD"))
-    ap.add_argument("--acts", help="comma-separated Chamber act numbers, read from camera.it instead of the graph")
+    ap.add_argument("--acts", help="comma-separated act numbers: Camera, read from camera.it instead of the graph; Senate, a filter")
     ap.add_argument("--archive-url", help="Postgres archive; omitted, nothing is written")
     ap.add_argument("--dry-run", action="store_true", help="download and parse, write nothing")
     ap.add_argument("--limit", type=int, help="only the first N versions")
@@ -394,6 +409,8 @@ def main() -> int:
     ap.add_argument("--embed-workers", type=int, default=4)
     args = ap.parse_args()
 
+    if args.chamber == "senato":
+        return main_senato(args)
     if args.acts:
         versions = versions_from_pages([a.strip() for a in args.acts.split(",") if a.strip()], args.leg)
     elif args.neo4j_uri:
@@ -419,18 +436,72 @@ def main() -> int:
         if i % 100 == 0:
             logger.info("%d/%d versions", i, len(versions))
 
-    chunks = sum(len(chunk_text(t)) for t in {r["text_hash"]: r["text"] for r in rows}.values())
-    chars = sum(len(r["text"]) for r in rows)
-    stats["rows"] = len(rows)
-    stats["chunks"] = chunks
-    # ~4 characters per token for Italian prose with this tokenizer (2026-10, amendments archive).
-    stats["est_usd"] = round(chars / 4 / 1e6 * EMBEDDING_PRICE_PER_M, 4)
-    logger.info("%d rows, %.1fM characters, %d chunks, ~USD %.2f to embed", len(rows), chars / 1e6, chunks,
-                stats["est_usd"])
+    estimate(rows, stats)
     if args.archive_url and not args.dry_run:
         load_archive(rows, args, stats)
         if args.neo4j_uri:
             mark_graph(rows, args)
+    logger.info("done%s: %s", " (dry run)" if args.dry_run else "", json.dumps(dict(sorted(stats.items()))))
+    return 0
+
+
+def estimate(rows: list[dict], stats: Counter) -> None:
+    texts = {r["text_hash"]: r["text"] for r in rows}
+    chunks = sum(len(chunk_text(t)) for t in texts.values())
+    chars = sum(len(t) for t in texts.values())
+    stats["rows"] = len(rows)
+    stats["chunks"] = chunks
+    # ~4 characters per token for Italian prose with this tokenizer (2026-10, amendments archive).
+    stats["est_usd"] = round(chars / 4 / 1e6 * EMBEDDING_PRICE_PER_M, 4)
+    logger.info("%d rows, %.1fM characters in distinct texts, %d chunks, ~USD %.2f to embed", len(rows),
+                chars / 1e6, chunks, stats["est_usd"])
+
+
+def senate_numbers(args) -> dict[str, str]:
+    """{act uri: number} of the Senate bills in the graph."""
+    from neo4j import GraphDatabase
+
+    with GraphDatabase.driver(args.neo4j_uri, auth=(args.neo4j_user, args.neo4j_password)) as driver:
+        rows = driver.execute_query("MATCH (a:Bill) WHERE a.uri STARTS WITH 'http://dati.senato.it/ddl/' "
+                                    "RETURN a.uri AS uri, a.number AS number").records
+    return {r["uri"]: str(r["number"]) for r in rows if r["number"]}
+
+
+def main_senato(args) -> int:
+    if not (args.akn_dir / f"Leg{args.leg}").is_dir():
+        logger.error("%s: no Leg%d folder (akn_pull in build/update_data.sh)", args.akn_dir, args.leg)
+        return 1
+    versions = senato.versions_from_akn(args.akn_dir, args.leg)
+    if args.acts:
+        wanted = {a.strip() for a in args.acts.split(",") if a.strip()}
+        versions = [v for v in versions if v["number"] in wanted]
+    if args.limit:
+        versions = versions[:args.limit]
+    stats: Counter = Counter()
+    if args.neo4j_uri and args.neo4j_password:
+        numbers = senate_numbers(args)
+        for v in versions:
+            if v["act"] not in numbers:
+                stats["acts.not_in_graph"] += 1
+            elif numbers[v["act"]] != v["number"]:
+                stats["acts.number_from_graph"] += 1
+                v["number"] = numbers[v["act"]]
+    logger.info("%d Senate texts in %s", len(versions), args.akn_dir)
+    rows: list[dict] = []
+    for v in versions:
+        try:
+            parsed = senato.parse_akn(v["path"].read_bytes())
+        except Exception as e:  # noqa: BLE001 - a malformed file must not stop the others
+            logger.warning("%s: %s", v["path"], e)
+            stats["docs.failed"] += 1
+            continue
+        stats[f"kind.{v['tipodoc']}.{parsed['kind']}"] += 1
+        rows.extend(rows_for(v, parsed, args.leg, "senato"))
+    stats["acts"] = len({r["act"] for r in rows})
+    stats["versions"] = len({r["version_id"] for r in rows})
+    estimate(rows, stats)
+    if args.archive_url and not args.dry_run:
+        load_archive(rows, args, stats)
     logger.info("done%s: %s", " (dry run)" if args.dry_run else "", json.dumps(dict(sorted(stats.items()))))
     return 0
 
