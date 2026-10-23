@@ -281,8 +281,9 @@ SET p.misto_page_seen = date()
 PRUNE = """
 MATCH (p:Senator)-[m:MEMBER_OF_COMPONENT]->(c:MistoComponent {chamber: 'senato'})
 WHERE m.source = $source AND NOT [p.senato_id, c.uri, toString(m.start_date)] IN $keep
+WITH m, p.last_name AS name, c.short_name AS comp, toString(m.start_date) AS since
 DELETE m
-RETURN p.last_name AS name, c.short_name AS comp, toString(m.start_date) AS since
+RETURN name, comp, since
 """
 
 PRUNE_COMPONENTS = """
