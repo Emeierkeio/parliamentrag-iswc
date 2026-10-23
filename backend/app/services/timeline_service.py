@@ -193,17 +193,18 @@ WITH a, score ORDER BY score DESC LIMIT 300
 CALL {{
   WITH a
   MATCH (s:Session)-[:HAS_VOTE]->(v)-[:ON_ACT]->(a)
-  RETURN s, min(v.number) AS vote_number
+  RETURN s, count(v) AS n, min(v.number) AS first_vote,
+         min(CASE WHEN v.finalVote THEN v.number END) AS final_vote
   UNION
   WITH a
   MATCH (s:Session)-[:HAS_DEBATE]->()-[:DISCUSSES]->(a)
-  RETURN s, null AS vote_number
+  RETURN s, 0 AS n, null AS first_vote, null AS final_vote
 }}
-WITH s, a, score, min(vote_number) AS vote_number
+WITH s, a, score, sum(n) AS votes, coalesce(min(final_vote), min(first_vote)) AS vote_number
 WHERE {SESSION_FILTER}
 OPTIONAL MATCH (s)-[:HAS_VOTE]->(v {{number: vote_number}})-[:ON_ACT]->(a)
-RETURN s.id AS sid, a.title AS title, a.description AS description,
-       head(collect(v.id)) AS vote_id, vote_number, score""",
+RETURN s.id AS sid, a.title AS title, a.description AS description, a.status AS status,
+       head(collect(v.id)) AS vote_id, vote_number, votes, score""",
     "speaker": f"""
 MATCH (spk)
 WHERE (spk:Deputy OR spk:Senator OR spk:GovernmentMember) AND size($search) >= 3
@@ -333,7 +334,14 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
                 m = SearchMatch(kind=kind, text=_excerpt(r.get("text") or "", search, 220))
             if not m.text:
                 continue
-            found.setdefault(r["sid"], {}).setdefault(kind, []).append((r.get("score") or 0.0, m))
+            rank = r.get("score") or 0.0
+            if kind == "act":
+                # The bill the sitting voted on, not the ones absorbed into it
+                # (the Senate links its votes to those too)
+                rank += 1000 * (r.get("votes") or 0)
+                if "assorbit" in (r.get("status") or "").lower():
+                    rank -= 500
+            found.setdefault(r["sid"], {}).setdefault(kind, []).append((rank, m))
 
     hits: dict[str, list[SearchMatch]] = {}
     for sid, by_kind in found.items():
