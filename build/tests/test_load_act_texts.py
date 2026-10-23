@@ -91,3 +91,14 @@ def test_rows_and_stable_hash():
     assert rows[0]["act_number"] == "2715"
     assert rows[0]["id"].endswith("#articolato")
     assert rows == T.rows_for(version, T.parse_document(PAGE), 19)
+
+
+def test_identical_letter_takes_the_proposers_letter():
+    page = ('<div id="telecomando"></div><div id="TFPD"><table>'
+            '<tr><td width="50%"><p>a) monitorare la distribuzione;</p></td>'
+            '<td width="50%"><p>a) <i>identica</i>;</p></td></tr>'
+            '<tr><td width="50%"><p>2. I servizi sociali aggiornano il Registro.</p></td>'
+            '<td width="50%"><p>2. Soppresso.</p></td></tr></table></div>')
+    text = T.parse_document(page)["articolato"]
+    assert "a) monitorare la distribuzione;" in text
+    assert "identica" not in text and "servizi sociali" not in text

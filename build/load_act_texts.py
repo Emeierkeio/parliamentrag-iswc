@@ -60,7 +60,7 @@ USER_AGENT = "ParliamentRAG/1.0 (+https://www.parliamentrag.it)"
 REQUEST_PAUSE = 1.0
 # Part of every row hash: bump it when the parser changes, so that the next run
 # rewrites the rows and re-embeds the texts that changed.
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 
 CODE_RE = re.compile(r"leg\.(\d+)\.pdl\.camera\.([^.]+?)(?:_([^.]+))?\.(\d+PDL\w+)$")
 
@@ -76,8 +76,10 @@ def _clean(fragment: str) -> str:
     return "\n".join(line.strip() for line in t.split("\n") if line.strip())
 
 
-IDENTICAL = re.compile(r"^\s*(?:\d+\.\s*)?identic[oa]\.?\s*$", re.I)
-SUPPRESSED = re.compile(r"^\s*(?:\d+\.\s*)?soppress[oa]\.?\s*$", re.I)
+# The committee column labels an unchanged comma or letter too: «2. Identico.», «a) identica;».
+_LABEL = r"(?:\d+(?:\.\d+)*(?:-\w+)?[.)]|[a-z]{1,2}(?:-\w+)?\))"
+IDENTICAL = re.compile(rf"^\s*(?:{_LABEL}\s*)?identic[oaei]»?[.;:]?\s*$", re.I)
+SUPPRESSED = re.compile(rf"^\s*(?:{_LABEL}\s*)?soppress[oaei]»?[.;:]?\s*$", re.I)
 CELL = re.compile(r'(?is)<td\b[^>]*width="50%"[^>]*>(.*?)</td>')
 
 
