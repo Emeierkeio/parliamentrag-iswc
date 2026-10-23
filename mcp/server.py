@@ -460,7 +460,9 @@ async def list_sessions(
     Args:
         limit: Sittings per page (1-30).
         before: ISO date cursor for pagination (returns sittings before it).
-        search: Optional keyword filter on debate titles/recaps; a law
+        search: Optional words to find in vote subjects, act titles, debate
+            titles, speeches, recaps and speaker names (plurals fold); each
+            sitting then lists in `matches` what matched. A law
             ("legge 180/2026") finds the sittings that debated or voted it.
         from_date / to_date: Optional YYYY-MM-DD bounds.
         chamber: "both" (default), "camera" or "senato".
