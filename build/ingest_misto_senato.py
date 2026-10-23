@@ -275,6 +275,24 @@ SET p.misto_page_seen = date()
 """
 
 
+# The page is the whole history of the Misto: an adhesion it no longer lists
+# was corrected at the source (Guidi in Avanti PSI from 21/10/2026, then in
+# Civici Marche from 22/10) and goes, with the components left without members.
+PRUNE = """
+MATCH (p:Senator)-[m:MEMBER_OF_COMPONENT]->(c:MistoComponent {chamber: 'senato'})
+WHERE m.source = $source AND NOT [p.senato_id, c.uri, toString(m.start_date)] IN $keep
+DELETE m
+RETURN p.last_name AS name, c.short_name AS comp, toString(m.start_date) AS since
+"""
+
+PRUNE_COMPONENTS = """
+MATCH (c:MistoComponent {chamber: 'senato'})
+WHERE NOT ()-[:MEMBER_OF_COMPONENT]->(c)
+DETACH DELETE c
+RETURN count(c) AS n
+"""
+
+
 def page_senators(page: str) -> List[str]:
     return sorted({f"http://dati.senato.it/senatore/{d}"
                    for d in re.findall(r"scheda-attivita\?did=(\d+)", page)})
@@ -284,6 +302,13 @@ def write(driver, rows: List[Dict[str, Optional[str]]], seen: List[str]) -> int:
     with driver.session() as s:
         linked = {r["sid"] for r in s.run(WRITE, rows=rows, legislature=LEGISLATURE, source=PAGE_URL)}
         s.run(MARK_SEEN, ids=seen).consume()
+        if rows:  # never prune on an empty parse
+            keep = [[r["senato_id"], r["comp_uri"], r["start_date"]] for r in rows]
+            for r in s.run(PRUNE, keep=keep, source=PAGE_URL):
+                logger.info("Adesione tolta (non più sulla pagina): %s %s dal %s", r["name"], r["comp"], r["since"])
+            n = s.run(PRUNE_COMPONENTS).single()["n"]
+            if n:
+                logger.info("Componenti senza iscritti tolte: %d", n)
     missing = sorted({r["name"] for r in rows if r["senato_id"] not in linked})
     if missing:
         logger.warning("Senatori senza nodo :Senator (non collegati): %s", ", ".join(missing))
