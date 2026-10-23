@@ -3,6 +3,9 @@
 
   build/nightly_report.py            (cron on the VPS, 05:00 UTC)
   build/nightly_report.py --dry-run  (write the HTML to /tmp and print a summary)
+  build/nightly_report.py --recupero (after build/recupero.sh: subject «Recupero …»,
+                                      steps from /var/log/parliamentrag-recupero.log,
+                                      Δ against tonight's run, history unchanged)
 
 Sources:
 - step lines (✓/✗, duration) of the last run in the cron log /var/log/parliamentrag-nightly.log;
@@ -30,13 +33,15 @@ import urllib.request
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 LOGS = ROOT / "build" / "logs"
 STATE = Path("/opt/parliamentrag-job/report-history.jsonl")
 REPORT_ENV = Path("/opt/parliamentrag-job/report.env")
 BACKUP_LOG = Path("/var/log/parliamentrag-backup.log")
-NIGHTLY_LOG = Path("/var/log/parliamentrag-nightly.log")
+RECUPERO = "--recupero" in sys.argv
+NIGHTLY_LOG = Path("/var/log/parliamentrag-recupero.log" if RECUPERO else "/var/log/parliamentrag-nightly.log")
 SENDER = {"name": "ParliamentRAG", "email": "news@parliamentrag.it"}
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 UA = {"User-Agent": "Mozilla/5.0 ParliamentRAG-report"}
@@ -305,7 +310,10 @@ def build(cfg: dict) -> tuple[str, str, dict]:
         db = {"errore": str(e)[:200]}
     arch = archive_counts()
     hist = history()
-    prev = flat(hist[-1]["db"]) if hist and hist[-1].get("date") != today else (flat(hist[-2]["db"]) if len(hist) > 1 else {})
+    if RECUPERO:  # against the last nightly run, tonight's included
+        prev = flat(hist[-1]["db"]) if hist else {}
+    else:
+        prev = flat(hist[-1]["db"]) if hist and hist[-1].get("date") != today else (flat(hist[-2]["db"]) if len(hist) > 1 else {})
     cur = flat(db)
     sp = {h: probe(u) for h, u in SPARQL.items()}
     sites = {s: probe(f"https://{s}/") for s in SITES}
@@ -323,6 +331,13 @@ def build(cfg: dict) -> tuple[str, str, dict]:
     else:
         verdict, vcol = "tutto ok", GREEN
     subject = f"Job notturno {today}: {verdict}"
+    kind = "job notturno"
+    if RECUPERO:
+        if ran_today and not died and not failed:
+            verdict, vcol = f"tutto ok, {len(steps)} passi", GREEN
+        at = datetime.now(ZoneInfo("Europe/Rome")).strftime("%H:%M")
+        subject = f"Recupero {today} {at}: {verdict}"
+        kind = f"recupero delle {at}"
 
     new_speech = sum(cur.get(f"Speech.{c}", 0) - prev.get(f"Speech.{c}", cur.get(f"Speech.{c}", 0)) for c in ("camera", "senato"))
     new_votes = sum(cur.get(f"Vote.{c}", 0) - prev.get(f"Vote.{c}", cur.get(f"Vote.{c}", 0)) for c in ("camera", "senato"))
@@ -330,7 +345,7 @@ def build(cfg: dict) -> tuple[str, str, dict]:
 
     parts = [f'<div style="background:{PAPER};padding:20px 14px">'
              f'<div style="max-width:720px;margin:0 auto">'
-             f'<div style="{MONO}font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{MUTED}">ParliamentRAG · job notturno · {today}</div>'
+             f'<div style="{MONO}font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{MUTED}">ParliamentRAG · {kind} · {today}</div>'
              f'<h1 style="{SANS}font-size:26px;line-height:32px;margin:6px 0 2px;color:{vcol}">{html.escape(verdict)}</h1>'
              f'<div style="{SANS}font-size:13px;color:{MUTED}">Durata {total_s // 60} min · {len(steps) - len(failed)}/{len(steps)} passi ok · log {html.escape(log.name if log else "assente")}</div>']
 
@@ -430,6 +445,8 @@ def main() -> int:
                                  headers={"api-key": cfg["BREVO_API_KEY"], "content-type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as r:
         print(subject, "→", r.status)
+    if RECUPERO:  # the history is one entry per night
+        return 0
     hist = [h for h in history() if h.get("date") != entry["date"]] + [entry]
     STATE.write_text("".join(json.dumps(h, ensure_ascii=False) + "\n" for h in hist[-60:]))
     return 0

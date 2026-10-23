@@ -8,6 +8,7 @@
 #   V2_DIR, DEMO_NEO4J, BACKEND_DIR, LOCAL_BOLT_PORT, LOCAL_SYNC, HF_DATASET_REPO
 #   SENATO_NEO4J (facoltativa: DB con il Senato da aggiornare, vedi update_senato.sh)
 #   EMENDAMENTI_GRAFO=1 (facoltativa: emendamenti nel grafo e nell'archivio)
+#   SOLO (facoltativa: regex sui nomi dei passi; gli altri si saltano, vedi build/recupero.sh)
 set -u -o pipefail
 
 cd "$(dirname "$0")/.."
@@ -58,6 +59,10 @@ fmt_dur() {
 # la durata. Rilancia le righe WARNING/ERROR dello step. Ritorna l'rc di cmd.
 run() {
 	local label="$1"; shift
+	# Recupero (build/recupero.sh): solo i passi il cui nome corrisponde a $SOLO.
+	if [ -n "${SOLO:-}" ] && ! printf '%s' "$label" | grep -qiE -- "$SOLO"; then
+		return 0
+	fi
 	STEP=$((STEP + 1))
 	local start=$SECONDS
 	{ echo; echo "════ [$STEP] $label"; } >>"$LOG"
