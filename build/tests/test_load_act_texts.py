@@ -102,3 +102,10 @@ def test_identical_letter_takes_the_proposers_letter():
     text = T.parse_document(page)["articolato"]
     assert "a) monitorare la distribuzione;" in text
     assert "identica" not in text and "servizi sociali" not in text
+
+
+def test_unique_rows_keeps_one_row_per_id():
+    from load_act_texts import unique_rows
+
+    rows = [{"id": "v1#articolato", "n": 1}, {"id": "v1#articolato", "n": 2}, {"id": "v1#relazione", "n": 3}]
+    assert unique_rows(rows) == [{"id": "v1#articolato", "n": 2}, {"id": "v1#relazione", "n": 3}]

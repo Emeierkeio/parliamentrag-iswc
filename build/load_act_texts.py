@@ -291,6 +291,12 @@ CREATE INDEX IF NOT EXISTS act_text_chunk_embedding_hnsw
 """
 
 
+def unique_rows(rows: list[dict]) -> list[dict]:
+    """One row per id, the last one: a version linked to two acts comes back twice
+    from the graph, and one INSERT ... ON CONFLICT cannot update a row twice."""
+    return list({r["id"]: r for r in rows}.values())
+
+
 def load_archive(rows: list[dict], args, stats: Counter) -> None:
     import psycopg
 
@@ -299,7 +305,7 @@ def load_archive(rows: list[dict], args, stats: Counter) -> None:
         conn.commit()
         existing = dict(conn.execute("SELECT id, row_hash FROM act_text WHERE chamber = 'camera' AND term = %s",
                                      [args.leg]).fetchall())
-        changed = [r for r in rows if existing.get(r["id"]) != r["row_hash"]]
+        changed = [r for r in unique_rows(rows) if existing.get(r["id"]) != r["row_hash"]]
         stats["archive.rows_written"] = len(changed)
         with conn.cursor() as cur:
             cur.execute("CREATE TEMP TABLE IF NOT EXISTS act_text_in (LIKE act_text) ON COMMIT DELETE ROWS")
