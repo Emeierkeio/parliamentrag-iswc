@@ -77,7 +77,10 @@ class GenerationPipeline:
             })
 
         _stage_t0 = time.perf_counter()
-        claims_result = self.analyst.analyze(query, evidence_list)
+        # Analyst, integrator and coherence validator use the sync OpenAI
+        # client: run them in a thread so the event loop keeps serving the
+        # other pipelines and /api/health while they wait.
+        claims_result = await asyncio.to_thread(self.analyst.analyze, query, evidence_list)
         claims = claims_result.get("claims", [])
 
         pipeline_metadata["stages"]["analyst"] = {
@@ -155,7 +158,8 @@ class GenerationPipeline:
         topic_statistics = self._compute_topic_statistics(evidence_list)
 
         _stage_t0 = time.perf_counter()
-        integrated = self.integrator.integrate_with_guard(
+        integrated = await asyncio.to_thread(
+            self.integrator.integrate_with_guard,
             query, sections, registry, topic_statistics=topic_statistics
         )
 
@@ -210,7 +214,8 @@ class GenerationPipeline:
                 if pick_eid in evidence_map and pick_quote:
                     evidence_map[pick_eid]["quote_text"] = pick_quote
                     evidence_map[pick_eid]["quote_vetted"] = True
-        coherence_report = self.coherence_validator.validate_all_citations(
+        coherence_report = await asyncio.to_thread(
+            self.coherence_validator.validate_all_citations,
             integrated.get("text", ""),
             evidence_map
         )

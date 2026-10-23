@@ -236,8 +236,8 @@ async def _semaphore_gated_query(
     # Notify the client immediately if it will have to wait.
     if semaphore._value == 0:
         _accept = (http_request.headers.get("accept-language", "it") if http_request else "it").strip()[:2].lower()
-        _wait_msg = ('Il sistema sta elaborando un altra richiesta. Attendi...' if _accept == 'it'
-                     else 'The system is processing another request. Please wait...')
+        _wait_msg = ('In coda: il sistema prepara poche risposte alla volta. La tua parte appena si libera un posto.' if _accept == 'it'
+                     else 'In the queue: the system prepares a few answers at a time. Yours starts as soon as a slot frees up.')
         yield (
             f"data: {json.dumps({'type': 'waiting', 'message': _wait_msg})}\n\n"
         )

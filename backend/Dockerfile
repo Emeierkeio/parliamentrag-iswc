@@ -20,11 +20,12 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p logs data
 
-# Single worker + single pipeline slot = at most one query running at a time.
-# WORKERS and MAX_CONCURRENT_PIPELINES can be overridden at runtime via env vars
-# if more throughput is needed, but the defaults enforce strict serialisation.
+# Single worker, up to four pipelines at a time. The slow sync LLM stages run
+# in threads, so concurrent pipelines no longer block each other (load test
+# of 23/10/2026 on Fascicoli, same pipeline: 4 together take 43-59 s each).
+# Both values can be overridden at runtime via env vars.
 ENV WORKERS=1
-ENV MAX_CONCURRENT_PIPELINES=1
+ENV MAX_CONCURRENT_PIPELINES=4
 
 # NOTE: keep 0.0.0.0 — Railway's public edge reaches the container over IPv4;
 # binding :: makes the socket IPv6-only here and breaks public routing (502).
