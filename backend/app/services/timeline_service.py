@@ -238,6 +238,49 @@ RETURN s.id AS sid, c.text AS text, score,
        trim(coalesce(spk.first_name, '') + ' ' + coalesce(spk.last_name, '')) AS speaker""",
 }
 
+# Speeches whose text lives in the Postgres archive (the Senate): Neo4j has
+# their Chunk nodes without text, so chunk_fulltext cannot see them. The
+# archive finds the chunk ids, the graph places them in their sitting.
+ARCHIVE_SPEECH_HITS = f"""
+MATCH (c:Chunk) WHERE c.id IN $ids
+MATCH (sp)-[:HAS_CHUNK]->(c)
+MATCH (s:Session)-[:HAS_DEBATE]->()-[:HAS_PHASE]->()-[:CONTAINS_SPEECH]->(sp)
+WHERE {SESSION_FILTER}
+WITH s, head(collect({{c: c.id, sp: sp}})) AS top
+WITH s, top.c AS chunk_id, top.sp AS sp
+OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(spk)
+RETURN s.id AS sid, chunk_id,
+       trim(coalesce(spk.first_name, '') + ' ' + coalesce(spk.last_name, '')) AS speaker"""
+
+# Motions, resolutions, orders of the day and questions of the Camera carry
+# a bare title ("RISOLUZIONE IN ASSEMBLEA 6/00300 presentata da ..."): what
+# they are about is in the description.
+_BARE_ACT_TITLE = re.compile(r"^[A-ZÀ-Ù'. ]{6,}\s\d")
+
+
+def archive_speech_rows(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
+                        legislature: int) -> list[dict]:
+    """Speech hits from the text archive, one per sitting, shaped like the
+    rows of SEARCH_HITS["speech"] (sid, text, speaker, score)."""
+    archive = get_archive()
+    if archive is None:
+        return []
+    out: list[dict] = []
+    for pair in archive.scopes:
+        if pair[1] != legislature or (chambers is not None and pair[0] not in chambers):
+            continue
+        ids = [h["id"] for h in archive.text_search(search.strip(), pair, limit=3000)]
+        if not ids:
+            continue
+        rows = neo4j.query(ARCHIVE_SPEECH_HITS, {"ids": ids, "chambers": chambers, "legislature": legislature})
+        with archive.pool.connection() as conn:
+            texts = dict(conn.execute("SELECT id, text FROM chunk WHERE id = ANY(%s)",
+                                      [[r["chunk_id"] for r in rows]]).fetchall())
+        out += [{"sid": r["sid"], "text": texts.get(r["chunk_id"]) or "", "speaker": r.get("speaker"),
+                 "score": 1.0} for r in rows]
+    return out
+
+
 # What a sitting shows for a search, in this order: the votes first.
 _MATCH_ORDER = ("vote", "act", "debate", "speaker", "speech", "recap")
 _MATCH_CAP = {"vote": 3, "act": 1, "debate": 1, "speaker": 1, "speech": 1, "recap": 1}
@@ -299,8 +342,16 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
         except Exception:
             return None
 
-    with ThreadPoolExecutor(max_workers=len(SEARCH_HITS)) as pool:
+    def archived() -> list[dict]:
+        try:
+            return archive_speech_rows(neo4j, search, chambers, legislature)
+        except Exception:
+            return []
+
+    with ThreadPoolExecutor(max_workers=len(SEARCH_HITS) + 1) as pool:
+        from_archive = pool.submit(archived)
         results = dict(zip(SEARCH_HITS, pool.map(run, SEARCH_HITS.values())))
+        results["speech"] = (results["speech"] or []) + from_archive.result()
     if results["vote"] is None:
         return None
 
@@ -314,8 +365,9 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
                 # Questions and motions have a bare title ("INTERROGAZIONE A
                 # RISPOSTA ORALE 3/02563"): their subject is the description.
                 title, desc = r.get("title") or "", r.get("description") or ""
-                if desc and (not title or title.isupper()):
-                    text = (title.capitalize() + ": " if title else "") + _excerpt(desc, search, 160)
+                if desc and (not title or title.isupper() or _BARE_ACT_TITLE.match(title)):
+                    name = re.sub(r"\s+presentat[ao]\s+da\b.*$", "", title, flags=re.IGNORECASE).strip()
+                    text = (name.capitalize() + ": " if name else "") + _excerpt(desc, search, 160)
                 else:
                     text = title
                 m = SearchMatch(kind=kind, text=re.sub(r"\s+", " ", text).strip(), vote_id=r.get("vote_id"),
