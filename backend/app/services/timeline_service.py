@@ -332,6 +332,40 @@ def debate_votes(neo4j: Neo4jClient, debate_ids: list[str]) -> dict[str, tuple[s
     return {r["debate_id"]: (r["vote_id"], r["vote_number"]) for r in rows if r.get("vote_id")}
 
 
+# Floor votes on amendments whose text (in the archive) contains the words:
+# the vote a reader wants when the subject reads only «EM 1.128».
+AMENDMENT_VOTE_HITS = f"""
+MATCH (am:Amendment) WHERE am.id IN $ids
+MATCH (v:Vote)-[:ON_AMENDMENT]->(am)
+MATCH (s:Session)-[:HAS_VOTE]->(v)
+WHERE {SESSION_FILTER}
+RETURN s.id AS sid, v.id AS vote_id, v.number AS vote_number, am.id AS amendment_id, am.number AS number"""
+
+
+def amendment_vote_rows(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
+                        legislature: int) -> list[dict]:
+    """Votes on amendments whose text contains the words, shaped like the vote hits."""
+    archive = get_archive()
+    words = search.strip()
+    if archive is None or len(words) < 3:
+        return []
+    escaped = words.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    try:
+        with archive.pool.connection() as conn:
+            found = conn.execute(
+                "SELECT id, coalesce(text, text_presented) FROM amendment "
+                "WHERE coalesce(text, text_presented) ILIKE %s LIMIT 3000", [f"%{escaped}%"]).fetchall()
+    except Exception:
+        return []
+    if not found:
+        return []
+    texts = {r[0]: r[1] for r in found}
+    rows = neo4j.query(AMENDMENT_VOTE_HITS, {"ids": list(texts), "chambers": chambers, "legislature": legislature})
+    return [{"sid": r["sid"], "vote_id": r["vote_id"], "vote_number": r["vote_number"],
+             "subject": f"Em. {r['number']}", "description": _excerpt(texts.get(r["amendment_id"]) or "", search, 140),
+             "score": 2.0} for r in rows]
+
+
 # What a sitting shows for a search, in this order: the votes first.
 _MATCH_ORDER = ("vote", "act", "debate", "speaker", "speech", "recap")
 _MATCH_CAP = {"vote": 3, "act": 1, "debate": 1, "speaker": 1, "speech": 1, "recap": 1}
@@ -400,15 +434,25 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
         except Exception:
             return []
 
-    with ThreadPoolExecutor(max_workers=len(SEARCH_HITS) + 1) as pool:
+    def amended() -> list[dict]:
+        try:
+            return amendment_vote_rows(neo4j, search, chambers, legislature)
+        except Exception:
+            return []
+
+    with ThreadPoolExecutor(max_workers=len(SEARCH_HITS) + 2) as pool:
         from_archive = pool.submit(archived)
+        from_amendments = pool.submit(amended)
         results = dict(zip(SEARCH_HITS, pool.map(run, SEARCH_HITS.values())))
         results["speech"] = (results["speech"] or []) + from_archive.result()
+        results["vote"] = (results["vote"] or []) + from_amendments.result() if results["vote"] is not None else None
     if results["vote"] is None:
         return None
 
-    # speeches and debates open the vote their debate led to
-    led = debate_votes(neo4j, [r.get("debate_id") for k in ("speech", "debate") for r in (results.get(k) or [])])
+    # A speech or a debate title does not tell what the vote was on: a speech on
+    # car insurance during the electoral law debate is not a vote on car
+    # insurance. Only vote and act hits carry a vote; a speech says where it was given.
+    led: dict[str, tuple[str, int]] = {}
 
     found: dict[str, dict[str, list[tuple[float, SearchMatch]]]] = {}
     for kind, rows in results.items():
@@ -439,7 +483,7 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
                 m = SearchMatch(kind=kind, text=_excerpt(r.get("text") or "", search, _LIST_WIDTH),
                                 speaker=_display_case(r.get("speaker")) or None,
                                 vote_id=vote[0] if vote else None, vote_number=vote[1] if vote else None,
-                                context=None if vote else _debate_context(r.get("debate_title")))
+                                context=_debate_context(r.get("debate_title")))
             elif kind == "debate":
                 if is_outcome_fragment(r.get("text")):
                     continue
