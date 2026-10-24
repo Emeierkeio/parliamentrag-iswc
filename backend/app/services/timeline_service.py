@@ -35,6 +35,7 @@ from ..models.timeline import (
     VoteActRef,
     VoteActTextResponse,
     VoteAmendment,
+    VoteMotion,
     VoteDetailResponse,
     VoteInfo,
     VoteParticipant,
@@ -944,7 +945,10 @@ async def get_session_votes(
                                  first: COLLECT { MATCH (p)-[f:SIGNED_AMENDMENT]->(am) WHERE f.first
                                                   RETURN {name: trim(coalesce(p.first_name, '') + ' ' + coalesce(p.last_name, '')),
                                                           id: p.id} }[0],
-                                 signers: COUNT { (p2)-[:SIGNED_AMENDMENT]->(am) }} } AS amendments
+                                 signers: COUNT { (p2)-[:SIGNED_AMENDMENT]->(am) }} } AS amendments,
+               COLLECT { MATCH (v)-[:ON_ACT]->(m:ParliamentaryAct)
+                         WHERE (m:AgendaOrder OR m:Motion OR m:Resolution) AND m.description IS NOT NULL
+                         RETURN {title: m.title, text: m.description} }[0] AS motion
         ORDER BY v.number
         """,
         {"session_id": session_id},
@@ -954,8 +958,43 @@ async def get_session_votes(
     for r in vote_rows:
         info = _vote_info(r)
         info.amendment = _vote_amendment(r.get("amendments") or [], texts)
+        info.motion = _vote_motion(r.get("motion"))
         out.append(info)
     return out
+
+
+_FILED_BY = re.compile(r"presentat[oa]\s+da\s+([A-ZÀ-ÜÉ'’ -]{2,}?)\s+([A-ZÀ-Ü][a-zà-üé'’]+(?:\s+[A-ZÀ-Ü][a-zà-üé'’]+)*)")
+_TITLE_GROUP = re.compile(r"presentat[oa]\s+da\s+[^(]+\(([^)]+)\)")
+
+
+def _vote_motion(m: dict | None) -> VoteMotion | None:
+    """Who filed an order of the day, motion or resolution, and what it asks:
+    the operative part («impegna il Governo…») when there is one."""
+    if not m or not m.get("text"):
+        return None
+    text = re.sub(r"\s+", " ", m["text"]).strip()
+    filed = _FILED_BY.search(text)
+    presenter = None
+    if filed:
+        surname = " ".join(w.capitalize() for w in filed.group(1).split())
+        presenter = f"{filed.group(2)} {surname}".strip()
+    group = _TITLE_GROUP.search(m.get("title") or "")
+    group_name = None
+    if group:
+        group_name = group.group(1).strip().title()
+        group_name = re.sub(r"\b(E|Di|Del|Della|Per|Le|La|Il)\b", lambda w: w.group(1).lower(), group_name)
+    low = text.lower()
+    at = low.find("impegna il governo")
+    if at < 0:
+        at = low.find("impegna")
+    if at < 0:
+        start = low.find("la camera,")
+        if start < 0:
+            start = low.find("il senato,")
+        at = max(start, 0)
+    part = text[at:]
+    excerpt = part if len(part) <= 360 else part[:360].rsplit(" ", 1)[0] + "…"
+    return VoteMotion(presenter=presenter, group=group_name, excerpt=excerpt[0].upper() + excerpt[1:] if excerpt else None)
 
 
 def _amendment_texts(ids: list[str]) -> dict[str, str]:

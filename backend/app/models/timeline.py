@@ -75,6 +75,14 @@ class VoteAmendment(BaseModel):
     excerpt: Optional[str] = None       # the start of the text, from the archive
 
 
+class VoteMotion(BaseModel):
+    """The order of the day, motion or resolution a vote is on: who filed it and what it asks."""
+
+    presenter: Optional[str] = None     # "Stefania Ascari"
+    group: Optional[str] = None         # "Movimento 5 Stelle", as the title writes it
+    excerpt: Optional[str] = None       # from «impegna il Governo…», or the start of the text
+
+
 class VoteInfo(BaseModel):
     """One roll-call vote attached to a session."""
 
@@ -98,6 +106,8 @@ class VoteInfo(BaseModel):
     act_title: Optional[str] = None
     # The amendment voted on (ON_AMENDMENT), with the start of its text
     amendment: Optional[VoteAmendment] = None
+    # Orders of the day, motions, resolutions: who filed it and what it asks the Government
+    motion: Optional[VoteMotion] = None
 
 
 class VoteParticipant(BaseModel):
