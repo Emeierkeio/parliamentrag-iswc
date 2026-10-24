@@ -255,6 +255,14 @@ RETURN s.id AS sid, chunk_id,
 # Motions, resolutions, orders of the day and questions of the Camera carry
 # a bare title ("RISOLUZIONE IN ASSEMBLEA 6/00300 presentata da ..."): what
 # they are about is in the description.
+# "Conversione in legge, con modificazioni, del decreto-legge 7 agosto 2026,
+# n. 143, recante disposizioni urgenti in materia di ..." → "Decreto-legge
+# n. 143/2026: ...", short enough for the two lines of the list.
+_DL_TITLE = re.compile(
+    r"^Conversione in legge(?:, con modificazioni,)? del decreto-legge \d{1,2} \w+ (\d{4}), n\. (\d+),"
+    r" recante (?:(?:misure|disposizioni) urgenti (?:in materia di|per|di) )?(.+)$", re.IGNORECASE)
+_LIST_WIDTH = 110  # characters that fit in the two lines of a row
+
 _BARE_ACT_TITLE = re.compile(r"^[A-ZÀ-Ù'. ]{6,}\s\d")
 
 
@@ -315,7 +323,8 @@ def _excerpt(text: str, query: str, width: int = 180) -> str:
             break
     if pos < 0 or len(text) <= width:
         return text[:width].rstrip() + ("…" if len(text) > width else "")
-    start = max(0, pos - width // 3)
+    # a third of the width before the word, or the whole last stretch when the word is near the end
+    start = max(0, min(pos - width // 3, len(text) - width))
     if start:
         space = text.find(" ", start)
         start = space + 1 if 0 <= space < pos else start
@@ -367,16 +376,20 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
                 title, desc = r.get("title") or "", r.get("description") or ""
                 if desc and (not title or title.isupper() or _BARE_ACT_TITLE.match(title)):
                     name = re.sub(r"\s+presentat[ao]\s+da\b.*$", "", title, flags=re.IGNORECASE).strip()
-                    text = (name.capitalize() + ": " if name else "") + _excerpt(desc, search, 160)
+                    text = (name.capitalize() + ": " if name else "") + _excerpt(desc, search, _LIST_WIDTH - len(name))
                 else:
-                    text = title
+                    dl = _DL_TITLE.match(title.strip())
+                    if dl:
+                        title = f"Decreto-legge n. {dl.group(2)}/{dl.group(1)}: {dl.group(3)}"
+                    # Long titles around the searched word, so the list shows it
+                    text = _excerpt(title, search, _LIST_WIDTH)
                 m = SearchMatch(kind=kind, text=re.sub(r"\s+", " ", text).strip(), vote_id=r.get("vote_id"),
                                 vote_number=r.get("vote_number"))
             elif kind == "speaker":
                 name = _display_case(r.get("speaker"))
                 m = SearchMatch(kind=kind, text=name, speaker=name)
             elif kind == "speech":
-                m = SearchMatch(kind=kind, text=_excerpt(r.get("text") or "", search),
+                m = SearchMatch(kind=kind, text=_excerpt(r.get("text") or "", search, _LIST_WIDTH),
                                 speaker=_display_case(r.get("speaker")) or None)
             elif kind == "debate":
                 if is_outcome_fragment(r.get("text")):
