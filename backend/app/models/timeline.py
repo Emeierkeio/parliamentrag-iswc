@@ -31,6 +31,8 @@ class SearchMatch(BaseModel):
     vote_id: Optional[str] = None    # kind "vote" (and "act" when the act was voted)
     vote_number: Optional[int] = None
     speaker: Optional[str] = None    # kind "speech"
+    # kind "speech" with no vote: where it was given («Interventi di fine seduta»)
+    context: Optional[str] = None
 
 
 class SessionCard(BaseModel):

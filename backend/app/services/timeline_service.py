@@ -231,12 +231,15 @@ RETURN s.id AS sid, CASE WHEN $locale = 'en' THEN s.recapEn ELSE s.recapIt END A
 CALL db.index.fulltext.queryNodes('chunk_fulltext', $q) YIELD node AS c, score
 WITH c, score ORDER BY score DESC LIMIT 3000
 MATCH (sp)-[:HAS_CHUNK]->(c)
-MATCH (s:Session)-[:HAS_DEBATE]->()-[:HAS_PHASE]->()-[:CONTAINS_SPEECH]->(sp)
+MATCH (s:Session)-[:HAS_DEBATE]->(d)-[:HAS_PHASE]->()-[:CONTAINS_SPEECH]->(sp)
 WHERE {SESSION_FILTER}
-WITH s, head(collect({{c: c, sp: sp, score: score}})) AS top
-WITH s, top.sp AS sp, top.c AS c, top.score AS score
+// in a sitting, prefer a speech in a debate on an act (it led to a vote) to one at the end of the sitting
+WITH s, c, sp, d, score, EXISTS {{ (d)-[:DISCUSSES]->() }} AS on_act
+ORDER BY on_act DESC, score DESC
+WITH s, head(collect({{c: c, sp: sp, d: d, score: score}})) AS top
+WITH s, top.sp AS sp, top.c AS c, top.d AS d, top.score AS score
 OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(spk)
-RETURN s.id AS sid, c.text AS text, score,
+RETURN s.id AS sid, d.id AS debate_id, d.title AS debate_title, c.text AS text, score,
        trim(coalesce(spk.first_name, '') + ' ' + coalesce(spk.last_name, '')) AS speaker""",
 }
 
@@ -246,12 +249,13 @@ RETURN s.id AS sid, c.text AS text, score,
 ARCHIVE_SPEECH_HITS = f"""
 MATCH (c:Chunk) WHERE c.id IN $ids
 MATCH (sp)-[:HAS_CHUNK]->(c)
-MATCH (s:Session)-[:HAS_DEBATE]->()-[:HAS_PHASE]->()-[:CONTAINS_SPEECH]->(sp)
+MATCH (s:Session)-[:HAS_DEBATE]->(d)-[:HAS_PHASE]->()-[:CONTAINS_SPEECH]->(sp)
 WHERE {SESSION_FILTER}
-WITH s, head(collect({{c: c.id, sp: sp}})) AS top
-WITH s, top.c AS chunk_id, top.sp AS sp
+WITH s, c, sp, d, EXISTS {{ (d)-[:DISCUSSES]->() }} AS on_act ORDER BY on_act DESC
+WITH s, head(collect({{c: c.id, sp: sp, d: d}})) AS top
+WITH s, top.c AS chunk_id, top.sp AS sp, top.d.id AS debate_id, top.d.title AS debate_title
 OPTIONAL MATCH (sp)-[:SPOKEN_BY]->(spk)
-RETURN s.id AS sid, chunk_id,
+RETURN s.id AS sid, chunk_id, debate_id, debate_title,
        trim(coalesce(spk.first_name, '') + ' ' + coalesce(spk.last_name, '')) AS speaker"""
 
 # Motions, resolutions, orders of the day and questions of the Camera carry
@@ -286,9 +290,46 @@ def archive_speech_rows(neo4j: Neo4jClient, search: str, chambers: list[str] | N
         with archive.pool.connection() as conn:
             texts = dict(conn.execute("SELECT id, text FROM chunk WHERE id = ANY(%s)",
                                       [[r["chunk_id"] for r in rows]]).fetchall())
-        out += [{"sid": r["sid"], "text": texts.get(r["chunk_id"]) or "", "speaker": r.get("speaker"),
+        out += [{"sid": r["sid"], "debate_id": r.get("debate_id"), "debate_title": r.get("debate_title"), "text": texts.get(r["chunk_id"]) or "", "speaker": r.get("speaker"),
                  "score": 1.0} for r in rows]
     return out
+
+
+# The vote a debate led to: votes of the sitting on one of the acts it
+# discussed (directly, through an agenda order, an amendment or an earlier
+# reading), the final vote first. A speech found by the search opens it.
+DEBATE_VOTES = """
+UNWIND $debate_ids AS did
+MATCH (d:Debate {id: did})<-[:HAS_DEBATE]-(s:Session)-[:HAS_VOTE]->(v:Vote)
+MATCH (d)-[:DISCUSSES]->(x:ParliamentaryAct)
+WITH did, v, collect(x) AS mine
+WHERE any(t IN [(v)-[:ON_ACT]->(a) | a] WHERE t IN mine)
+   OR any(t IN [(v)-[:ON_ACT]->()-[:REFERS_TO]->(b) | b] WHERE t IN mine)
+   OR any(t IN [(v)-[:ON_ACT]->()-[:NEXT_READING*1..3]->(c) | c] WHERE t IN mine)
+   OR any(t IN [(v)-[:ON_AMENDMENT]->()-[:AMENDS]->(e) | e] WHERE t IN mine)
+WITH did, v ORDER BY coalesce(v.finalVote, false) DESC, v.number DESC
+WITH did, head(collect(v)) AS v
+RETURN did AS debate_id, v.id AS vote_id, v.number AS vote_number"""
+
+
+def _debate_context(title: str | None) -> str | None:
+    """Where a speech without a vote was given, in a few words: «Interventi di fine seduta»."""
+    t = re.sub(r"\s+", " ", title or "").strip().rstrip(".")
+    if not t:
+        return None
+    return t if len(t) <= 90 else t[:90].rsplit(" ", 1)[0] + "…"
+
+
+def debate_votes(neo4j: Neo4jClient, debate_ids: list[str]) -> dict[str, tuple[str, int]]:
+    """{debate id: (vote id, vote number)} for the debates that led to a vote."""
+    ids = sorted({d for d in debate_ids if d})
+    if not ids:
+        return {}
+    try:
+        rows = neo4j.query(DEBATE_VOTES, {"debate_ids": ids})
+    except Exception:
+        return {}
+    return {r["debate_id"]: (r["vote_id"], r["vote_number"]) for r in rows if r.get("vote_id")}
 
 
 # What a sitting shows for a search, in this order: the votes first.
@@ -366,6 +407,9 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
     if results["vote"] is None:
         return None
 
+    # speeches and debates open the vote their debate led to
+    led = debate_votes(neo4j, [r.get("debate_id") for k in ("speech", "debate") for r in (results.get(k) or [])])
+
     found: dict[str, dict[str, list[tuple[float, SearchMatch]]]] = {}
     for kind, rows in results.items():
         for r in rows or []:
@@ -391,12 +435,17 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
                 name = _display_case(r.get("speaker"))
                 m = SearchMatch(kind=kind, text=name, speaker=name)
             elif kind == "speech":
+                vote = led.get(r.get("debate_id") or "")
                 m = SearchMatch(kind=kind, text=_excerpt(r.get("text") or "", search, _LIST_WIDTH),
-                                speaker=_display_case(r.get("speaker")) or None)
+                                speaker=_display_case(r.get("speaker")) or None,
+                                vote_id=vote[0] if vote else None, vote_number=vote[1] if vote else None,
+                                context=None if vote else _debate_context(r.get("debate_title")))
             elif kind == "debate":
                 if is_outcome_fragment(r.get("text")):
                     continue
-                m = SearchMatch(kind=kind, text=re.sub(r"\s+", " ", r.get("text") or "").strip())
+                vote = led.get(r.get("debate_id") or "")
+                m = SearchMatch(kind=kind, text=re.sub(r"\s+", " ", r.get("text") or "").strip(),
+                                vote_id=vote[0] if vote else None, vote_number=vote[1] if vote else None)
             else:
                 m = SearchMatch(kind=kind, text=_excerpt(r.get("text") or "", search, 220))
             if not m.text:
@@ -419,7 +468,7 @@ def search_hits(neo4j: Neo4jClient, search: str, chambers: list[str] | None,
             if kind == "vote":
                 ranked.sort(key=lambda x: (-x[0], x[1].vote_number or 0))
             for _, m in ranked:
-                key = m.vote_id or m.text
+                key = (m.vote_id if kind == "vote" else None) or m.text
                 if key in seen:
                     continue
                 seen.add(key)
