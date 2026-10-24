@@ -330,8 +330,11 @@ if [ -n "$LOCAL_UP" ]; then
 fi
 
 # ── Emendamenti XIX (Camera e Senato) ────────────────────────────────────────
-# Scarica solo ciò che è nuovo o con l'iter cambiato negli ultimi giorni, poi
-# rigenera downloads/emendamenti/emendamenti_leg19.jsonl (circa un minuto).
+# Camera: ogni file già scaricato si richiede con If-Modified-Since (304 se
+# invariato), più le letture con l'iter cambiato, le navette (-B) e gli
+# stralci (-bis), i numeri mai provati e un settimo dei 404 a rotazione:
+# circa 900 richieste, 6-8 minuti. Senato: fasi con l'iter cambiato negli
+# ultimi giorni. Poi rigenera downloads/emendamenti/emendamenti_leg19.jsonl.
 # Il caricamento nel grafo e nell'archivio è più sotto, dopo il Senato.
 EMEND_DAYS=14
 # senato.it blocca l'IP (403 su tutto il sito) dopo qualche ora a 0,5 s tra le
@@ -359,7 +362,9 @@ akn_pull() {
 			&& git -C "$AKN_DIR" checkout --quiet master
 	fi
 }
-run "Emendamenti Camera (nuovi e cambiati)" "$PY" build/download_emendamenti_camera.py --recenti "$EMEND_DAYS" \
+CAMERA_EMEND_DELAY=0.2
+run "Emendamenti Camera (nuovi e cambiati)" \
+	"$PY" build/download_emendamenti_camera.py --recenti "$EMEND_DAYS" --delay "$CAMERA_EMEND_DELAY" \
 	|| warn "emendamenti Camera: download incompleto, riprova al prossimo giro"
 run "Fasi Senato + pagine emendamenti di commissione" \
 	"$PY" build/download_emendamenti_senato.py --recenti "$EMEND_DAYS" --delay "$SENATO_DELAY" \

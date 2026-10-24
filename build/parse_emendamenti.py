@@ -33,7 +33,9 @@ a new base text is adopted, so a number can repeat within one bill.
 
 id_ddl is the Senate osr:idDdl, which identifies the whole bill across both
 chambers. Chamber bills get it from the Senate SPARQL readings with ramo C
-(cached in downloads/emendamenti/fasi_camera_leg{N}.csv).
+(downloads/emendamenti/fasi_camera_leg{N}.csv, rewritten every night by
+download_emendamenti_camera.py). Chamber files of later readings and
+split-off bills keep their suffix in atto: "C.1038-B", "C.643-bis".
 
 Usage:
     python build/parse_emendamenti.py [--leg 19]
@@ -49,6 +51,7 @@ import html
 import json
 import os
 import re
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -117,6 +120,9 @@ def block_text(container: ET.Element | None) -> str:
 # --------------------------------------------------------------------- Camera
 
 def camera_id_ddl(leg: int) -> dict[str, str]:
+    """File key ('2822', '1038-B', '643-bis') -> Senate idDdl."""
+    from download_emendamenti_camera import camera_key
+
     cache = DOWNLOADS / "emendamenti" / f"fasi_camera_leg{leg}.csv"
     if not cache.exists():
         r = requests.get(SPARQL, params={"query": FASI_CAMERA_QUERY.format(leg=leg)},
@@ -128,12 +134,23 @@ def camera_id_ddl(leg: int) -> dict[str, str]:
             w.writerow(["numeroFase", "idDdl"])
             for b in r.json()["results"]["bindings"]:
                 w.writerow([b["numeroFase"]["value"], b["idDdl"]["value"]])
+    out = {}
     with open(cache) as f:
-        return {row["numeroFase"]: row["idDdl"] for row in csv.DictReader(f)}
+        for row in csv.DictReader(f):
+            key = camera_key(row["numeroFase"])
+            if key:
+                out.setdefault(key, row["idDdl"])
+    return out
+
+
+def camera_file_order(path: Path) -> tuple[int, str]:
+    """ac.1038.xml before ac.1038-B.xml before ac.1039.xml."""
+    base, _, suffix = path.name[len("ac."):-len(".xml")].partition("-")
+    return int(base), suffix
 
 
 def parse_camera(path: Path, id_ddl: dict[str, str], leg: int):
-    numero_atto = path.stem.split(".", 1)[1]
+    numero_atto = path.name[len("ac."):-len(".xml")]
     root = ET.parse(path).getroot()
     for ses in root.findall("proposteEmendativeInSeduta"):
         sed = ses.find("seduta")
@@ -375,6 +392,42 @@ def parse_senato_single(page: str, fase: dict, sede: str, leg: int, id_testo: st
         "fonte": f"https://www.senato.it/show-doc?leg={leg}&tipodoc={tipodoc}&id={id_testo}",
     }
 
+# ListEmendc numbers carry notes: "1.1 (id. a 1.2)", "G/1852/27/6 [già em. 15.0.8
+# (testo 2)]", "1.1 (testo 2) [id. a 1.2 (testo 2)]".
+HTML_MERGE_MAX_AGE = 14 * 86400  # seconds; the nightly window of download_emendamenti_senato.py
+AMEND_NUMBER_RE = re.compile(r"\s*([^\s(\[]+)")
+AMEND_VERSION_RE = re.compile(r"^[^\[]*?\((testo[^)]*)\)", re.I)
+
+
+def amendment_slot(numero: str, versione: str | None) -> tuple[str, str]:
+    """(number, version) without the notes, comparable across Akoma Ntoso and HTML."""
+    text = numero + (f" ({versione})" if versione else "")
+    m = AMEND_NUMBER_RE.match(text)
+    v = AMEND_VERSION_RE.match(text)
+    return (m.group(1).rstrip(".,;").lower() if m else text.lower(),
+            " ".join(v.group(1).lower().split()) if v else "")
+
+
+def akn_committee_numbers(rows: list[dict]) -> dict[str, set[tuple]]:
+    """Senate bill -> amendment slots of its Akoma Ntoso committee rows, joint bills included."""
+    known: dict[str, set[tuple]] = collections.defaultdict(set)
+    for r in rows:
+        if r["ramo"] == "S" and r["sede"] == "commissione":
+            for atto in [r["atto"], *(r.get("atti_congiunti") or [])]:
+                known[atto].add(amendment_slot(r["numero"], r["versione"]))
+    return known
+
+
+def html_rows_missing_from_akn(html_rows: list[dict], known: set[tuple]) -> list[dict]:
+    """ListEmendc rows whose number and version Akoma Ntoso does not have.
+
+    A number seen in any earlier round counts as present: the Senate restarts
+    numbering on a new base text, and a row is better missed for a few days
+    (until Akoma Ntoso has it) than doubled.
+    """
+    return [r for r in html_rows if amendment_slot(r["numero"], r["versione"]) not in known]
+
+
 # --------------------------------------------------------------------- main
 
 def main() -> None:
@@ -390,7 +443,7 @@ def main() -> None:
 
     rows = []
     id_ddl = camera_id_ddl(args.leg)
-    for path in sorted(camera_dir.glob("ac.*.xml"), key=lambda p: int(p.stem.split(".")[1])):
+    for path in sorted(camera_dir.glob("ac.*.xml"), key=camera_file_order):
         rows.extend(parse_camera(path, id_ddl, args.leg))
     with open(senato_dir / "fasi.csv") as f:
         fasi = {r["idFase"]: r for r in csv.DictReader(f)}
@@ -398,17 +451,28 @@ def main() -> None:
     akn_vuoti: list[dict] = []
     rows.extend(parse_senato(akn_dir, fasi, esiti, args.leg, akn_vuoti))
 
-    # Bills whose committee amendments are missing from Akoma Ntoso
+    # Committee amendments from the ListEmendc pages: the whole bill when it has
+    # no emendc folder in Akoma Ntoso, otherwise only the numbers that Akoma
+    # Ntoso does not have yet (the bulk export lags the site by some days),
+    # read from pages downloaded in the last days: an older page has nothing
+    # Akoma Ntoso has not caught up with, only notes it numbers differently.
     akn_comm = {str(int(d.name[4:])) for d in akn_dir.glob("Atto*") if (d / "emendc").is_dir()}
-    html_fallback = 0
+    html_fallback = html_integrati = 0
+    akn_known = akn_committee_numbers(rows)
     for path in sorted(senato_dir.glob("emendc.*.html")):
         id_fase = path.stem.split(".", 1)[1]
-        if id_fase in akn_comm or id_fase not in fasi:
+        in_akn = id_fase in akn_comm
+        if id_fase not in fasi or (in_akn and time.time() - path.stat().st_mtime > HTML_MERGE_MAX_AGE):
             continue
-        for row in parse_senato_html(path.read_text(encoding="utf-8"), fasi[id_fase], "commissione",
-                                     esiti_by_num, args.leg):
-            rows.append(row)
-            html_fallback += 1
+        html_rows = list(parse_senato_html(path.read_text(encoding="utf-8"), fasi[id_fase], "commissione",
+                                           esiti_by_num, args.leg))
+        if in_akn:
+            fresh = html_rows_missing_from_akn(html_rows, akn_known.get(fasi[id_fase]["fase"], set()))
+            rows.extend(fresh)
+            html_integrati += len(fresh)
+        else:
+            rows.extend(html_rows)
+            html_fallback += len(html_rows)
 
     # Empty Akoma Ntoso files: single pages fetched by download_esiti_senato.py --singoli
     singoli_dir = senato_dir / "singoli"
@@ -515,6 +579,7 @@ def main() -> None:
         "senato_akn_vuoti": dict(collections.Counter(x["sede"] for x in akn_vuoti)),
         "senato_akn_vuoti_recuperati": recuperati,
         "senato_da_html_commissione": html_fallback,
+        "senato_da_html_non_ancora_in_akn": html_integrati,
     }
     (out_dir / f"report_leg{args.leg}.json").write_text(json.dumps(report, indent=2, ensure_ascii=False))
     print(json.dumps(report, indent=2, ensure_ascii=False))

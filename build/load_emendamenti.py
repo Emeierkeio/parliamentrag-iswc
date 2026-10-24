@@ -262,9 +262,19 @@ def parse_vote_refs(chamber: str, subject: str | None,
 DATE_SLACK = dt.timedelta(days=7)
 # A Chamber floor file carries the date of the sitting that votes it: on the
 # 2026-10 data 7,371 of 7,391 Chamber matches fall within 5 days; the other 20
-# were second readings ("DDL n. 1038-B", 24 days later) whose file is missing
-# and matched the first reading.
+# were second readings ("DDL n. 1038-B", 24 days later) whose file was not
+# downloaded and matched the first reading. Chamber votes name the bill
+# without the suffix, so floor rows are indexed by the plain number and the
+# window tells the readings apart.
 CAMERA_FILE_WINDOW = dt.timedelta(days=7)
+
+
+def floor_bill_key(chamber: str, atto: str | None) -> str | None:
+    """Bill number as floor votes name it: Chamber 'C.1038-B' -> '1038'."""
+    number = act_number(atto)
+    if chamber == "camera" and number:
+        return number.split("-", 1)[0]
+    return number
 
 
 def pick_candidate(cands: list[dict], when: dt.date | None) -> tuple[dict | None, str]:
@@ -627,7 +637,7 @@ def link_votes(rows: list[dict], gi: GraphIndex, rels: dict, stats: Counter, unl
         if r.get("sede") != "assemblea":
             continue
         for atto in [r.get("atto")] + list(r.get("atti_congiunti") or []):
-            floor[(r["_chamber"], act_number(atto), r["_number_key"], r["_version"])].append(r)
+            floor[(r["_chamber"], floor_bill_key(r["_chamber"], atto), r["_number_key"], r["_version"])].append(r)
 
     for v in gi.votes:
         ch = v["chamber"]

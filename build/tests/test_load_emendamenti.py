@@ -244,6 +244,19 @@ def test_votes_linked_by_bill_and_number():
     assert unlinked["senato.vote"][0][0] == "v2"
 
 
+def test_camera_second_reading_votes_link_to_the_suffixed_file():
+    # Chamber votes name "DDL n. 1038-B" as bill 1038: the sitting date picks the reading.
+    rows = [_row("C|a", chamber="camera", atto="C.1038", numero="20.6", seduta_data="2023-07-11"),
+            _row("C|b", chamber="camera", atto="C.1038-B", numero="20.6", seduta_data="2023-08-03")]
+    votes = [{"id": "v", "session": "s", "chamber": "camera", "date": _Date(dt.date(2023, 8, 3)),
+              "subject": "Votazione Emendamento 20.6 DDL n. 1038-B", "description": "Emendamento 20.6", "acts": []}]
+    stats, unlinked = Counter(), {}
+    rels = L.derive_relations(rows, _index(votes), stats, unlinked)
+    assert rels["ON_AMENDMENT"] == {("C|b", "v", "label")}
+    assert L.floor_bill_key("camera", "C.643-bis") == "643"
+    assert L.floor_bill_key("senato", "S.924-bis") == "924-bis"
+
+
 def test_sub_of_and_resubmits():
     rows = [_row("S|1", numero="7.0.100", sede="commissione"),
             _row("S|2", numero="7.0.100/3", sede="commissione"),
