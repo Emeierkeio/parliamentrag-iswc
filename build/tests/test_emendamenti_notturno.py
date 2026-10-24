@@ -30,7 +30,8 @@ def test_nightly_targets_ask_saved_files_and_suffixed_readings():
     have = {"1", "2"}
     missing = {str(n) for n in range(4, 40)}
     targets, full, top = C.select_targets(fasi, 14, have, missing, today)
-    assert top == 39 + C.PROBE_AHEAD  # highest known number, 404s included
+    assert top == 3 + C.PROBE_AHEAD  # highest reading or saved file, not the 404s probed ahead
+    assert C.select_targets([], 14, set(), missing, today)[2] == 39 + C.PROBE_AHEAD
     assert full == {"2"}
     assert {"1", "2"} <= set(targets)  # saved files are always asked
     assert {"3", "3-B"} <= set(targets)  # never probed

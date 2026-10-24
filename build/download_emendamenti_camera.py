@@ -98,7 +98,9 @@ def select_targets(fasi: list[dict], days: int, have: set[str], missing: set[str
         key = camera_key(f["numeroFase"])
         if key and (key not in readings or (f.get("data") or "") > (readings[key].get("data") or "")):
             readings[key] = f
-    known = set(readings) | have | missing
+    # Not the 404s: they include the numbers probed ahead, and the top would
+    # creep up by PROBE_AHEAD every night.
+    known = (set(readings) | have) or missing
     top = max((key_base(k) for k in known), default=0) + PROBE_AHEAD
     full = {k for k, f in readings.items() if changed_since(f, days)}
     plain = {str(n) for n in range(1, top + 1)}
