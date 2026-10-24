@@ -65,6 +65,16 @@ class PhaseInfo(BaseModel):
     speech_count: int
 
 
+class VoteAmendment(BaseModel):
+    """The amendment a floor vote is on, for a reader who does not know what «EM 1.151 NF» means."""
+
+    numbers: list[str]                  # "1.151" (more when the vote groups several)
+    first_signer: Optional[str] = None  # "Devis Dori"
+    first_signer_id: Optional[str] = None  # "307634": the number of dati.camera.it / dati.senato.it
+    signers: int = 0                    # every signatory, the first included
+    excerpt: Optional[str] = None       # the start of the text, from the archive
+
+
 class VoteInfo(BaseModel):
     """One roll-call vote attached to a session."""
 
@@ -86,6 +96,8 @@ class VoteInfo(BaseModel):
     # The main act voted on (the bill, not the joint ones absorbed into it)
     act_number: Optional[str] = None
     act_title: Optional[str] = None
+    # The amendment voted on (ON_AMENDMENT), with the start of its text
+    amendment: Optional[VoteAmendment] = None
 
 
 class VoteParticipant(BaseModel):

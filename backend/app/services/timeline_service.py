@@ -34,6 +34,7 @@ from ..models.timeline import (
     TimelineResponse,
     VoteActRef,
     VoteActTextResponse,
+    VoteAmendment,
     VoteDetailResponse,
     VoteInfo,
     VoteParticipant,
@@ -937,12 +938,63 @@ async def get_session_votes(
                          RETURN a.subject }[0] AS act_subject,
                COLLECT { MATCH (v)-[:ON_ACT]->(a:ParliamentaryAct)
                          RETURN {number: a.number, title: a.title, type: a.type,
-                                 status: a.status, subject: a.subject} } AS acts
+                                 status: a.status, subject: a.subject} } AS acts,
+               COLLECT { MATCH (v)-[:ON_AMENDMENT]->(am:Amendment)
+                         RETURN {id: am.id, number: am.number,
+                                 first: COLLECT { MATCH (p)-[f:SIGNED_AMENDMENT]->(am) WHERE f.first
+                                                  RETURN {name: trim(coalesce(p.first_name, '') + ' ' + coalesce(p.last_name, '')),
+                                                          id: p.id} }[0],
+                                 signers: COUNT { (p2)-[:SIGNED_AMENDMENT]->(am) }} } AS amendments
         ORDER BY v.number
         """,
         {"session_id": session_id},
     )
-    return [_vote_info(r) for r in vote_rows]
+    texts = _amendment_texts([a["id"] for r in vote_rows for a in (r.get("amendments") or []) if a.get("id")])
+    out = []
+    for r in vote_rows:
+        info = _vote_info(r)
+        info.amendment = _vote_amendment(r.get("amendments") or [], texts)
+        out.append(info)
+    return out
+
+
+def _amendment_texts(ids: list[str]) -> dict[str, str]:
+    """{amendment id: text} from the archive, in one query for the whole sitting."""
+    archive = get_archive()
+    if archive is None or not ids:
+        return {}
+    try:
+        with archive.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, coalesce(text, text_presented) FROM amendment WHERE id = ANY(%s)", [list(set(ids))]
+            ).fetchall()
+    except Exception:
+        return {}
+    return {r[0]: r[1] for r in rows if r[1]}
+
+
+def _vote_amendment(amendments: list[dict], texts: dict[str, str]) -> VoteAmendment | None:
+    """The amendment of a vote: numbers, first signatory and the start of the text."""
+    amendments = [a for a in amendments if a.get("number")]
+    if not amendments:
+        return None
+    amendments.sort(key=lambda a: [int(x) if x.isdigit() else 0 for x in re.split(r"\D+", a["number"]) if x] or [0])
+    first = amendments[0]
+    text = next((texts[a["id"]] for a in amendments if texts.get(a["id"])), None)
+    excerpt = None
+    if text:
+        flat = re.sub(r"\s+", " ", text).strip()
+        excerpt = flat if len(flat) <= 240 else flat[:240].rsplit(" ", 1)[0] + "…"
+    signer = first.get("first") or {}
+    name = (signer.get("name") or "").strip()
+    tail = re.search(r"(\d+)$", signer.get("id") or "")
+    return VoteAmendment(
+        numbers=list(dict.fromkeys(a["number"] for a in amendments)),
+        first_signer=name.title() if name.isupper() else (name or None),
+        first_signer_id=tail.group(1) if tail else None,
+        signers=int(first.get("signers") or 0),
+        excerpt=excerpt,
+    )
 
 
 ACT_REF_MAP = """{
