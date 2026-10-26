@@ -24,10 +24,10 @@ ParliamentRAG is an authority-aware, multi-view Retrieval-Augmented Generation s
 
 <!-- screenshot: chat view with expert cards, citations, and ideological compass -->
 
-- **178k+ text chunks** from **722 plenary sessions**, updated through 2026-10-07
-- **17.5k roll-call votes** with **7M individual vote records** linked to deputies
+- **181k+ text chunks** from **732 plenary sessions**, updated through 2026-10-26
+- **20.1k roll-call votes** with **8M individual vote records** linked to deputies
 
-The figures above count the Camera dei Deputati only: it is the corpus behind the ISWC 2026 paper, here updated to 2026-10-07. The Senate of the XIX Legislature is now loaded as well and is not included in them.
+The figures above count the Camera dei Deputati only: it is the corpus behind the ISWC 2026 paper, here updated to 2026-10-26. The Senate figures are listed apart under Knowledge graph.
 
 - **Verified citations**: every quote is checked verbatim against its source chunk; unverifiable quotes are removed
 - **Topic-aware authority scoring**: the system picks the most credible speaker per party for the specific question asked
@@ -102,14 +102,14 @@ roles, votes), with EuroVoc subject links for parliamentary acts. The Senate
 data come from [dati.senato.it](https://dati.senato.it/) (senators, groups,
 sittings, votes) and the Senate's stenographic reports.
 
-- **XIX Legislature, data as of 2026-10-07** (updated incrementally): 722 sessions · 47.7k speeches · 178k+ chunks · 36.8k acts · 17.5k roll calls with 7M individual votes. These are Camera figures, as in the paper; the Senate is loaded too and not counted here
+- **XIX Legislature, data as of 2026-10-26** (updated incrementally). Camera: 732 sessions · 48.4k speeches · 181k+ chunks · 37.7k acts · 20.1k roll calls with 8M individual votes. Senato: 467 sessions · 18.1k speeches · 86k+ chunks · 15.6k acts · 8.4k roll calls with 1.7M individual votes
 - **Speaker model**: every speaker is a `Person` (labels `Deputy` / `GovernmentMember`), with date-aware group membership; deputies in the Gruppo Misto are attributed to their political component
 - **Native types throughout**: embeddings as float arrays in Neo4j vector indexes, dates as `date()` values; every `Chunk` is an exact substring of its `Speech` (verified invariant)
 - **Linked Data**: entity URIs conform to the source datasets (dati.camera.it/ocd/…, eurovoc.europa.eu/…) and are dereferenceable
 - Every build/update ends with an **invariant validation gate** (`build/validate_db.py`): string embeddings, orphan speeches, broken chunk offsets or malformed URIs fail the build
-- **RDF export**: the whole graph is serialized back to RDF (`make export-rdf`; Turtle, plus the 6.3M individual votes in N-Triples) and archived on Zenodo under CC BY-SA 4.0 with DOI [10.5281/zenodo.21560331](https://doi.org/10.5281/zenodo.21560331); project terms use the [w3id.org/parliamentrag](https://w3id.org/parliamentrag/) namespace
-- **Amendments**: the update pipeline also collects the XIX amendments of both chambers (about 223k, with signatories, outcome when published and the bill's iter across chambers) into one JSONL; they are not part of the graph yet
-- **Hugging Face dataset**: the corpus is also published in tabular form as [emeierkeio/parliamentrag-leg19](https://huggingface.co/datasets/emeierkeio/parliamentrag-leg19) (CC BY-SA 4.0), refreshed via `make export-hf`
+- **RDF export**: the whole graph is serialized back to RDF (`make export-rdf`; Turtle, plus the individual votes in N-Triples) and archived on Zenodo under CC BY-SA 4.0 with DOI [10.5281/zenodo.21560331](https://doi.org/10.5281/zenodo.21560331), always the latest version. The 2026-10-26 version ([10.5281/zenodo.23672829](https://doi.org/10.5281/zenodo.23672829)) covers both chambers: 6.1M triples, 234.7k amendments and 9.7M individual votes; project terms use the [w3id.org/parliamentrag](https://w3id.org/parliamentrag/) namespace
+- **Amendments**: the XIX amendments of both chambers (234.7k, with full text, signatories, outcome when published and the bill's iter across chambers) are in the graph and in the RDF export
+- **Hugging Face dataset**: the corpus is also published in tabular form as [emeierkeio/parliamentrag-leg19](https://huggingface.co/datasets/emeierkeio/parliamentrag-leg19) (CC BY-SA 4.0), refreshed by the nightly update; each refresh is tagged with its date (e.g. `2026-10-26`)
 
 The construction pipeline lives in [`build/`](build/README.md):
 

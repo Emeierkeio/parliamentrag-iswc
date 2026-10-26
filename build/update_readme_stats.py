@@ -5,10 +5,14 @@ Run automatically at the end of `make update-data`; can also be run by hand:
     python build/update_readme_stats.py [--neo4j-uri bolt://localhost:7690]
 
 Credentials come from NEO4J_USER / NEO4J_PASSWORD (repo-root .env is loaded).
-The script targets three specific lines, matched by stable anchors:
-  - "- **<N>k+ text chunks** from ..."
-  - "- **<N>k roll-call votes** with ..."
+The script targets four specific lines, matched by stable anchors:
+  - "- **<N>k+ text chunks** from ..."             (Camera, the paper corpus)
+  - "- **<N>k roll-call votes** with ..."          (Camera)
+  - "The figures above count ... here updated to <date>."
   - "- **XIX Legislature — data as of ...** (updated incrementally): ..."
+                                                  (Camera and Senato apart)
+Counts are split by chamber as in /api/data/stats (backend/app/routers/data.py)
+and never summed across the two houses.
 """
 import argparse
 import os
@@ -35,6 +39,23 @@ def m(n: int) -> str:
     return f"{n / 1_000_000:.1f}".rstrip("0").rstrip(".") + "M"
 
 
+CHAMBERS = ("camera", "senato")
+
+# Same split as SENATE_PREFIX_COUNTS in backend/app/routers/data.py
+SENATE_PREFIXES = {
+    "speeches": ("Speech", "id", ("sen_",)),
+    "chunks": ("Chunk", "id", ("sen_",)),
+    "ivotes": ("IndividualVote", "id", ("iv_senato_",)),
+    "acts": ("ParliamentaryAct", "uri", ("http://dati.senato.it/", "senato:")),
+}
+
+
+def chamber_line(c: dict, ch: str) -> str:
+    return (f"{c['sessions'][ch]} sessions · {k(c['speeches'][ch])} speeches · "
+            f"{kplus(c['chunks'][ch])} chunks · {k(c['acts'][ch])} acts · "
+            f"{k(c['votes'][ch])} roll calls with {m(c['ivotes'][ch])} individual votes")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Refresh README data stats from Neo4j")
     parser.add_argument("--neo4j-uri", default=None)
@@ -48,13 +69,27 @@ def main():
         sys.exit("NEO4J_PASSWORD not set")
 
     driver = GraphDatabase.driver(uri, auth=(user, password))
-    counts = {}
     with driver.session() as session:
-        for key, label in {
-            "chunks": "Chunk", "sessions": "Session", "speeches": "Speech",
-            "acts": "ParliamentaryAct", "votes": "Vote", "ivotes": "IndividualVote",
-        }.items():
-            counts[key] = session.run(f"MATCH (n:`{label}`) RETURN count(n) AS c").single()["c"]
+        def one(cypher, **params):
+            return session.run(cypher, **params).single()["c"]
+
+        def chamber_counts(cypher):
+            rows = {r["chamber"]: r["c"] for r in session.run(cypher)}
+            return {ch: rows.get(ch, 0) for ch in CHAMBERS}
+
+        counts = {}
+        # Senate nodes are told apart by id prefix, the Camera is the rest
+        for key, (label, prop, prefixes) in SENATE_PREFIXES.items():
+            total = one(f"MATCH (n:`{label}`) RETURN count(n) AS c")
+            senato = sum(one(f"MATCH (n:`{label}`) WHERE n.`{prop}` STARTS WITH $p "
+                             "RETURN count(n) AS c", p=prefix) for prefix in prefixes)
+            counts[key] = {"camera": total - senato, "senato": senato}
+        # Sessions ingested before the Senate carry no chamber: they are Camera
+        counts["sessions"] = chamber_counts(
+            "MATCH (s:Session) RETURN coalesce(s.chamber, 'camera') AS chamber, count(s) AS c")
+        counts["votes"] = chamber_counts(
+            "MATCH (s:Session)-[:HAS_VOTE]->(v:Vote) "
+            "RETURN coalesce(s.chamber, 'camera') AS chamber, count(DISTINCT v) AS c")
         # Last `make update-data` run; falls back to newest Session date for
         # DBs stamped before SchemaMeta.updated_at existed
         last = session.run(
@@ -68,23 +103,29 @@ def main():
     last_date = str(last.to_native() if hasattr(last, "to_native") else last)
 
     text = README.read_text(encoding="utf-8")
+    cam = {key: by_chamber["camera"] for key, by_chamber in counts.items()}
     replacements = [
         (
             re.compile(r"^- \*\*[\d.,]+k\+ text chunks\*\* from .*$", re.M),
-            f"- **{kplus(counts['chunks'])} text chunks** from "
-            f"**{counts['sessions']} plenary sessions**, updated through {last_date}",
+            f"- **{kplus(cam['chunks'])} text chunks** from "
+            f"**{cam['sessions']} plenary sessions**, updated through {last_date}",
         ),
         (
             re.compile(r"^- \*\*[\d.,]+k roll-call votes\*\* with .*$", re.M),
-            f"- **{k(counts['votes'])} roll-call votes** with **{m(counts['ivotes'])} "
+            f"- **{k(cam['votes'])} roll-call votes** with **{m(cam['ivotes'])} "
             "individual vote records** linked to deputies",
         ),
         (
+            re.compile(r"^The figures above count .*$", re.M),
+            "The figures above count the Camera dei Deputati only: it is the corpus "
+            f"behind the ISWC 2026 paper, here updated to {last_date}. The Senate "
+            "figures are listed apart under Knowledge graph.",
+        ),
+        (
             re.compile(r"^- \*\*XIX Legislature[,—\s]+data as of .*$", re.M),
-            f"- **XIX Legislature, data as of {last_date}** (updated incrementally): "
-            f"{counts['sessions']} sessions · {k(counts['speeches'])} speeches · "
-            f"{kplus(counts['chunks'])} chunks · {k(counts['acts'])} acts · "
-            f"{k(counts['votes'])} roll calls with {m(counts['ivotes'])} individual votes",
+            f"- **XIX Legislature, data as of {last_date}** (updated incrementally). "
+            f"Camera: {chamber_line(counts, 'camera')}. "
+            f"Senato: {chamber_line(counts, 'senato')}",
         ),
     ]
     changed = 0
@@ -94,7 +135,7 @@ def main():
             print(f"WARNING: anchor matched {n} times (expected 1): {pattern.pattern}")
         changed += n
     README.write_text(text, encoding="utf-8")
-    print(f"README.md: {changed}/3 stat lines refreshed (data as of {last_date})")
+    print(f"README.md: {changed}/{len(replacements)} stat lines refreshed (data as of {last_date})")
 
 
 if __name__ == "__main__":
