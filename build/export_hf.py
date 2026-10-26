@@ -86,6 +86,16 @@ def s(value):
     return None if value is None else str(value)
 
 
+def senate_speaker(chamber, person_id, senato_id):
+    """In the Senate a person is named by the Senate URI, as in Fascicoli.
+
+    The graph has one node per person: for senators who sat in the Chamber
+    (Boccia, Gelmini, ...) or in the government the node id is not the Senate
+    URI, which is kept in senato_id.
+    """
+    return senato_id if chamber == "senato" and senato_id else person_id
+
+
 def source_chamber(props: dict):
     """Chamber of an act or Misto component, falling back on its source URI.
 
@@ -239,14 +249,15 @@ class HfExporter:
                               ("MEMBER_OF_COMPONENT", "misto_component")]:
             for rec in self.rows(
                 f"MATCH (a:Person)-[r:{rel}]->(b) "
-                "RETURN a.id AS person_id, b.name AS org_name, "
+                "RETURN a.id AS person_id, a.senato_id AS senato_id, b.name AS org_name, "
                 "b.chamber AS org_chamber, r"
             ):
                 r = dict(rec["r"])
+                chamber = r.get("chamber") or rec["org_chamber"]
                 records.append({
-                    "person_id": rec["person_id"],
+                    "person_id": senate_speaker(chamber, rec["person_id"], rec["senato_id"]),
                     "org_type": org_type,
-                    "chamber": r.get("chamber") or rec["org_chamber"],
+                    "chamber": chamber,
                     "org_name": rec["org_name"],
                     "role": r.get("officerRole"),
                     "start_date": iso(r.get("start_date")),
@@ -280,6 +291,7 @@ class HfExporter:
                 "chamber": p.get("chamber"),
                 "number": p.get("number"),
                 "date": iso(p.get("date")),
+                "record_url": p.get("record_url"),
                 "recap_it": p.get("recapIt"),
                 "recap_en": p.get("recapEn"),
             })
@@ -311,7 +323,7 @@ class HfExporter:
             "RETURN s.id AS session_id, s.chamber AS chamber, s.date AS date, "
             "d.id AS debate_id, "
             "d.title AS debate_title, ph.id AS phase_id, ph.title AS phase_title, "
-            "ph.phaseType AS phase_type, sp, p.id AS speaker_id "
+            "ph.phaseType AS phase_type, sp, p.id AS speaker_id, p.senato_id AS senato_id "
             "ORDER BY s.date, d.order, ph.order, sp.id"
         ):
             p = dict(rec["sp"])
@@ -327,8 +339,9 @@ class HfExporter:
                 "phase_id": rec["phase_id"],
                 "phase_title": rec["phase_title"],
                 "phase_type": rec["phase_type"],
-                "speaker_id": rec["speaker_id"],
+                "speaker_id": senate_speaker(rec["chamber"], rec["speaker_id"], rec["senato_id"]),
                 "speaker_name": p.get("cognomeNome"),
+                "url": p.get("url"),
                 "text": text,
             })
         self.write("speeches", records)

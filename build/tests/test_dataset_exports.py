@@ -167,3 +167,10 @@ def test_source_chamber_falls_back_on_uri():
     assert export_hf.source_chamber({"uri": "placeholder:pdl:5-A"}) == "camera"
     assert export_hf.source_chamber({"uri": "http://dati.senato.it/ddl/1"}) == "senato"
     assert export_hf.source_chamber({"id": "gov_meloni"}) is None
+
+
+def test_senate_speaker_is_the_senate_uri():
+    cam, sen = "http://dati.camera.it/ocd/persona.rdf/p302892", "http://dati.senato.it/senatore/25555"
+    assert export_hf.senate_speaker("senato", cam, sen) == sen
+    assert export_hf.senate_speaker("camera", cam, sen) == cam
+    assert export_hf.senate_speaker("senato", "gov_nordio_carlo", None) == "gov_nordio_carlo"

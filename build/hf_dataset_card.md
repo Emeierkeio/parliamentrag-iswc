@@ -53,8 +53,8 @@ All content is in Italian, except the session and debate recaps, which exist in 
 
 | Table | Rows | Contents |
 | --- | ---: | --- |
-| `speeches` | {{ROWS_SPEECHES}} | Verbatim transcript of every speech, with date, debate title, phase and speaker |
-| `sessions` | {{ROWS_SESSIONS}} | Plenary sittings, with Italian and English recaps |
+| `speeches` | {{ROWS_SPEECHES}} | Verbatim transcript of every speech, with date, debate title, phase, speaker and link to the official record |
+| `sessions` | {{ROWS_SESSIONS}} | Plenary sittings, with the link to their record and Italian and English recaps |
 | `debates` | {{ROWS_DEBATES}} | Agenda items of each sitting, with recaps |
 | `votes` | {{ROWS_VOTES}} | Roll-call votes: subject, outcome, numeric breakdown, linked acts |
 | `individual_votes` | {{ROWS_INDIVIDUAL_VOTES}} | One row per (member, vote) with the individual ballot |
@@ -65,7 +65,7 @@ All content is in Italian, except the session and debate recaps, which exist in 
 | `act_subjects` | {{ROWS_ACT_SUBJECTS}} | Act → EuroVoc concept links |
 | `speech_references` | {{ROWS_SPEECH_REFERENCES}} | NER-resolved mentions of persons and citations of acts in speeches |
 
-Row identifiers are shared across tables: `session_id` (e.g. `leg19_sed1` for the Chamber, `sen_leg19_sed1` for the Senate), `vote_id`, `speech_id`, `person_id` (the dati.camera.it or dati.senato.it person URI; `gov_…` for government members) and `act_uri` join the tables together. The `chamber` column (`camera`, `senato`, `bicamerale` for joint committees) tells the two houses apart. Speeches are ordered as delivered (session date, debate order, phase order).
+Row identifiers are shared across tables: `session_id` (e.g. `leg19_sed1` for the Chamber, `sen_leg19_sed1` for the Senate), `vote_id`, `speech_id`, `person_id` (the dati.camera.it or dati.senato.it person URI; `gov_…` for government members; in Senate speeches and memberships a person is always named by the Senate URI, which `persons` gives in `senato_id` for the senators who also sat in the Chamber or in the government) and `act_uri` join the tables together. The `chamber` column (`camera`, `senato`, `bicamerale` for joint committees) tells the two houses apart. Speeches are ordered as delivered (session date, debate order, phase order).
 
 Individual ballot outcomes in `individual_votes` are `favor`, `against`, `abstain`, `absent`. The Senate publishes only the senators who took part in a vote, so Senate ballots have no `absent` rows. For secret ballots (`secret_vote = true` in `votes`) only participation is recorded (`absent`, `abstain`): who voted for or against is not public, so those votes carry aggregate numbers only.
 
