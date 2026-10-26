@@ -25,7 +25,7 @@ const ZENODO_URL = `https://doi.org/${ZENODO_DOI}`;
 // Date the dataset was last published to Zenodo. Rewritten by
 // build/zenodo_update.py on a successful publish, NOT by make update-data:
 // the archive is a frozen snapshot and lags the live graph on purpose.
-const ZENODO_UPDATED = "2026-07-26";
+const ZENODO_UPDATED = "2026-10-26";
 
 /* ── Graph numbers — live from /api/data/stats, static fallback ── */
 /* Counts with a chamber show Camera and Senato apart, never summed */
@@ -467,7 +467,7 @@ export default function DataPage() {
               body={t("fileKgDesc")}
               file={manifest["parliamentrag_kg.ttl"]}
               resolved={manifestLoaded}
-              fallbackSize="172 MB"
+              fallbackSize="769 MB"
               locale={locale}
               downloadLabel={t("downloadCta")}
               readyNote={t("readyNote")}
@@ -481,7 +481,7 @@ export default function DataPage() {
               body={t("fileVotesDesc")}
               file={manifest["parliamentrag_votes.nt"]}
               resolved={manifestLoaded}
-              fallbackSize={`${formatStat(3.8, locale)} GB`}
+              fallbackSize={`${formatStat(6.4, locale)} GB`}
               locale={locale}
               downloadLabel={t("downloadCta")}
               readyNote={t("readyNote")}
