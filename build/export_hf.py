@@ -137,7 +137,8 @@ CARD_STAT_QUERIES = {
     "ROWS_ORGANIZATIONS": ("MATCH (n) WHERE n:ParliamentaryGroup OR n:Committee "
                            "OR n:MistoComponent OR n:Government RETURN count(n) AS v"),
     "ROWS_MEMBERSHIPS": ("MATCH (:Person)-[r:MEMBER_OF_GROUP|MEMBER_OF_COMMITTEE"
-                         "|MEMBER_OF_COMPONENT|HOLDS_OFFICE]->() RETURN count(r) AS v"),
+                         "|MEMBER_OF_COMPONENT|HOLDS_OFFICE]->() WHERE r.affiliation IS NULL"
+                         " RETURN count(r) AS v"),
     "ROWS_ACTS": "MATCH (n:ParliamentaryAct) RETURN count(n) AS v",
     "ROWS_ACT_SUBJECTS": ("MATCH (:ParliamentaryAct)-[r:HAS_SUBJECT]->"
                           "(:EurovocConcept) RETURN count(r) AS v"),
@@ -250,7 +251,9 @@ class HfExporter:
                               ("MEMBER_OF_COMMITTEE", "committee"),
                               ("MEMBER_OF_COMPONENT", "misto_component")]:
             for rec in self.rows(
-                f"MATCH (a:Person)-[r:{rel}]->(b) "
+                # affiliation: the party area of a non-parliamentarian minister,
+                # not a seat in a group; kept out of the public data
+                f"MATCH (a:Person)-[r:{rel}]->(b) WHERE r.affiliation IS NULL "
                 "RETURN a.id AS person_id, a.senato_id AS senato_id, b.name AS org_name, "
                 "b.chamber AS org_chamber, r"
             ):

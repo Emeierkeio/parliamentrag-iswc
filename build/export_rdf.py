@@ -835,12 +835,16 @@ class RdfExporter:
             print(f"  {rel_type} (speech-level): {count}")
 
     def export_memberships(self):
-        """MEMBER_OF_* {start,end} → reified org:Membership (W3C ORG)."""
+        """MEMBER_OF_* {start,end} → reified org:Membership (W3C ORG).
+
+        Skips affiliation: the party area of a non-parliamentarian minister,
+        not a seat in a group.
+        """
         PRO = self.PRO
         for rel_type in ("MEMBER_OF_GROUP", "MEMBER_OF_COMMITTEE", "MEMBER_OF_COMPONENT"):
             count = 0
             for rec in self.rows(
-                f"MATCH (a)-[r:`{rel_type}`]->(b) "
+                f"MATCH (a)-[r:`{rel_type}`]->(b) WHERE r.affiliation IS NULL "
                 "RETURN elementId(a) AS a, elementId(b) AS b, r"
             ):
                 person = self.uri_by_eid.get(rec["a"])
