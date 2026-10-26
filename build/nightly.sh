@@ -3,8 +3,9 @@
 #
 # The checkout is deploy-only: it is reset to origin/main before every run, so
 # local edits (the README stats that update_data.sh rewrites) are discarded.
-# Neo4j is reached on localhost, no SSH tunnel; the local snapshot sync and the
-# Hugging Face upload stay on the developer machine (LOCAL_SYNC=0).
+# Neo4j is reached on localhost, no SSH tunnel; the local snapshot sync stays on
+# the developer machine (LOCAL_SYNC=0). The Hugging Face upload runs here too,
+# with the hf CLI in /opt/hf-cli (symlink in /usr/local/bin, `hf auth login`).
 set -u -o pipefail
 cd "$(dirname "$0")/.."
 

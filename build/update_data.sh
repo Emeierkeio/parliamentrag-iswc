@@ -581,16 +581,19 @@ fi
 
 # ── Dataset Hugging Face ─────────────────────────────────────────────────────
 # A differenza di Zenodo (snapshot congelato) segue il DB vivo: rigenera i
-# parquet + card dallo snapshot locale e ricarica il repo. Non blocca.
+# parquet + card dal DB appena aggiornato e ricarica il repo con il tag della
+# data, che il verificatore offline scarica da data_version. Non blocca.
 if ! command -v hf >/dev/null 2>&1; then
 	note "HF dataset: hf CLI not installed — skipped (uv tool install huggingface_hub)"
-elif ! nc -z -w 2 localhost "$LOCAL_BOLT_PORT" >/dev/null 2>&1; then
-	note "HF dataset: local snapshot (:$LOCAL_BOLT_PORT) not running — skipped"
 else
 	hf_update() {
-		"$PY" build/export_hf.py \
-			&& hf upload "$HF_DATASET_REPO" dumps/hf . --repo-type dataset \
-				--commit-message "Data update $(date +%Y-%m-%d)"
+		NEO4J_URI="$DEMO_NEO4J" "$PY" build/export_hf.py || return 1
+		local v
+		v=$("$PY" -c 'import json; print(json.load(open("dumps/hf/export_meta.json"))["generated_at"][:10])') || return 1
+		hf upload "$HF_DATASET_REPO" dumps/hf . --repo-type dataset \
+			--commit-message "Data update $v" || return 1
+		hf repos tag create "$HF_DATASET_REPO" "$v" --repo-type dataset -m "Data as of $v" \
+			|| echo "tag $v già presente"
 	}
 	run "Update Hugging Face dataset ($HF_DATASET_REPO)" hf_update \
 		|| warn "HF dataset update failed — retry with 'make export-hf hf-upload'"
