@@ -213,10 +213,15 @@ export-hf:
 ## Ricarica dumps/hf/ sul dataset Hugging Face. A differenza di Zenodo
 ## (snapshot congelato, vedi sotto) il dataset HF segue il DB vivo: viene
 ## rilanciato in coda a ogni `make update-data`. Richiede la CLI `hf` con
-## token write (`hf auth login`).
+## token write (`hf auth login`). Il commit prende un tag uguale alla data
+## dell'export (generated_at di export_meta.json): è la data_version delle
+## risposte, e il verificatore scarica direttamente quella versione.
 hf-upload:
-	@hf upload $(HF_DATASET_REPO) dumps/hf . --repo-type dataset \
-		--commit-message "Data update $$(date +%Y-%m-%d)"
+	@V=$$($(BACKEND_DIR)/venv/bin/python -c "import json;print(json.load(open('dumps/hf/export_meta.json'))['generated_at'][:10])") && \
+	hf upload $(HF_DATASET_REPO) dumps/hf . --repo-type dataset \
+		--commit-message "Data update $$V" && \
+	{ hf repos tag create $(HF_DATASET_REPO) $$V --repo-type dataset -m "Data as of $$V" \
+		|| echo "tag $$V già presente: il verificatore userà quello"; }
 
 ## Nuova versione del record Zenodo con i dump correnti di dumps/rdf/.
 ##

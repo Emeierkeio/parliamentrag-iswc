@@ -334,6 +334,10 @@ def law_uris(props: dict) -> tuple[URIRef, URIRef | None]:
     return URIRef(props["urn"]), None
 
 
+def has_camera_mandate(props: dict) -> bool:
+    return any(str(m).startswith("camera_") for m in props.get("mandates") or [])
+
+
 class RdfExporter:
     def __init__(self, driver, base: str, include_text: bool,
                  archive_texts: dict | None = None,
@@ -412,7 +416,9 @@ class RdfExporter:
             uri = URIRef(node_id) if node_id.startswith("http") else self.mint("person", node_id)
             self.uri_by_eid[rec["eid"]] = uri
             self.g.add((uri, RDF.type, FOAF.Person))
-            if "Deputy" in rec["labels"]:
+            # :Deputy also marks senators (backend queries written for the
+            # Camera): a deputy is who holds a Camera mandate.
+            if "Deputy" in rec["labels"] and has_camera_mandate(props):
                 self.g.add((uri, RDF.type, OCD.deputato))
             if "Senator" in rec["labels"]:
                 self.g.add((uri, RDF.type, OSR.Senatore))

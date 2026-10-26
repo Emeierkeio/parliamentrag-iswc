@@ -174,3 +174,10 @@ def test_senate_speaker_is_the_senate_uri():
     assert export_hf.senate_speaker("senato", cam, sen) == sen
     assert export_hf.senate_speaker("camera", cam, sen) == cam
     assert export_hf.senate_speaker("senato", "gov_nordio_carlo", None) == "gov_nordio_carlo"
+
+
+def test_deputy_is_who_holds_a_camera_mandate():
+    from export_rdf import has_camera_mandate
+    assert has_camera_mandate({"mandates": ["camera_19"]})
+    assert not has_camera_mandate({"mandates": ["senato_19"]})
+    assert not has_camera_mandate({})

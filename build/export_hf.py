@@ -213,7 +213,9 @@ class HfExporter:
                 "profession": p.get("profession"),
                 "education": p.get("education"),
                 "institutional_role": p.get("institutional_role"),
-                "is_deputy": "Deputy" in rec["labels"],
+                # :Deputy also marks senators: a deputy holds a Camera mandate
+                "is_deputy": "Deputy" in rec["labels"] and any(
+                    str(m).startswith("camera_") for m in p.get("mandates") or []),
                 "is_senator": "Senator" in rec["labels"],
                 "is_government_member": "GovernmentMember" in rec["labels"],
                 "camera_id": s(p.get("camera_id")),
